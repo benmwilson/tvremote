@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """TV Remote: web controller for mpv / streamlink on the Pi."""
+import functools
 import hashlib
 import hmac
 import html
@@ -42,6 +43,7 @@ import accounts
 import activity
 import chat
 import discover
+import store
 import kick
 import mpvipc
 import roku
@@ -164,9 +166,7 @@ def _sess_load():
 
 def _sess_save(d):
     try:
-        with open(_sess_file() + ".tmp", "w") as f:
-            json.dump(d, f)
-        os.replace(_sess_file() + ".tmp", _sess_file())
+        store.write_json(_sess_file(), d, 0o600)  # only hashes, but nobody else needs to read them
     except OSError:
         pass  # sessions then last until the next restart
 
@@ -474,10 +474,7 @@ def load_settings():
 
 
 def save_settings():
-    tmp = SETTINGS_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(settings, f)
-    os.replace(tmp, SETTINGS_FILE)
+    store.write_json(SETTINGS_FILE, settings)
 
 
 def screen(kind, detail="", source=None):
@@ -763,12 +760,19 @@ def load_favs(user=None):
         return []
 
 
+_files_lock = threading.RLock()  # favourites and recents are load, change, save: two at once must take turns or one change is lost
+
+
+def under_files_lock(fn):
+    @functools.wraps(fn)
+    def inner(*a, **k):
+        with _files_lock:
+            return fn(*a, **k)
+    return inner
+
+
 def save_favs(favs, user=None):
-    path = fav_file(user)
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(favs, f, indent=2)
-    os.replace(tmp, path)
+    store.write_json(fav_file(user), favs, indent=2)
 
 
 def fav_name(url):
@@ -850,11 +854,10 @@ def load_recents():
 def remember(url):
     """Keep the last few links that were played, newest first."""
     try:
-        items = [r for r in load_recents() if r.get("url") != url]
-        items.insert(0, {"name": fav_name(url)[:40], "url": url, "source": route(url)[0]})
-        with open(RECENT_FILE + ".tmp", "w") as f:
-            json.dump(items[:8], f)
-        os.replace(RECENT_FILE + ".tmp", RECENT_FILE)
+        with _files_lock:
+            items = [r for r in load_recents() if r.get("url") != url]
+            items.insert(0, {"name": fav_name(url)[:40], "url": url, "source": route(url)[0]})
+            store.write_json(RECENT_FILE, items[:8])
     except OSError:
         pass  # history is a convenience
 
@@ -1652,6 +1655,7 @@ def favs_get():
 
 
 @app.post("/api/favourites")
+@under_files_lock
 def favs_add():
     data = request.get_json(silent=True) or {}
     url = normalise(data.get("url") or state["url"])
@@ -1676,6 +1680,7 @@ def favs_add():
 
 
 @app.post("/api/favourites/order")
+@under_files_lock
 def favs_order():
     """Save the favourites in the order the phone shows them. Anything not listed keeps its place at the end."""
     urls = (request.get_json(silent=True) or {}).get("urls")
@@ -2114,6 +2119,7 @@ def setup_finish():
 
 
 @app.delete("/api/favourites")
+@under_files_lock
 def favs_del():
     url = (request.get_json(silent=True) or {}).get("url")
     favs = [f for f in load_favs() if f.get("url") != url]  # the main link: the whole favourite goes

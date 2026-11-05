@@ -9,6 +9,8 @@ import secrets
 import threading
 import time
 
+import store
+
 REDEEM_WINDOW = 48 * 3600  # an unopened link stops working after this
 MAX_PENDING = 20
 COOLDOWN = 30  # seconds between requests from one address
@@ -30,11 +32,7 @@ def _read(name, default):
 
 
 def _write(name, data):
-    tmp = _path(name) + ".tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        json.dump(data, f)
-    os.replace(tmp, _path(name))
+    store.write_json(_path(name), data, 0o600)
 
 
 # ---- requests for access ----

@@ -7,6 +7,8 @@ import os
 import threading
 import time
 
+import store
+
 
 class LiveWatch:
     """urls: () -> the channel URLs to watch. check: url -> {"live": bool, "game", "title", "uptime_s"} or None when
@@ -29,10 +31,7 @@ class LiveWatch:
 
     def _save(self):
         try:
-            tmp = self.path + ".tmp"
-            with open(tmp, "w") as f:
-                json.dump(self._data, f)
-            os.replace(tmp, self.path)
+            store.write_json(self.path, self._data)
         except OSError:
             pass  # a read-only disk must not stop the app
 

@@ -11,6 +11,8 @@ import secrets
 import threading
 import time
 
+import store
+
 OWNER = "owner"
 GUEST = "guest"  # the pseudo-account behind a one-time link: controls the TVs, nothing else
 ROLES = ("user", "admin")
@@ -111,11 +113,7 @@ def valid_name(name):
 
 
 def _write(d):
-    tmp = _file() + ".tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # hashes are for this app only
-    with os.fdopen(fd, "w") as f:
-        json.dump(d, f)
-    os.replace(tmp, _file())
+    store.write_json(_file(), d, 0o600)  # hashes are for this app only
 
 
 def add(name, password, new_role=None, founder=False):

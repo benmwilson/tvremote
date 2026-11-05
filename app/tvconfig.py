@@ -6,6 +6,8 @@ import json
 import os
 import re
 
+import store
+
 IDS = ("living", "bedroom")
 INPUTS = ("", "HDMI1", "HDMI2", "HDMI3", "HDMI4")
 DEFAULT_NAMES = {"living": "Living room", "bedroom": "Bedroom"}
@@ -58,8 +60,5 @@ def save(data_dir, cfg):
     current = load(data_dir)
     for tid, item in cfg.items():
         current[tid] = {**(current.get(tid) or {}), **item}
-    tmp = _path(data_dir) + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(current, f, indent=2)
-    os.replace(tmp, _path(data_dir))
+    store.write_json(_path(data_dir), current, indent=2)
     return current

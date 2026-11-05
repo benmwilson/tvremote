@@ -5,6 +5,8 @@ import os
 import threading
 import time
 
+import store
+
 SAVE_EVERY = 30
 _lock = threading.Lock()
 _data = None
@@ -40,10 +42,7 @@ def note(who, text, now=None):
         if now - _saved >= SAVE_EVERY:
             _saved = now
             try:
-                tmp = _path() + ".tmp"
-                with open(tmp, "w") as f:
-                    json.dump(d, f)
-                os.replace(tmp, _path())
+                store.write_json(_path(), d)
             except OSError:
                 pass  # a read-only disk must not stop the app
 
