@@ -229,8 +229,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .plat.twitch{--c:#9146ff;--c-ink:#fff;--c-bg:rgba(145,70,255,.12)}
 .plat.off{opacity:.7}.plat.off .chip{background:var(--line);color:var(--dim)}
 
-.s-steps{display:flex;gap:6px;justify-content:center;margin:14px 0 6px}.s-steps i{width:34px;height:4px;border-radius:2px;background:var(--line)}.s-steps i.on{background:var(--tv)}
-#view-setup .card{margin-top:10px}.s-err{color:#ff6b6b;min-height:1.2em;margin:0}
+.s-err{color:#ff6b6b;min-height:1.2em;margin:0}
 
 #adminarea .card+.card,#adminarea .card+.s-wide,#adminarea .s-wide+.card{margin-top:10px}
 .s-cap{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:600;margin:0 0 6px}
@@ -238,11 +237,40 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 #view-settings input::placeholder{color:var(--dim);opacity:.9}
 .s-out+.sub{margin-top:8px}
 
-.tvslot{border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0;display:grid;gap:10px}
-.tvslot h3{margin:0;font-size:15px}.tvslot label.f{display:grid;gap:4px;font-size:13px;color:var(--dim)}
-.tvslot input,.tvslot select{font-size:16px;min-height:48px;width:100%;box-sizing:border-box}
-.tvslot .why{margin:0;color:var(--dim);font-size:13px}.tvslot .test{display:flex;gap:10px;align-items:center}.tvslot .test span{font-size:13px}
-.tvslot.off>:not(.top){opacity:.45;pointer-events:none}.tvslot .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+
+#view-setup{padding-bottom:24px}
+.wz-head{text-align:center;margin:18px 0 4px}.wz-head h1{margin:0;font-size:26px}.wz-head p{margin:6px 0 0;color:var(--dim);font-size:15px}
+.wz-steps{display:flex;list-style:none;margin:20px 8px 18px;padding:0}
+.wz-steps li{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;color:var(--dim);font-size:13px;font-weight:600}
+.wz-steps li::after{content:"";position:absolute;top:15px;left:calc(50% + 20px);right:calc(-50% + 20px);height:2px;background:var(--line)}
+.wz-steps li:last-child::after{display:none}.wz-steps li.done::after{background:var(--tv,#62b0ff)}
+.wz-steps i{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:15px;background:var(--line);color:var(--dim)}
+.wz-steps li.on{color:var(--fg)}.wz-steps li.on i{background:var(--tv,#62b0ff);color:#0b0e14}
+.wz-steps li.done i{background:rgba(98,176,255,.2);color:#8cc4ff}
+.wz-card{padding:20px 18px;margin-top:0}.wz-card h2{margin:0 0 8px;font-size:22px;color:var(--fg,#f6f1ee)}
+.wz-lead{margin:0;color:var(--dim);font-size:15px;line-height:1.5}
+.wz-form{display:grid;gap:16px;margin-top:18px}
+.wz-f{display:grid;gap:6px}.wz-f>span{font-size:14px;font-weight:600}
+.wz-f input,.wz-f select{font-size:16px;min-height:52px;width:100%;box-sizing:border-box}
+.wz-f small{color:var(--dim);font-size:13px;line-height:1.4}
+#view-setup code{background:var(--line);border-radius:6px;padding:1px 6px;font-size:.92em}
+.wz-slot{background:var(--card);border-radius:var(--r,16px);padding:16px;margin-top:12px;display:grid;gap:14px;border:1px solid transparent}
+.wz-slot.is-off{border-color:var(--line)}.wz-slot.is-off .wz-body{display:none}
+.wz-top{display:flex;align-items:center;gap:12px}.wz-top .grow{flex:1;min-width:0}.wz-top b{display:block;font-size:17px}.wz-top small{color:var(--dim);font-size:13px}
+.wz-body{display:grid;gap:14px}
+.tg{-webkit-appearance:none;appearance:none;flex:0 0 auto;width:54px!important;height:32px!important;min-height:0!important;border-radius:16px;background:var(--line);position:relative;cursor:pointer;transition:background .15s;padding:0;margin:0;border:0}
+.tg::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;transition:transform .15s}
+.tg:checked{background:var(--tv,#62b0ff)}.tg:checked::after{transform:translateX(22px)}
+.tg:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.wz-test{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.wz-test button{min-height:44px;padding:0 16px}.wz-test span{font-size:13px;color:var(--dim);flex:1 1 140px}
+.wz-why{border-left:3px solid var(--tv,#62b0ff);background:rgba(98,176,255,.07);border-radius:0 10px 10px 0;padding:10px 12px;font-size:13px;line-height:1.45;color:var(--dim)}
+.wz-why b{display:block;color:#8cc4ff;font-size:12px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px}.wz-why p{margin:2px 0}
+.wz-bar{position:sticky;bottom:0;display:flex;gap:10px;padding:14px 0 10px;margin-top:8px;background:linear-gradient(to top,var(--bg,#0b0e14) 70%,transparent)}
+.wz-bar button{flex:1;min-height:54px}.wz-bar .go{flex:1.6}
+.wz-done{text-align:center;display:grid;justify-items:center;gap:10px;padding:28px 18px}
+.wz-check{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:32px;background:rgba(123,226,154,.16);color:#7be29a}
+.wz-done .go{width:100%;margin-top:8px}#setupsummary{width:100%;text-align:left;display:grid;gap:8px;margin-top:6px}
+.wz-sum{display:flex;gap:12px;align-items:center;background:var(--bg,#0b0e14);border-radius:12px;padding:10px 12px}.wz-sum b{display:block}.wz-sum small{color:var(--dim);font-size:13px}
 </style>
 </head>
 <body>
@@ -306,40 +334,52 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 </section>
 
 <section id="view-setup" class="hide">
-  <div class="s-steps" id="setupdots" aria-hidden="true"><i></i><i></i><i></i></div>
-  <p class="sub" id="setupcount" style="text-align:center"></p>
-  <div id="setup0" class="card hide">
-    <h2 style="margin:0 0 6px">Who owns this install?</h2>
-    <p class="sub">This install was set up before owners existed. Only the owner can change other admins. To make your account (<b id="claimwho"></b>) the owner, enter the setup code from the Pi's log (<code>docker logs tvremote</code>). Favourites and the Kick link made before accounts existed become yours.</p>
-    <form id="claimform" class="s-form" style="margin-top:12px">
-      <input id="claimcode" placeholder="Setup code" autocapitalize="none" autocomplete="off" aria-label="Setup code">
-      <p class="sub s-err" id="claimerr" role="alert"></p>
+  <div class="wz-head"><h1>Set up TV Remote</h1><p>It only takes a minute, and you only do it once.</p></div>
+  <ol class="wz-steps" id="setupdots" aria-label="Setup progress">
+    <li><i>1</i><span>Account</span></li><li><i>2</i><span>TVs</span></li><li><i>3</i><span>Done</span></li></ol>
+
+  <div id="setup0" class="card wz-card hide">
+    <h2>Who owns this install?</h2>
+    <p class="wz-lead">This install was set up before owners existed. Only the owner can change other admins. To make <b id="claimwho"></b> the owner, enter the setup code from the Pi's log. Favourites and the Kick link made before accounts existed become theirs.</p>
+    <form id="claimform" class="wz-form">
+      <label class="wz-f"><span>Setup code</span><input id="claimcode" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="6 characters">
+        <small>On the Pi, run <code>docker logs tvremote</code> and look for the line with the setup code.</small></label>
+      <p class="s-err" id="claimerr" role="alert"></p>
       <button class="go">Make me the owner</button>
     </form>
   </div>
-  <div id="setup1" class="card hide">
-    <h2 style="margin:0 0 6px">Create your admin account</h2>
-    <p class="sub" id="setup1text"></p>
-    <form id="setupform" class="s-form" style="margin-top:12px">
-      <input id="sucode" class="hide" placeholder="Setup code (from docker logs tvremote)" autocapitalize="none" autocomplete="off" aria-label="Setup code">
-      <input id="suname" placeholder="Username" autocapitalize="none" autocomplete="username" aria-label="Admin username">
-      <input id="supw" type="password" placeholder="Password (6+ characters)" autocomplete="new-password" aria-label="Admin password">
-      <input id="supw2" type="password" placeholder="Repeat the password" autocomplete="new-password" aria-label="Repeat the password">
-      <p class="sub s-err" id="suerr" role="alert"></p>
+
+  <div id="setup1" class="card wz-card hide">
+    <h2>Create your admin account</h2>
+    <p class="wz-lead" id="setup1text"></p>
+    <form id="setupform" class="wz-form">
+      <label class="wz-f hide" id="sucodewrap"><span>Setup code</span><input id="sucode" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="6 characters">
+        <small>This proves you have access to the Pi. Run <code>docker logs tvremote</code> there and look for the line with the setup code.</small></label>
+      <label class="wz-f"><span>Username</span><input id="suname" autocapitalize="none" autocomplete="username" spellcheck="false" placeholder="for example, ben">
+        <small>Letters, digits, - or _ (2 to 20).</small></label>
+      <label class="wz-f"><span>Password</span><input id="supw" type="password" autocomplete="new-password" placeholder="At least 6 characters"></label>
+      <label class="wz-f"><span>Repeat the password</span><input id="supw2" type="password" autocomplete="new-password"></label>
+      <p class="s-err" id="suerr" role="alert"></p>
       <button class="go">Create admin account</button>
     </form>
   </div>
-  <div id="setup2" class="card hide">
-    <h2 style="margin:0 0 6px">Your TVs</h2>
-    <p class="sub" id="tvintro">Looking for TVs on your network&hellip;</p>
+
+  <div id="setup2" class="hide">
+    <div class="wz-card card">
+      <h2>Your TVs</h2>
+      <p class="wz-lead" id="tvintro">Looking for TVs on your network&hellip;</p>
+    </div>
     <div id="tvslots"></div>
-    <p class="sub s-err" id="tverr" role="alert"></p>
-    <div class="row"><button id="tvrescan" type="button">Look again</button><button id="tvsave" class="go">Save and continue</button></div>
+    <p class="s-err" id="tverr" role="alert"></p>
+    <div class="wz-bar"><button id="tvrescan" type="button">Look again</button><button id="tvsave" class="go">Save and continue</button></div>
   </div>
-  <div id="setup3" class="card hide">
-    <h2 style="margin:0 0 6px">You're all set</h2>
-    <p class="sub" id="setupdone"></p>
-    <button id="sufinish" class="go s-wide">Open the remote</button>
+
+  <div id="setup3" class="card wz-card wz-done hide">
+    <div class="wz-check" aria-hidden="true">&#10003;</div>
+    <h2>You're all set</h2>
+    <p class="wz-lead" id="setupdone"></p>
+    <div id="setupsummary"></div>
+    <button id="sufinish" class="go">Open the remote</button>
   </div>
 </section>
 
@@ -1110,15 +1150,25 @@ function renderSetup() {
   [1, 2, 3].forEach(n => $('setup' + n).classList.toggle('hide', n !== setupStep || (n === 1 && claim)));
   $('setup0').classList.toggle('hide', !claim);
   if (claim) $('claimwho').textContent = setupInfo.user || '';
-  [...$('setupdots').children].forEach((d, i) => d.classList.toggle('on', i < setupStep));
-  $('setupcount').textContent = 'Step ' + setupStep + ' of 3';
+  [...$('setupdots').children].forEach((li, i) => {
+    li.classList.toggle('done', i < setupStep - 1); li.classList.toggle('on', i === setupStep - 1);
+    li.querySelector('i').textContent = i < setupStep - 1 ? '\u2713' : String(i + 1);
+    if (i === setupStep - 1) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+  });
   if (setupStep === 1) {
-    $('setup1text').textContent = 'Nobody can log in yet. Create the first admin account. It becomes the owner and can add everyone else.';
-    $('sucode').classList.toggle('hide', !setupInfo.needs_code);  // only a brand-new install asks for the code printed in the log
+    $('setup1text').textContent = 'Nobody can log in yet. This first account becomes the owner and can add everyone else later.';
+    $('sucodewrap').classList.toggle('hide', !setupInfo.needs_code);  // only a brand-new install asks for the code printed in the log
   }
   if (setupStep === 2 && !tvLoading && !tvDisc) discoverTvs();
-  if (setupStep === 3) $('setupdone').textContent = (setupInfo.created ? 'Your admin account "' + setupInfo.created + '" is ready. ' : 'You can add people and guest links from Settings. ')
-    + 'Everything else is in Settings, behind the gear.';
+  if (setupStep === 3) {
+    $('setupdone').textContent = (setupInfo.created ? 'Your admin account \u201c' + setupInfo.created + '\u201d is ready. ' : '') + 'Add people and guest links from Settings, behind the gear.';
+    const on = ['living', 'bedroom'].filter(t => tvForm[t] && tvForm[t].enabled);
+    $('setupsummary').replaceChildren(...(on.length ? on.map(t => {
+      const f = tvForm[t], r = tvDisc && tvDisc.rokus.find(x => x.ip === f.roku);
+      return mk('div', {class: 'wz-sum'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, f.name.slice(0, 1)),
+        mk('div', {}, mk('b', {}, f.name), mk('small', {}, [r ? [r.brand, r.model].filter(Boolean).join(' ') : (f.roku ? f.roku : 'No TV controls'), f.input ? f.input.replace('HDMI', 'HDMI ') : null].filter(Boolean).join(' \u00b7 '))));
+    }) : []));
+  }
 }
 async function openSetup() {
   setupInfo = await fetch('/api/setup').then(r => r.json()).catch(() => ({}));
@@ -1171,44 +1221,47 @@ async function discoverTvs() {
 function rokuLabel(r) {
   return [r.name || 'Roku', [r.brand, r.size ? r.size + '\u2033' : ''].filter(Boolean).join(' '), r.model, r.ip].filter(Boolean).join(' \u00b7 ') + (r.error ? ' (didn\u2019t answer)' : '');
 }
-function field(label, control) { return mk('label', {class: 'f'}, label, control); }
+function field(label, control) { return mk('label', {class: 'wz-f'}, mk('span', {}, label), control); }
 function opts(sel, items, value) {
   items.forEach(([v, text]) => { const o = mk('option', {value: v}, text); sel.append(o); });
   sel.value = value;
   return sel;
 }
 function tvSlot(t) {
-  const f = tvForm[t], box = mk('div', {class: 'tvslot' + (f.enabled ? '' : ' off')});
-  const use = mk('input', {type: 'checkbox', 'aria-label': 'Use ' + TV_TITLES[t]}); use.checked = f.enabled;
-  use.onchange = () => { f.enabled = use.checked; box.classList.toggle('off', !f.enabled); };
-  box.append(mk('div', {class: 'top'}, mk('h3', {}, TV_TITLES[t]), mk('label', {class: 's-check', style: 'min-height:0'}, use, 'Use it')));
+  const f = tvForm[t], box = mk('div', {class: 'wz-slot' + (f.enabled ? '' : ' is-off')});
+  const use = mk('input', {type: 'checkbox', class: 'tg', role: 'switch', 'aria-label': 'Use ' + TV_TITLES[t]}); use.checked = f.enabled;
+  use.onchange = () => { f.enabled = use.checked; box.classList.toggle('is-off', !f.enabled); };
+  box.append(mk('div', {class: 'wz-top'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, t === 'living' ? 'P' : 'C'),
+    mk('div', {class: 'grow'}, mk('b', {}, TV_TITLES[t]), mk('small', {}, t === 'living' ? 'The TV plugged into the Pi' : 'The TV with a Chromecast')), use));
+  const body = mk('div', {class: 'wz-body'});
   const name = mk('input', {value: f.name, maxlength: '24'}); name.oninput = () => { f.name = name.value; };
-  box.append(field('Name', name));
+  body.append(field('Name', name));
   if (t === 'bedroom') {
     const devs = tvDisc.chromecasts.map(d => [d.name, d.name + ' \u00b7 ' + d.host]);
     if (f.device && !devs.some(d => d[0] === f.device)) devs.push([f.device, f.device + ' (saved, not found now)']);
     const dev = opts(mk('select', {}), devs.length ? devs : [['', 'No Chromecast found']], f.device || '');
     dev.onchange = () => { f.device = dev.value; };
-    box.append(field('Chromecast', dev));
+    body.append(field('Chromecast', dev));
   }
   const rokus = tvDisc.rokus.map(r => [r.ip, rokuLabel(r)]);
   if (f.roku && !rokus.some(r => r[0] === f.roku)) rokus.push([f.roku, f.roku + ' (saved, not found now)']);
   const roku = opts(mk('select', {}), [['', 'None: no power, volume or input controls'], ...rokus], f.roku);
   roku.onchange = () => { f.roku = roku.value; };
-  box.append(field('Its TV (a Roku)', roku));
+  body.append(field('Its Roku TV', roku));
   const inp = opts(mk('select', {}), [['', 'Don\u2019t switch the TV\u2019s input'], ['HDMI1', 'HDMI 1'], ['HDMI2', 'HDMI 2'], ['HDMI3', 'HDMI 3'], ['HDMI4', 'HDMI 4']], f.input);
   inp.onchange = () => { f.input = inp.value; };
-  box.append(field('HDMI input to switch to when you play', inp));
-  const out = mk('span', {class: 'sub'});
-  const test = mk('button', {type: 'button'}, 'Test the TV controls');
+  body.append(field('HDMI input to switch to when you play', inp));
+  const out = mk('span', {role: 'status'});
+  const test = mk('button', {type: 'button'}, 'Test the TV');
   test.onclick = async () => {
-    if (!f.roku) { out.textContent = 'Pick a TV first.'; return; }
+    if (!f.roku) { out.textContent = 'Pick a Roku TV first.'; return; }
     out.textContent = '';
     const r = await busy(test, () => fetch('/api/targets/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({roku: f.roku})}).then(x => x.json()));
-    out.textContent = !r ? 'Couldn\u2019t reach the Pi.' : r.ok ? 'Sent the TV\u2019s Info key: did its information banner appear?' : r.error;
+    out.textContent = !r ? 'Couldn\u2019t reach the Pi.' : r.ok ? 'Sent. Did the TV\u2019s information banner appear?' : r.error;
   };
-  box.append(mk('div', {class: 'test'}, test, out));
-  f.why.forEach(w => box.append(mk('p', {class: 'why'}, 'Guess: ' + w)));
+  body.append(mk('div', {class: 'wz-test'}, test, out));
+  if (f.why.length) body.append(mk('div', {class: 'wz-why'}, mk('b', {}, 'Why we picked this'), ...f.why.map(w => mk('p', {}, w))));
+  box.append(body);
   return box;
 }
 function renderTvSlots() { $('tvslots').replaceChildren(tvSlot('living'), tvSlot('bedroom')); }
