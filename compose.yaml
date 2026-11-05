@@ -1,0 +1,39 @@
+services:
+  tvremote:
+    build: .
+    image: tvremote:latest
+    container_name: tvremote
+    restart: unless-stopped
+    network_mode: host # port ${PORT:-8765} on the LAN, no NAT
+    user: "${PI_UID:-1000}:${PI_GID:-1000}"
+    group_add: ["${VIDEO_GID:-44}", "${RENDER_GID:-992}"] # numeric host GIDs (see .env.example)
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/cec0:/dev/cec0
+      - /dev/video10:/dev/video10 # H.264 decoder (v4l2m2m)
+      - /dev/video11:/dev/video11
+      - /dev/video12:/dev/video12
+      - /dev/video13:/dev/video13
+      - /dev/video14:/dev/video14
+      - /dev/video15:/dev/video15
+      - /dev/video16:/dev/video16
+      - /dev/video18:/dev/video18
+      - /dev/video19:/dev/video19
+    volumes:
+      - /run/user/${PI_UID:-1000}:/run/user/${PI_UID:-1000} # Wayland + PipeWire sockets
+      - tvremote-data:/data # favourites.json, player.log
+    environment:
+      - XDG_RUNTIME_DIR=/run/user/${PI_UID:-1000}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
+      - PIPEWIRE_RUNTIME_DIR=/run/user/${PI_UID:-1000}
+      - TVREMOTE_PORT=${PORT:-8765}
+      - TVREMOTE_CEC_PHYS=${CEC_PHYS:-1.0.0.0}
+      - TVREMOTE_CEC_NAME=HunnidPi
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:${PORT:-8765}/api/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  tvremote-data:
