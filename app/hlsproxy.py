@@ -1,7 +1,9 @@
 """HLS relay for the Chromecast: the Pi (wired) fetches the live segments and keeps the latest few in memory,
 then serves a playlist pointing at itself, so the Chromecast only does plain HTTP on the LAN.
 shortcut: media playlists only (no EXT-X-MAP/KEY rewriting, no master playlist), upgrade if a source needs them."""
+import hmac
 import ipaddress
+import secrets
 import socket
 import threading
 import urllib.request
@@ -11,7 +13,7 @@ from urllib.parse import quote, urljoin, urlparse
 MAX_BYTES = 30_000_000  # per playlist/segment
 MAX_CACHED = 14  # ~1 minute of 4s segments, about 40 MB at 1080p60
 _lock = threading.Lock()
-_up = {"url": None}
+_up = {"url": None, "token": None}
 _cache = OrderedDict()  # segment url -> _Seg
 _allowed = set()        # only segments listed in the playlist can be fetched through us
 
@@ -55,9 +57,19 @@ def _get(url, timeout=15):
     return data
 
 
+def token():
+    return _up["token"]
+
+
+def valid(candidate):
+    t = _up["token"]
+    return bool(t) and hmac.compare_digest(candidate.encode(), t.encode())
+
+
 def set_upstream(url):
     with _lock:
         _up["url"] = url
+        _up["token"] = secrets.token_urlsafe(16)  # unguessable path segment: the Chromecast gets it in the URL we cast
         _cache.clear()
         _allowed.clear()
 

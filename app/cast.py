@@ -174,7 +174,7 @@ class CastTarget:
         cast = self._connect()
         if cast.app_id != APP_MEDIA_RECEIVER:
             cast.start_app(APP_MEDIA_RECEIVER)
-        cast.media_controller.play_media(f"http://{self._lan_ip(self.device().host)}:{self.port}/cast/live.m3u8",
+        cast.media_controller.play_media(f"http://{self._lan_ip(self.device().host)}:{self.port}/cast/{hlsproxy.token()}/live.m3u8",
                                          "application/x-mpegURL", title=self.title_fn(url), stream_type="LIVE")
         self.state["via"] = "pi-proxy"
 
