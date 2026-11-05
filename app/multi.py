@@ -75,6 +75,13 @@ def quality_for(player, label):
     return None
 
 
+def friendly(raw):
+    """Plain words for why a window's player stopped (what mpv or streamlink last said is not for a person)."""
+    if not raw or re.search(r"No playable streams|offline|Closing currently open stream|End of file|Exiting|404|Not Found", raw, re.I):
+        return "Went offline"
+    return raw[:100]
+
+
 def rules_xml():
     """The desktop (labwc) window rules for every layout, count and tile."""
     rules = []
@@ -95,6 +102,7 @@ class Wall:
 
     def __init__(self, build, resolve, name, log_dir="/tmp", volume=lambda: None):
         self.build, self.resolve, self.name, self.log_dir, self.volume = build, resolve, name, log_dir, volume
+        self.on_change = lambda: None  # called when a window ends by itself (a stream went offline), so the screen can say so
         self.layout = None
         self.extras = []  # tiles 1..: {"url", "source", "proc", "error"}
         self.sound = {0}  # the tiles with sound on: the main stream only, to start with. Any number can be switched on
@@ -182,7 +190,8 @@ class Wall:
                     lines = [l for l in f.read().splitlines() if l.strip()]
             except OSError:
                 lines = []
-            t["error"] = re.sub(r"^\[[^\]]*\]\s*(ERROR:\s*)?", "", lines[-1])[:120] if lines else "The player stopped."
+            t["error"] = friendly(re.sub(r"^\[[^\]]*\]\s*(ERROR:\s*)?", "", lines[-1]) if lines else None)
+            self.on_change()
 
     def start_windows(self, pause=STAGGER):
         """(Re)start the extra windows that need it, each in its own thread so they all begin together (or `pause` seconds apart). A
@@ -240,6 +249,12 @@ class Wall:
                 self.sound = {k if k < i else k - 1 for k in self.sound if k != i}  # the tiles after it move up one
             if not self.extras:
                 self.layout = None
+
+    def retry(self, i):
+        """Try an extra window again (its stream may be back): forget the failure, then start_windows() restarts it."""
+        with self.lock:
+            if 1 <= i <= len(self.extras):
+                self.extras[i - 1].update(error=None, proc=None)
 
     def swap(self, i, main_url):
         """Put extra tile i's stream on the big tile. Returns the new main url, or None."""

@@ -329,11 +329,12 @@ body:has(dialog.sheet[open]){overflow:hidden}
 .wtile{margin-top:12px;padding:12px;border-radius:14px;background:var(--card2,var(--line));min-width:0}.wtile .top{display:flex;align-items:center;gap:10px;min-width:0;min-height:44px}
 .wtile .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.wtile .ctl{display:flex;align-items:center;gap:8px;margin-top:10px}
 .wtile .ctl>*{min-height:44px}.wtile .ctl select{flex:1;min-width:0}.wtile .ctl .snd{flex:none;display:flex;align-items:center;gap:6px;padding:0 14px}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
-.wtile .top button{flex:none;width:44px;min-height:44px;padding:0}.wtile .ctl .ib{flex:none;width:44px;padding:0}.wtile .err{color:#ff8a8a;font-size:13px;margin-top:8px}
+.wtile .top button{flex:none;width:44px;min-height:44px;padding:0}.wtile .ctl .ib{flex:none;width:44px;padding:0}.wtile .err{color:#ff8a8a;font-size:14px;margin-top:10px;display:flex;align-items:center;gap:10px}.wtile .err button{margin-left:auto;min-height:36px;padding:0 14px;background:var(--card);color:var(--fg);font-size:14px}
 .wtile .acts{display:flex;gap:8px;margin-top:8px}.wtile .acts button{flex:1;min-height:40px;font-size:14px;background:var(--card)}
 .wallstrip{display:flex;gap:6px;margin:0 0 12px}  /* the tiles share the width: no scrolling */
 .wstream{flex:1 1 0;min-width:0;height:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 3px;border-radius:14px;background:var(--card2,var(--line));position:relative}
 .wstream .av{width:42px;height:42px}.wstream .wn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600}
+.wstream.off .av,.wstream.off .wn{opacity:.45}
 .wstream .wtags{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}.wstream .badge{font-size:9px;padding:2px 5px;min-height:0;line-height:1.3}
 .wstream[aria-pressed=true]{box-shadow:inset 0 0 0 2px var(--tv,#6bb2ff)}.wstream .ws{position:absolute;top:6px;right:6px;display:flex;color:var(--tv,#6bb2ff)}.wstream .ws .ic{width:16px;height:16px}
 .wallnote .ni{display:inline-flex;vertical-align:-4px}.wallnote .ni .ic{width:18px;height:18px}
@@ -752,8 +753,8 @@ function renderWallStrip(show) {
   strip.classList.toggle('hide', !(w && show));
   if (!(w && show)) { stripSig = ''; return; }
   const items = [{i: 0, name: chanName(st.url || '') || st.title || 'Main', url: st.url, source: st.source}, ...w.tiles];
-  items.forEach(t => { t.live = t.i === 0 ? !!st.live : t.live === true; });
-  const sig = JSON.stringify([items.map(t => [t.url, t.name, t.live]), w.sound]);
+  items.forEach(t => { t.off = t.i === 0 ? (!st.running && !st.starting && !!st.error) : !!t.error; t.live = !t.off && (t.i === 0 ? !!st.live : t.live === true); });
+  const sig = JSON.stringify([items.map(t => [t.url, t.name, t.live, t.off]), w.sound]);
   if (sig === stripSig) return;
   stripSig = sig;
   strip.replaceChildren(...items.map(t => {
@@ -763,6 +764,7 @@ function renderWallStrip(show) {
     const tags = el('span', 'wtags');  // the site and LIVE chips live here, under each picture
     tags.append(el('span', 'badge ' + (t.source || ''), t.source || 'Other'));
     if (t.live) tags.append(el('span', 'badge live', 'LIVE'));
+    if (t.off) { tags.append(el('span', 'badge', 'Offline')); b.classList.add('off'); }
     b.append(avatarEl(name, t.url), el('span', 'wn', name), tags);
     if (on) { const s = el('span', 'ws'); s.innerHTML = ic('volume'); b.append(s); }
     b.onclick = () => wallApi({action: 'sound', i: t.i, on: !on});
@@ -1745,7 +1747,11 @@ function renderWall() {
       only.title = 'Back to one stream, with this one'; only.onclick = () => wallApi({action: 'only', i: r.i});
       acts.append(main, only); tile.append(acts);
     }
-    if (r.error) tile.append(el('div', 'err', r.error));
+    if (r.error) {  // it ended by itself: say why, and offer to try again (taking it off the screen is the X, which moves the others)
+      const e = el('div', 'err', r.error), retry = el('button', null, 'Try again');
+      retry.onclick = () => busy(retry, () => wallApi({action: 'retry', i: r.i}));
+      e.append(retry); tile.append(e);
+    }
     return tile;
   }));
   const free = !w || w.tiles.length + 1 < w.max;

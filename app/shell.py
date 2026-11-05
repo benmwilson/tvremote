@@ -117,12 +117,15 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=(), accent=None):
 
 def wall_screen(layout, labels):
     """The background behind several streams: soft colour glows, and each stream's name on the strip under its window.
-    labels: [(name, source)] in tile order. Returns one ASS event text per piece."""
+    labels: [(name, source, ended)] in tile order; an ended stream's slot says so. Returns one ASS event text per piece."""
     def glow(x, y, w, h, colour, alpha):  # a big rectangle, blurred into a soft light
         return r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&\1a&H%s&\blur140}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x, y, colour, alpha, w, w, h, h)
     out = [glow(-200, -260, 1100, 760, "9A5A2E", "50"), glow(1000, 640, 1100, 760, "8A2E6A", "58")]
-    for (x, y, w, h), (name, source) in zip(multi.tiles(layout, len(labels)), labels):
-        dot = SRC_BGR.get(source, DIM)
+    for (x, y, w, h), (name, source, ended) in zip(multi.tiles(layout, len(labels)), labels):
+        if ended:  # the window closed: a dim panel where it was
+            out.append(r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H000000&\1a&H70&}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x, y, w, w, h, h))
+            out.append(r"{\an5\pos(%d,%d)\fs38\b1\bord0\shad0\c&H%s&}Went offline\N{\fs26\b0\c&H%s&}%s" % (x + w // 2, y + h // 2, TEXT, DIM, esc(clean(name))[:30]))
+        dot = SRC_BGR.get(source, DIM) if not ended else DIM
         out.append(r"{\an4\pos(%d,%d)\fs26\b1\bord0\shad0\c&H%s&}%s  {\c&H%s&}%s" % (
             x + 2, y + h + multi.S // 2 + 2, dot, "●", TEXT, esc(clean(name))[:30]))
     return out

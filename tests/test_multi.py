@@ -130,7 +130,7 @@ if __name__ == "__main__":
 class WallScreenTest(unittest.TestCase):
     def test_background_has_a_name_strip_per_stream_and_no_big_logo(self):
         import shell
-        ev = shell.wall_screen("grid", [("alpha", "Kick"), ("beta", "Twitch"), ("gamma", "Other")])
+        ev = shell.wall_screen("grid", [("alpha", "Kick", False), ("beta", "Twitch", False), ("gamma", "Other", False)])
         self.assertEqual(len(ev), 5)  # two glows and three names
         self.assertTrue(all(f"{n}" in "".join(ev) for n in ("alpha", "beta", "gamma")))
         self.assertNotIn("fscx260", shell.ass_file([(0, 1, "x")], logo=False))  # no big logo behind the windows
@@ -165,6 +165,25 @@ class OnlyThisTest(unittest.TestCase):
         self.assertTrue(r.get_json()["ok"])
         self.assertEqual(calls, [(server.wall_relayout, ("https://kick.com/b",))])
         self.assertFalse(server.wall.active())
+
+
+class OfflineTest(unittest.TestCase):
+    def test_a_window_that_ends_says_why_in_plain_words_and_can_be_retried(self):
+        self.assertEqual(multi.friendly("[info] Closing currently open stream..."), "Went offline")
+        self.assertEqual(multi.friendly(None), "Went offline")
+        self.assertEqual(multi.friendly("Failed to open something odd"), "Failed to open something odd")
+        w = wall()
+        w.add("https://kick.com/b", "https://kick.com/a")
+        w.extras[0].update(error="Went offline", proc=object())
+        w.retry(1)
+        self.assertIsNone(w.extras[0]["error"])
+        self.assertIsNone(w.extras[0]["proc"])
+
+    def test_the_background_marks_an_ended_streams_slot(self):
+        import shell
+        ev = shell.wall_screen("grid", [("a", "Kick", False), ("b", "Kick", True)])
+        self.assertEqual(len(ev), 2 + 2 + 2)  # two glows, two names, and a panel with its words for the ended one
+        self.assertIn("Went offline", "".join(ev))
 
 
 class StaleWallTest(unittest.TestCase):

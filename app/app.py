@@ -327,7 +327,7 @@ def screen(kind, detail="", source=None):
     """Show a screen on the TV's home screen, if it is on. `source` (Kick, Twitch, YouTube) tints it in that site's colour."""
     if HOME and settings.get("shell"):
         if kind == "playing" and wall.active():  # several streams: the background behind them, not a hidden window
-            labels = [(fav_name(state["url"] or ""), state["source"])] + [(wall.name(t["url"]), t.get("source")) for t in wall.extras]
+            labels = [(fav_name(state["url"] or ""), state["source"], bool(state.get("ended")))] + [(wall.name(t["url"]), t.get("source"), bool(t.get("error"))) for t in wall.extras]
             HOME.show_wall(wall.layout, labels)
             return
         accent = shell.SRC_BGR.get(source)
@@ -420,6 +420,10 @@ def _watch(proc):
     proc.wait()
     if state["proc"] is not proc:
         return  # replaced, or stopped on purpose
+    if wall.active():  # one of several: say so in its slot, and leave the other windows alone
+        state["ended"] = True
+        screen("playing")
+        return
     raw = last_error()
     name = fav_name(state["url"] or "")
     if raw and re.search(r"No playable streams|offline", raw, re.I):
@@ -551,7 +555,7 @@ def start_player(url, quality=None, screen_kind="loading"):
     log = open(LOG_FILE, "w")
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log,
                             stderr=subprocess.STDOUT, start_new_session=True)
-    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time(), stalls=0, stall_s=0, wid=wall.main_wid(),
+    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time(), stalls=0, stall_s=0, wid=wall.main_wid(), ended=False,
                  hot=cmd[0] == "mpv" and player == "streamlink")
     chat_sync()
     threading.Thread(target=_watch, args=(proc,), daemon=True).start()
@@ -932,6 +936,7 @@ def wall_relayout(main_url=None):
         screen("playing")  # the names on the background may have changed
 
 
+wall.on_change = lambda: screen("playing")  # a window ended by itself: redraw the background so its slot says so
 _detected = {}  # name -> (when, answer): a streamer's sites are looked up at most once a minute
 
 
@@ -1020,6 +1025,11 @@ def swap_job(new_main, old_main, i):
     wall_relayout(new_main)
 
 
+def tile_retry():
+    wall.start_windows()
+    screen("playing")
+
+
 def _restart_main_quality(label):
     with lock:
         start_player(state["url"], multi.quality_for(resolve(state["url"])[1], label), "quality")
@@ -1063,6 +1073,13 @@ def api_wall():
         if not new_main:
             return jsonify(ok=False, error="Nothing to swap"), 400
         wall_later(swap_job, new_main, old_main, i)
+    elif act == "retry":  # a stream that went offline may be back
+        if i == 0:
+            state["wid"] = "retry"  # makes the next change restart the main window
+            wall_later(wall_relayout)
+        else:
+            wall.retry(i)
+            wall_later(tile_retry)
     elif act == "only":  # back to a single stream, keeping this one (the main stream is tile 0)
         keep = state["url"] if i == 0 else next(iter(t["url"] for k, t in enumerate(wall.extras, start=1) if k == i), None)
         if not keep:
