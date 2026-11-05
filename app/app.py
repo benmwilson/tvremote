@@ -297,6 +297,23 @@ def sprop(sock, name):
     return r.get("data") if r and r.get("error") == "success" else None
 
 
+_title_warming = set()
+
+
+def warm_title(url):
+    """Fetch a stream's title and details in the background if they are not known: only the first window used to get them."""
+    if not url or url in _qcache or url in _title_warming:
+        return
+    _title_warming.add(url)
+
+    def run():
+        try:
+            sl_info(url)
+        finally:
+            _title_warming.discard(url)
+    threading.Thread(target=run, daemon=True).start()
+
+
 def sel_info():
     """(url, source, player, socket) of the stream the remote controls: the main one, or the selected one while several are on the screen."""
     if wall.active() and wall.selected:
@@ -1162,7 +1179,7 @@ def api_wall():
             wall.retry(i)
             wall_later(tile_retry)
     elif act == "only":  # back to a single stream, keeping this one (the main stream is tile 0)
-        keep = state["url"] if i == 0 else next(iter(t["url"] for k, t in enumerate(wall.extras, start=1) if k == i), None)
+        keep = (wall.main_url or state["url"]) if i == 0 else next(iter(t["url"] for k, t in enumerate(wall.extras, start=1) if k == i), None)
         if not keep:
             return jsonify(ok=False, error="No such stream"), 400
         if i:
@@ -1330,10 +1347,13 @@ def pi_status():
     if running:
         for key, name in PROPS.items():
             data[key] = P(name)
-        if player == "streamlink":
-            data["title"] = display_title(url)
-        data["stalls"], data["stall_s"] = state.get("stalls", 0), round(state.get("stall_s", 0))
         facts = livewatch.snapshot().get(url or "", {})
+        if player == "streamlink":
+            warm_title(url)
+            data["title"] = display_title(url)
+            if data["title"] == fav_name(url) and facts.get("title"):  # no details yet: what the live check saw
+                data["title"] = f"{data['title']}: {facts['title']}"
+        data["stalls"], data["stall_s"] = state.get("stalls", 0), round(state.get("stall_s", 0))
         data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(url or "")
         data["chat_ok"] = source == "Twitch" and bool(chat.channel_of(url or ""))
         data["chat"] = bool(_chat["obj"])

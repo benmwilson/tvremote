@@ -337,7 +337,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 #wallcard.updating .acts,#wallcard.updating .wtile .top button,#wallcard.updating .wtile select,#wallcard.updating #walllayout,#wallcard.updating #wallclear{opacity:.45;pointer-events:none}
 .pill{flex:none;padding:2px 9px;border-radius:99px;background:var(--tv,#6bb2ff);color:#0b0e14;font-size:11px;font-weight:700}.wtile .top{cursor:pointer}.wtile .acts button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
 .wtile .err{color:#ff8a8a;font-size:14px;margin-top:10px;display:flex;align-items:center;gap:10px}.wtile .err button{margin-left:auto;min-height:36px;padding:0 14px;background:var(--card);color:var(--fg);font-size:14px}
-.wtile .acts{display:flex;gap:8px;margin-top:8px}.wtile .acts button{flex:1;min-height:40px;font-size:14px;background:var(--card)}
+.wtile .acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}.wtile .acts button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:58px;padding:6px 4px;font-size:13px;background:var(--card)}.wtile .acts button .ic{width:20px;height:20px}
 .stripcap{margin:0 2px 8px;color:var(--dim);font-size:13px;line-height:1.35}.ctlfor{margin:14px 2px 0;color:var(--tv,#6bb2ff);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .wallstrip{display:flex;gap:6px;margin:0 0 12px}  /* the tiles share the width: no scrolling */
 .wstream{flex:1 1 0;min-width:0;height:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 3px;border-radius:14px;background:var(--card2,var(--line));position:relative}
@@ -358,8 +358,10 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2v13.6a.9.9 0 001.4.8l10.2-6.8a.9.9 0 000-1.6L9.4 4.4A.9.9 0 008 5.2z" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor" stroke="none"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor" stroke="none"/></symbol>
-<symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
-<symbol id="i-focus" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="9" rx="1.5"/><rect x="4" y="15.5" width="4.5" height="4.5" rx="1"/><rect x="9.75" y="15.5" width="4.5" height="4.5" rx="1"/><rect x="15.5" y="15.5" width="4.5" height="4.5" rx="1"/></symbol>
+<symbol id="i-enlarge" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></symbol>
+<symbol id="i-fullscreen" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+<symbol id="i-multi-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-multi-focus" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="9" rx="1.5"/><rect x="4" y="15.5" width="4.5" height="4.5" rx="1"/><rect x="9.75" y="15.5" width="4.5" height="4.5" rx="1"/><rect x="15.5" y="15.5" width="4.5" height="4.5" rx="1"/></symbol>
 <symbol id="i-swap" viewBox="0 0 24 24"><path d="M5 8h13l-3.5-3.5M19 16H6l3.5 3.5"/></symbol>
 <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.6-5.9M20 4v5h-5"/></symbol>
 <symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4.5H6.5A1.5 1.5 0 005 6v12a1.5 1.5 0 001.5 1.5H10M15 8l4 4-4 4M19 12H9.5"/></symbol>
@@ -591,10 +593,10 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <a id="chatpop" class="chatpoplink hide" target="_blank" rel="noopener" title="Open this chat on the site (you can type there if you're logged in)">Open on the site <svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a>
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
-<div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg><span class="grow"><b>Multi-view</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chev">&rsaquo;</span></button></div>
+<div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multi-view</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chev">&rsaquo;</span></button></div>
 <dialog id="wallcard" class="sheet" aria-labelledby="wallttl">
   <div class="sh"><div class="grow"><b id="wallttl">Multi-view</b><span class="sub" id="wallsub"></span></div>
-    <span class="wseg hide" id="walllayout"><button data-l="grid" aria-label="Grid layout" title="Grid: equal tiles"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg></button><button data-l="focus" aria-label="Focus layout" title="Focus: one big, the rest below"><svg class="ic" aria-hidden="true"><use href="#i-focus"/></svg></button></span>
+    <span class="wseg hide" id="walllayout"><button data-l="grid" aria-label="Grid layout" title="Grid: equal tiles"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg></button><button data-l="focus" aria-label="Focus layout" title="Focus: one big, the rest below"><svg class="ic" aria-hidden="true"><use href="#i-multi-focus"/></svg></button></span>
     <button class="sclose" data-close aria-label="Close" autofocus><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
     <div id="walltiles"></div>
@@ -1771,14 +1773,12 @@ function renderWall() {
     q.onchange = () => wallApi({action: 'quality', i: r.i, quality: q.value});
     ctl.append(sound, q);
     tile.append(top, ctl);
-    const acts = el('div', 'acts'), rp = el('button', null, 'Replace');
-    rp.title = 'Put a different stream in this window'; rp.setAttribute('aria-pressed', String(wallReplace === r.i));
-    rp.onclick = () => { wallReplace = wallReplace === r.i ? null : r.i; wallSig = ''; renderWall(); if (wallReplace !== null) $('wallurl').focus(); };
-    acts.append(rp);
-    if (r.i && w.layout === 'focus') {  // the big window's place: the two streams trade windows, in place
-      const big = el('button', null, 'Make big'); big.title = 'Swap it with the big one'; big.onclick = () => wallApi({action: 'swap', i: r.i}); acts.append(big);
-    }
-    if (r.i) { const only = el('button', null, 'Only this'); only.title = 'Back to one stream, with this one'; only.onclick = () => wallApi({action: 'only', i: r.i}); acts.append(only); }
+    const acts = el('div', 'acts');
+    const act = (icon, label, title, fn) => { const x = el('button'); x.innerHTML = ic(icon) + '<span>' + label + '</span>'; x.title = title; x.setAttribute('aria-label', label + ': ' + title); x.onclick = fn; acts.append(x); return x; };
+    const rp = act('swap', 'Replace', 'put a different stream in this window', () => { wallReplace = wallReplace === r.i ? null : r.i; wallSig = ''; renderWall(); if (wallReplace !== null) $('wallurl').focus(); });
+    rp.setAttribute('aria-pressed', String(wallReplace === r.i));
+    if (r.i && w.layout === 'focus') act('enlarge', 'Enlarge', 'swap places with the big window', () => wallApi({action: 'swap', i: r.i}));
+    act('fullscreen', 'Full screen', 'stop multi-view and show only this stream, full screen', () => wallApi({action: 'only', i: r.i}));
     tile.append(acts);
     if (r.error) {  // it ended by itself: say why, and offer to try again (taking it off the screen is the X, which moves the others)
       const e = el('div', 'err', r.error), retry = el('button', null, 'Try again');
