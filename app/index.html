@@ -145,6 +145,13 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 #chatbox iframe{display:block;width:100%;height:340px;border:0;border-radius:12px;background:#0b0e14}
 #chatbox{margin-top:10px;max-height:340px;overflow-y:auto;overscroll-behavior:contain;font-size:15px;line-height:1.35;-webkit-overflow-scrolling:touch}
 #chatbox .m{padding:3px 0;word-break:break-word}#chatbox .m b{margin-right:6px}#chatbox img{height:1.5em;vertical-align:middle;margin:0 1px}
+.seekbar{display:flex;align-items:center;gap:10px;margin-top:14px;font-variant-numeric:tabular-nums;color:var(--dim);font-size:14px}
+.seekbar input{flex:1;min-width:0}
+.extras{margin-top:12px;display:grid;gap:10px}
+.chips{display:flex;gap:8px}.chips button{flex:1;min-height:40px;border-radius:12px;background:var(--card2);color:var(--dim);font-size:14px}
+.chips button[aria-pressed=true]{background:var(--tv);color:#0b0e14;font-weight:700}
+.sleeprow{display:flex;align-items:center;gap:12px}.sleeprow select{flex:1;min-width:0}
+.fav.off{opacity:.62}
 .sortbtn{margin-left:auto;margin-right:8px;min-height:44px;padding:0 14px;background:none;color:var(--dim);font-size:14px;border-radius:12px}
 .sortbtn[aria-pressed=true]{background:var(--card2,#222a38);color:var(--text,#fff)}
 .fav .mv{position:absolute;right:0;top:0;display:flex}
@@ -253,6 +260,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <div id="game" class="sub hide"></div>
   <div id="meta"></div>
   <button id="pp" class="pp" data-a="pause" aria-label="Pause or resume"></button>
+  <div class="seekbar hide" id="seekbar"><span id="pos">0:00</span><input type="range" id="seekr" min="0" max="100" step="1" value="0" aria-label="Position"><span id="dur">0:00</span></div>
   <div class="row" id="seek">
     <button data-a="seek" data-v="-60" aria-label="Back 60 seconds">&minus;60</button><button data-a="seek" data-v="-10" aria-label="Back 10 seconds">&minus;10</button>
     <button data-a="seek" data-v="10" aria-label="Forward 10 seconds">+10</button><button data-a="seek" data-v="60" aria-label="Forward 60 seconds">+60</button>
@@ -266,6 +274,10 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
     <button id="fav"></button>
     <div class="pair"><button id="refresh" aria-label="Refresh the stream" title="Refresh the stream"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
     <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div></div>
+  <div class="extras hide" id="extras">
+    <div class="chips hide" id="qpresets" role="group" aria-label="Quality shortcuts"><button data-p="best">Best</button><button data-p="balanced">Balanced</button><button data-p="saver">Data saver</button></div>
+    <div class="sleeprow"><select id="sleepsel" aria-label="Sleep timer"><option value="">Sleep timer</option><option value="15">Stop in 15 min</option><option value="30">Stop in 30 min</option><option value="60">Stop in 1 hour</option><option value="90">Stop in 90 min</option><option value="0">Cancel timer</option></select><span class="sub" id="sleepnote"></span></div>
+  </div>
 </div>
 <div class="card hide" id="chatcard">
   <div class="chatrow"><button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span><span class="chev">&#9662;</span></button>
@@ -307,6 +319,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <button id="favList" aria-label="Show favourites as a list" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg></button>
   <button id="favTiles" aria-label="Show favourites as tiles" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg></button></div></div>
 <div class="grid list" id="favs"></div>
+<h2 id="recenthead" class="hide">Recent</h2>
+<div class="grid list" id="recents"></div>
 
 <p style="text-align:center;margin-top:26px"><button id="dbgOpen" style="min-height:44px;background:none;color:var(--dim);font-size:14px"><svg class="ic" aria-hidden="true"><use href="#i-terminal"/></svg>Debug</button></p>
 </section>
@@ -483,6 +497,7 @@ function render() {
   if (run && st.url !== qualFor) loadQualities();
   checkFavLoading();
   chatShow();
+  renderExtras();
 }
 
 async function loadQualities() {
@@ -493,6 +508,7 @@ async function loadQualities() {
   (q || []).forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; sel.appendChild(o); });
   sel.value = [...sel.options].map(o => o.value).find(v => String(st.quality).split(',').includes(v)) || '';
   sel.classList.toggle('hide', !sel.options.length || !st.running);
+  renderPresets();
 }
 
 async function poll() {
@@ -505,6 +521,7 @@ let reordering = false;
 async function loadFavs() {
   favList = await api('/api/favourites') || [];
   drawFavs();
+  loadRecents();
 }
 // Drag a row by its handle: the row follows the finger, the others slide out of the way, and the order is saved on release.
 function dragFav(e, row, from) {
@@ -541,7 +558,7 @@ function drawFavs() {
   // live ones first (keeping your order among them); while reordering, exactly your order
   const shown = reordering ? favList : [...favList].sort((a, b) => (b.live === true) - (a.live === true));
   shown.forEach(f => {
-    const b = el('div', 'fav'); b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = f.url;
+    const b = el('div', 'fav' + (f.live === false ? ' off' : '')); b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = f.url;
     const x = el('button', 'x'); x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Remove ' + f.name);
     x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'DELETE', {url: f.url}); loadFavs(); };
     b.onclick = () => { if (!reordering) playFav(f.url); };
@@ -596,7 +613,7 @@ function checkFavLoading() {
 async function play(text) {
   err();
   const r = await api('/api/play', 'POST', {url: text, site});
-  if (r && r.ok) { $('link').value = ''; $('results').innerHTML = ''; setTimeout(poll, 1500); }
+  if (r && r.ok) { $('link').value = ''; $('results').innerHTML = ''; setTimeout(poll, 1500); setTimeout(loadRecents, 2500); }
   return r;
 }
 
@@ -696,6 +713,63 @@ $('shellrow').onclick = async () => {
 };
 
 fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
+
+// ---- seek bar, quality shortcuts, sleep timer ----
+let seekDrag = false;
+function renderPresets() {
+  const o = [...$('qual').options].map(x => x.value), box = $('qpresets');
+  box.classList.toggle('hide', o.length < 3 || !st.running);
+  const pick = {best: o[0], balanced: o[Math.floor(o.length / 2)], saver: o[o.length - 1]};
+  box.querySelectorAll('button').forEach(b => { b.dataset.q = pick[b.dataset.p] || ''; b.setAttribute('aria-pressed', String(b.dataset.q === $('qual').value)); });
+}
+$('qpresets').onclick = e => {
+  const b = e.target.closest('button');
+  if (b && b.dataset.q && $('qual').value !== b.dataset.q) { $('qual').value = b.dataset.q; $('qual').onchange(); renderPresets(); }
+};
+function renderExtras() {
+  const vod = st.running && !st.live && st.duration > 0;
+  $('seekbar').classList.toggle('hide', !vod);
+  if (vod && !seekDrag) {
+    const p = Math.min(st.position || 0, st.duration);
+    $('seekr').max = Math.floor(st.duration); $('seekr').value = p;
+    $('seekr').style.setProperty('--p', (100 * p / st.duration) + '%');
+    $('pos').textContent = fmt(p); $('dur').textContent = fmt(st.duration);
+  }
+  $('extras').classList.toggle('hide', !st.running);
+  const left = st.sleep_at ? Math.max(0, Math.round((st.sleep_at * 1000 - Date.now()) / 60000)) : 0;
+  $('sleepnote').textContent = st.sleep_at ? 'TV stops in ' + (left < 1 ? 'under a minute' : left + ' min') : '';
+  renderPresets();
+}
+$('seekr').oninput = () => { seekDrag = true; $('pos').textContent = fmt(+$('seekr').value); $('seekr').style.setProperty('--p', (100 * $('seekr').value / $('seekr').max) + '%'); };
+$('seekr').onchange = async () => { await cmd('seek_to', $('seekr').value); seekDrag = false; setTimeout(poll, 500); };
+$('sleepsel').onchange = async () => {
+  const v = $('sleepsel').value;
+  if (v === '') return;
+  await api('/api/sleep', 'POST', {minutes: +v});
+  $('sleepsel').value = '';
+  poll();
+};
+
+// ---- recent links ----
+async function loadRecents() {
+  const r = await fetch('/api/recents').then(x => x.json()).catch(() => []);
+  const saved = new Set(favList.map(f => f.url));
+  const items = (Array.isArray(r) ? r : []).filter(x => !saved.has(x.url)).slice(0, 5);
+  const box = $('recents');
+  box.replaceChildren();
+  $('recenthead').classList.toggle('hide', !items.length);
+  items.forEach(it => {
+    const b = el('div', 'fav'), head = el('div', 'fhead');
+    b.setAttribute('role', 'button'); b.tabIndex = 0;
+    head.append(avatarEl(it.name, it.url), el('b', null, it.name));
+    const x = el('button', 'x'); x.innerHTML = ic('star'); x.setAttribute('aria-label', 'Save ' + it.name + ' to favourites');
+    x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'POST', {url: it.url, name: it.name}); await loadFavs(); };
+    b.onclick = () => play(it.url);
+    b.onkeydown = e => { if (e.key === 'Enter') play(it.url); };
+    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), x);
+    box.append(b);
+  });
+}
 
 // ---- chat on the phone (read-only) ----
 // Twitch: the Pi reads the chat and the phone asks it for new messages. Kick: its own popout chat page is embedded (the Pi
