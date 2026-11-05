@@ -409,7 +409,7 @@ function cardEl(c, onTap, extra) {
   const size = c.size ? c.size + '″' : '';
   const sub = [[c.brand, size].filter(Boolean).join(' '), c.model].filter(Boolean).join(' · ');
   const n = c.now;
-  const line = !c.reachable ? "Can't reach this TV" : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : 'Nothing playing';
+  const line = !c.reachable ? "Can't reach this TV" : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.error ? "Couldn't play: " + c.error : 'Nothing playing';
   b.append(head, el('div', 'sub', [sub, c.connection].filter(Boolean).join(' · ')), el('div', 'now', line));
   const tags = el('div', 'tags');
   if (c.reachable && n && !n.starting) {
@@ -450,16 +450,20 @@ function tvInfo() {  // the TV details in the One TV view come from the same cac
   }
 }
 
+let cardSig = '';
 async function loadTargets() {
-  let ok = false;
+  let ok = false, changed = false;
   try {
     const r = await fetch('/api/targets');
     const j = await r.json();
-    if (Array.isArray(j)) { targets = j; ok = true; }
+    if (Array.isArray(j)) {
+      // redraw only when something visible changed: rebuilding the cards every poll can swallow a tap on the picker
+      const sig = JSON.stringify(j, (k, v) => k === 'position' ? undefined : v);
+      changed = sig !== cardSig; cardSig = sig; targets = j; ok = true;
+    }
   } catch (e) {}
   $('dot').classList.toggle('on', ok);
-  renderCards(); tvInfo();
-  if (view() === 'share') renderPicker();
+  if (changed) { renderCards(); tvInfo(); if (view() === 'share') renderPicker(); }
 }
 
 function show() {

@@ -49,6 +49,16 @@ class CardCache(unittest.TestCase):
         self.assertEqual((card["name"], card["power"]), ("B", "on"))
         self.assertFalse(card["reachable"])
 
+    def test_late_result_is_kept_for_the_next_refresh(self):
+        c = targets.Cards({"b": lambda: time.sleep(0.3) or {"name": "B"}}, order=["b"], timeout=0.1)
+        c.refresh_now()                     # misses its deadline
+        self.assertFalse(c.snapshot()[0]["reachable"])
+        time.sleep(0.4)                     # the provider finishes in the background
+        c.refresh_now()                     # its result is adopted, and being a little slow no longer counts as unreachable
+        card = c.snapshot()[0]
+        self.assertEqual(card.get("name"), "B")
+        self.assertTrue(card["reachable"])
+
     def test_stuck_provider_is_not_stacked(self):
         calls = []
         c = targets.Cards({"b": lambda: calls.append(1) or time.sleep(1)}, order=["b"], timeout=0.1)

@@ -47,14 +47,20 @@ app = Flask(__name__, static_folder=None)
 
 
 def tgt():
-    """The Chromecast target when ?target=bedroom, else None (= the Pi)."""
-    if request.args.get("target") == "bedroom":
+    """The Chromecast target for ?target=bedroom, None for the Pi (no target, or "living"). Anything else is
+    refused: guessing would risk controlling the wrong TV."""
+    t = request.args.get("target") or "living"
+    if t == "living":
+        return None
+    if t == "bedroom":
         if not CAST:  # never fall back to the Pi: that would control the wrong TV
             abort(Response(json.dumps({"ok": False, "error": "The bedroom Chromecast isn't available. "
                                        "Check that it is powered on and on the same Wi-Fi."}),
                            503, mimetype="application/json"))
         return CAST
-    return None
+    abort(Response(json.dumps({"ok": False, "error": "Unknown TV."}), 400, mimetype="application/json"))
+
+
 lock = threading.Lock()
 state = {"proc": None, "url": None, "quality": None, "source": None, "player": None}
 _qcache = {}
@@ -344,7 +350,7 @@ def play_get():
         except Exception as e:  # shown on the remote via /api/status
             if c:
                 c.state["error"] = str(e)
-    return redirect(f"/?target={c.id}" if c else "/", code=303)
+    return redirect(f"/?target={c.id if c else 'living'}", code=303)
 
 
 def switch_input(tid):
@@ -552,14 +558,29 @@ def stream_label(quality):
     return (first if "p" in first else first + "p") if first else None
 
 
-def roku_details(tv_id):
-    ip = ROKU_IPS.get(tv_id)
-    if not ip:
-        return {}
+_roku = {}       # tv_id -> (fetched at, info)
+_roku_busy = set()
+ROKU_TTL = 15    # seconds: TV details change rarely, and every ECP call costs two round trips
+
+
+def fetch_roku(tv_id):
     try:
-        return roku.info(ip)
+        info = roku.info(ROKU_IPS[tv_id])
     except (roku.RokuError, OSError):
-        return {}  # a TV that won't talk ECP still gets a card from its player status
+        info = _roku.get(tv_id, (0, {}))[1]  # a TV that won't talk ECP keeps its last details
+    _roku[tv_id] = (time.time(), info)
+    _roku_busy.discard(tv_id)
+
+
+def roku_details(tv_id):
+    """Cached TV details. A stale or missing entry is refreshed in the background, so a card never waits on a TV."""
+    if not ROKU_IPS.get(tv_id):
+        return {}
+    fetched, info = _roku.get(tv_id, (0, {}))
+    if time.time() - fetched > ROKU_TTL and tv_id not in _roku_busy:
+        _roku_busy.add(tv_id)
+        threading.Thread(target=fetch_roku, args=(tv_id,), daemon=True).start()
+    return info
 
 
 def make_card(tv_id, status):
@@ -572,7 +593,8 @@ def make_card(tv_id, status):
            "stream": stream_label(status.get("quality"))} if busy else None
     return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection,
             "brand": r.get("brand"), "model": r.get("model"), "size": r.get("size"), "tv_name": r.get("name"),
-            "power": r.get("power"), "input": r.get("app"), "now": now, "health": targets.health(kind, status)}
+            "power": r.get("power"), "input": r.get("app"), "now": now, "error": status.get("error"),
+            "health": targets.health(kind, status)}
 
 
 def living_card():
@@ -606,7 +628,7 @@ INPUTS = {"living": os.environ.get("TVREMOTE_INPUT_LIVING", ""),
 
 
 def roku_ip():
-    return ROKU_IPS.get("bedroom" if request.args.get("target") == "bedroom" else "living")
+    return ROKU_IPS.get(request.args.get("target") or "living")  # None for a TV we don't know
 
 
 @app.get("/api/roku")

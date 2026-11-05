@@ -30,6 +30,10 @@ class Targets(unittest.TestCase):
         for p in self.patches:
             p.start()
             self.addCleanup(p.stop)
+        server._roku.clear()
+        server._roku_busy.clear()
+        server.fetch_roku("living")  # warm the cache the way the background refresh would
+        server.fetch_roku("bedroom")
 
     def test_targets_returns_both_cards_in_order(self):
         fresh_cards().refresh_now()
@@ -60,6 +64,31 @@ class Targets(unittest.TestCase):
         fresh_cards().refresh_now()
         self.assertIsNone(self.client.get("/api/targets").get_json()[0]["now"])
 
+    def test_failed_playback_shows_its_error_on_the_card(self):
+        server.pi_status.return_value = {"running": False, "error": "HTTP error 404 Not Found", "url": "https://kick.com/chan", "source": "Kick"}
+        fresh_cards().refresh_now()
+        living = self.client.get("/api/targets").get_json()[0]
+        self.assertEqual(living["error"], "HTTP error 404 Not Found")
+        self.assertIsNone(living["now"])
+
+    def test_slow_roku_does_not_make_the_card_unreachable(self):
+        getattr(server, "_roku", {}).clear()
+        server.roku.info.side_effect = lambda ip, **kw: time.sleep(5) or dict(ROKU)
+        fresh_cards().refresh_now()
+        living = self.client.get("/api/targets").get_json()[0]
+        self.assertTrue(living["reachable"])  # the Pi player answered; only the TV's own details are late
+        self.assertEqual(living["now"]["title"], "chan: a very good stream")
+
+    def test_roku_is_not_polled_on_every_refresh(self):
+        server._roku.clear()
+        server._roku_busy.clear()
+        server.roku.info.reset_mock()  # setUp warmed the cache with the same mock
+        cards = fresh_cards()
+        for _ in range(5):
+            cards.refresh_now()
+        time.sleep(0.3)
+        self.assertLessEqual(server.roku.info.call_count, 2)  # at most one fetch per TV, not one per refresh
+
     def test_targets_never_waits_on_a_slow_tv(self):
         fresh_cards(living=server.living_card, bedroom=lambda: time.sleep(5) or {}).refresh_now()
         t0 = time.time()
@@ -72,6 +101,19 @@ class Targets(unittest.TestCase):
 class Routes(unittest.TestCase):
     def setUp(self):
         self.client = server.app.test_client()
+
+    def test_play_redirect_opens_the_pis_remote(self):
+        with mock.patch.object(server, "start_player"):
+            r = self.client.get("/play?u=https%3A%2F%2Fkick.com%2Fchan")
+        self.assertEqual(r.status_code, 303)
+        self.assertTrue(r.headers["Location"].endswith("/?target=living"), r.headers["Location"])
+
+    def test_unknown_target_is_refused_not_sent_to_the_pi(self):
+        with mock.patch.object(server, "stop_player") as sp:
+            r = self.client.post("/api/cmd?target=foo", json={"action": "stop"})
+        self.assertEqual(r.status_code, 400)
+        sp.assert_not_called()
+        self.assertEqual(self.client.get("/api/status?target=foo").status_code, 400)
 
     def test_share_serves_the_page(self):
         r = self.client.get("/share?u=https%3A%2F%2Fkick.com%2Fx")

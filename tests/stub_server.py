@@ -55,7 +55,7 @@ def card(tv):
            "starting": bool(st.get("starting")), "position": st.get("position"),
            "stream": "1080p60" if tv == "living" else "1080p"} if busy and not down else None
     c = {"id": tv, **INFO[tv], "reachable": not down, "now": now, "health": health(tv), "type": INFO[tv]["kind"],
-         "online": not down, "roku": True}
+         "online": not down, "roku": True, "error": st.get("error")}
     if down:
         c.update(now=None, power=None, input=None)
     return c
