@@ -1861,8 +1861,13 @@ def setup_admin():
         fresh = not auth_required()
         if not fresh:
             admin_only()
+            if not accounts.is_owner(g.user):
+                return refuse()  # a fresh install, or the owner: never another admin
+        wanted = str(data.get("name") or "").strip().lower()
+        if accounts.exists(wanted):
+            return jsonify(ok=False, error="That name is taken."), 400  # setup creates accounts, it never overwrites one
         try:
-            name = accounts.add(data.get("name"), data.get("password"), "admin", founder=not PASSWORD)
+            name = accounts.add(wanted, data.get("password"), "admin", founder=fresh and not PASSWORD)
         except ValueError as e:
             return jsonify(ok=False, error=str(e)), 400
     r = jsonify(ok=True, name=name)

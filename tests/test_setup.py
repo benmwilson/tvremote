@@ -105,6 +105,22 @@ class WithEnvPassword(SetupBase):
         self.assertEqual((users["ben"]["role"], users["ben"]["founder"], "owner" in users), ("admin", False, True))
         self.assertEqual(c.patch("/api/accounts", json={"name": "ben", "role": "user"}).status_code, 200)  # the .env owner is the fallback
 
+    def test_setup_never_overwrites_an_account_or_lets_a_plain_admin_in(self):
+        owner = server.app.test_client()
+        owner.post("/login", data={"password": "owner-pw"})
+        owner.post("/api/accounts", json={"name": "amy", "password": "secret1", "role": "admin"})
+        owner.post("/api/accounts", json={"name": "bo", "password": "secret1", "role": "admin"})
+        self.assertEqual(owner.post("/api/setup/admin", json={"name": "bo", "password": "hijack1"}).status_code, 400)  # exists
+        self.assertTrue(accounts.verify("bo", "secret1"))
+        amy = server.app.test_client()
+        amy.post("/login", data={"username": "amy", "password": "secret1"})
+        self.assertEqual(amy.post("/api/setup/admin", json={"name": "bo", "password": "hijack1"}).status_code, 403)  # admin, not owner
+        self.assertEqual(amy.post("/api/setup/admin", json={"name": "newone", "password": "secret1"}).status_code, 403)
+        self.assertTrue(accounts.verify("bo", "secret1"))
+        self.assertFalse(accounts.exists("newone"))
+        self.assertEqual(owner.post("/api/setup/admin", json={"name": "newone", "password": "secret1"}).status_code, 200)
+        self.assertFalse([u for u in accounts.listing() if u["founder"]])  # founder only ever comes from a fresh install
+
     def test_a_normal_user_is_never_prompted(self):
         accounts.add("sam", "secret1")
         sam = server.app.test_client()
