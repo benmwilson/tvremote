@@ -8,6 +8,7 @@ States per TV: idle, playing, paused, buffering, starting, down, error.  Add pla
 """
 import json
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -81,7 +82,7 @@ class H(BaseHTTPRequestHandler):
         routes = {
             "/api/targets": lambda: [card("living"), card("bedroom")],
             "/api/status": lambda: status(tv),
-            "/api/favourites": lambda: [],
+            "/api/favourites": lambda: [{"name": "chan: a long favourite stream title that is longer than one line", "url": "https://example.com/living", "source": "Kick"}, {"name": "Big Buck Bunny", "url": "https://example.com/bedroom", "source": "YouTube"}],
             "/api/qualities": lambda: ["1080p60", "720p60", "480p"] if tv == "living" else ["1080", "720", "480"],
             "/api/roku": lambda: {"name": INFO[tv]["tv_name"], "power": "PowerOn", "app": INFO[tv]["input"]},
             "/api/tv": lambda: {"name": "TV One", "power": "on"},
@@ -101,7 +102,9 @@ class H(BaseHTTPRequestHandler):
             if STATE["play_fail"] == q.get("target"):
                 return self._send({"ok": False, "error": "The bedroom Chromecast isn't available. "
                                    "Check that it is powered on and on the same Wi-Fi."}, code=503)
-            STATE[q.get("target", "living")] = "playing"
+            tv = q.get("target", "living")
+            STATE[tv] = "starting"
+            threading.Timer(4, lambda: STATE.update({tv: "playing"})).start()  # takes a few seconds, like the real thing
             return self._send({"ok": True})
         self._send({"ok": True})
 

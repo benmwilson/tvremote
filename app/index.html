@@ -89,6 +89,15 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .fav{position:relative;background:var(--card);border-radius:16px;padding:12px;min-height:72px;text-align:left;display:block;width:100%;min-width:0}
 .fav b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:30px;margin-bottom:6px}
+.fav{overflow:hidden}
+.fav .starting{display:none;font-size:13px;color:var(--dim)}
+.fav .spin{display:none;position:absolute;right:12px;bottom:12px;width:18px;height:18px;border-radius:50%;
+  border:3px solid var(--line);border-top-color:var(--tv,var(--fg));animation:spin .8s linear infinite}
+.fav.loading{pointer-events:none}.fav.loading .badge{display:none}
+.fav.loading .starting{display:inline}.fav.loading .spin{display:block}
+.fav.loading::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:40%;background:var(--tv,var(--fg));animation:slide 1.2s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slide{0%{left:-40%}100%{left:100%}}
 .fav .x{position:absolute;top:0;right:0;width:44px;min-height:44px;background:none;color:var(--dim);padding:0}
 .res{display:flex;gap:10px;background:var(--card);border-radius:16px;padding:8px;margin-bottom:8px;width:100%;text-align:left;align-items:center;justify-content:flex-start}
 .res img{width:112px;aspect-ratio:16/9;border-radius:8px;object-fit:cover;background:#000;flex:none}
@@ -273,6 +282,7 @@ function render() {
   const saved = favList.some(f => f.url === st.url);
   setBtn($('fav'), saved ? 'star-fill' : 'star', saved ? 'Saved' : 'Favourite');
   if (run && st.url !== qualFor) loadQualities();
+  checkFavLoading();
 }
 
 async function loadQualities() {
@@ -297,21 +307,45 @@ async function loadFavs() {
   g.innerHTML = '';
   if (!favList.length) g.append(Object.assign(el('div', 'sub', 'No favourites yet. Tap the star while something is playing to save it.'), {style: 'grid-column:1/-1;padding:4px'}));
   favList.forEach(f => {
-    const b = el('div', 'fav'); b.setAttribute('role', 'button'); b.tabIndex = 0;
+    const b = el('div', 'fav'); b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = f.url;
     const x = el('button', 'x'); x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Remove ' + f.name);
     x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'DELETE', {url: f.url}); loadFavs(); };
-    b.onclick = () => play(f.url);
-    b.onkeydown = e => { if (e.key === 'Enter') play(f.url); };
-    b.append(el('b', null, f.name), el('span', 'badge ' + (f.source || ''), f.source || 'Other'), x);
+    b.onclick = () => playFav(f.url);
+    b.onkeydown = e => { if (e.key === 'Enter') playFav(f.url); };
+    const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
+    b.append(el('b', null, f.name), el('span', 'badge ' + (f.source || ''), f.source || 'Other'), el('span', 'starting', 'Starting\u2026'), spin, x);
     g.appendChild(b);
   });
+  markFavs();
   render();
+}
+
+// A tapped favourite shows a spinner until that stream is playing (or fails, or 30 s pass).
+let favLoading = null;  // {url, t0}
+function markFavs() {
+  document.querySelectorAll('#favs .fav').forEach(b => {
+    const on = !!favLoading && b.dataset.url === favLoading.url;
+    b.classList.toggle('loading', on);
+    if (on) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
+  });
+}
+async function playFav(url) {
+  if (favLoading) return;
+  favLoading = {url, t0: Date.now()}; markFavs();
+  const r = await play(url);
+  if (!r || !r.ok) { favLoading = null; markFavs(); }
+}
+function checkFavLoading() {
+  if (!favLoading) return;
+  const age = Date.now() - favLoading.t0;
+  if ((st.running && st.url === favLoading.url) || (st.error && age > 1500) || age > 30000) { favLoading = null; markFavs(); }
 }
 
 async function play(text) {
   err();
   const r = await api('/api/play', 'POST', {url: text, site});
   if (r && r.ok) { $('link').value = ''; $('results').innerHTML = ''; setTimeout(poll, 1500); }
+  return r;
 }
 
 async function search(q) {
