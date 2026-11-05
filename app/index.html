@@ -137,8 +137,9 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .sortbtn{margin-left:auto;margin-right:8px;min-height:44px;padding:0 14px;background:none;color:var(--dim);font-size:14px;border-radius:12px}
 .sortbtn[aria-pressed=true]{background:var(--card2,#222a38);color:var(--text,#fff)}
 .fav .mv{position:absolute;right:0;top:0;display:flex}
-.fav .mv button{width:44px;height:44px;background:none;color:var(--dim);font-size:20px}
-.fav .mv button:disabled{opacity:.25}
+.fav .mv button{width:44px;height:44px;background:none;color:var(--dim);font-size:22px;touch-action:none;cursor:grab}
+.fav.drag{position:relative;z-index:2;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.fav:not(.drag){transition:transform .15s}
 .fav .livenote{display:block;margin-top:4px;font-size:13px}
 .fav .note{display:block;color:var(--warn);font-size:13px;margin-top:4px}
 .fav .note:empty{display:none}
@@ -475,6 +476,27 @@ async function loadFavs() {
   favList = await api('/api/favourites') || [];
   drawFavs();
 }
+// Drag a row by its handle: the row follows the finger, the others slide out of the way, and the order is saved on release.
+function dragFav(e, row, from) {
+  e.preventDefault();
+  const grip = e.currentTarget, items = [...$('favs').children], rects = items.map(n => n.getBoundingClientRect());
+  const h = rects[from].height + 8, y0 = e.clientY;
+  let to = from;
+  grip.setPointerCapture(e.pointerId);
+  row.classList.add('drag');
+  grip.onpointermove = m => {
+    const dy = m.clientY - y0, c = rects[from].top + rects[from].height / 2 + dy;
+    row.style.transform = 'translateY(' + dy + 'px)';
+    const j = rects.findIndex(r => c < r.top + r.height / 2);
+    to = j < 0 ? items.length - 1 : j;
+    items.forEach((n, k) => { if (k !== from) n.style.transform = from < k && k <= to ? 'translateY(' + -h + 'px)' : to <= k && k < from ? 'translateY(' + h + 'px)' : ''; });
+  };
+  grip.onpointerup = grip.onpointercancel = async () => {
+    grip.onpointermove = grip.onpointerup = grip.onpointercancel = null;
+    if (to !== from) { favList.splice(to, 0, favList.splice(from, 1)[0]); await api('/api/favourites/order', 'POST', {urls: favList.map(f => f.url)}); }
+    drawFavs();
+  };
+}
 async function moveFav(i, d) {
   const j = i + d;
   if (j < 0 || j >= favList.length) return;
@@ -501,11 +523,11 @@ function drawFavs() {
     b.append(head, el('span', 'badge ' + (f.source || ''), f.source || 'Other'), ...(live ? [live] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
     if (reordering) {
       const i = favList.indexOf(f), mv = el('span', 'mv');
-      const up = el('button', null, '▲'), dn = el('button', null, '▼');
-      up.setAttribute('aria-label', 'Move ' + f.name + ' up'); dn.setAttribute('aria-label', 'Move ' + f.name + ' down');
-      up.disabled = i === 0; dn.disabled = i === favList.length - 1;
-      up.onclick = e => { e.stopPropagation(); moveFav(i, -1); }; dn.onclick = e => { e.stopPropagation(); moveFav(i, 1); };
-      mv.append(up, dn); b.append(mv);
+      const grip = el('button', 'grip', '☰');  // drag this to move the row; arrow keys also work
+      grip.setAttribute('aria-label', 'Drag to move ' + f.name);
+      grip.onpointerdown = e => dragFav(e, b, i);
+      grip.onkeydown = e => { if (e.key === 'ArrowUp') { e.preventDefault(); moveFav(i, -1); } if (e.key === 'ArrowDown') { e.preventDefault(); moveFav(i, 1); } };
+      mv.append(grip); b.append(mv);
       b.querySelectorAll('.iconlink,.x').forEach(n => n.classList.add('hide'));
     }
     g.appendChild(b);
