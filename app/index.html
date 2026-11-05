@@ -241,8 +241,9 @@ $('fav').onclick = async () => {
   loadFavs();
 };
 $('qual').onchange = () => cmd('restart', null, {quality: $('qual').value}).then(() => setTimeout(poll, 1500));
-$('vol').oninput = () => { dragging = true;
-  if (st.muted && +$('vol').value > (st.volume || 0)) { st.muted = false; cmd('mute'); } // dragging up while muted unmutes (once)
+const unmute = () => { if (st.muted) { st.muted = false; cmd('unmute'); } };  // touching the slider while muted unmutes at once
+$('vol').onpointerdown = unmute;
+$('vol').oninput = () => { dragging = true; unmute();
   $('volv').textContent = $('vol').value; cmd('volume', $('vol').value); };
 $('vol').onchange = () => { dragging = false; };
 
