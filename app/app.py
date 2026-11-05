@@ -862,7 +862,8 @@ def api_recents():
         return jsonify([])  # what other people played is not for someone on a guest link
     livewatch.poke()
     snap = livewatch.snapshot()
-    return jsonify([{**r, "live": snap.get(r.get("url"), {}).get("live")} for r in load_recents()])
+    return jsonify([{**r, "live": e.get("live"), "game": e.get("game"), "live_for": livewatch.live_for(r.get("url") or ""), "last_live": e.get("last_live")}
+                    for r in load_recents() for e in [snap.get(r.get("url"), {})]])
 
 
 _start_seq = {}  # per TV: the newest start request. A request that is no longer the newest quits without starting.
@@ -954,21 +955,23 @@ def api_cmd():
     except (TypeError, ValueError):
         return jsonify(ok=False, error="Bad value"), 400
     on_wall = wall.active() and action in ("volume", "volume_delta", "mute", "unmute")
-    if on_wall:  # the level goes to every window (a tile switched on later is at the same level); mute only to the ones with sound
-        rs = [mpvipc.send(wall.sock(k, SOCK), cmd) for k in (range(wall.count()) if action.startswith("volume") else sorted(wall.sound))]
-        r = rs[0] if rs else {"error": "success"}  # nothing has sound on: nothing to change
+    if on_wall and action in ("mute", "unmute"):  # the stream the card controls: its sound on or off (the same switch as its speaker)
+        wall.set_sound(wall.selected, action == "unmute" or wall.selected not in wall.sound, SOCK)
+        return jsonify(ok=True)
+    if on_wall:  # the level of the stream the card controls only: with several heard at once, each has its own
+        r = mpvipc.send(sel_info()[3], cmd)
     else:
         sock = sel_info()[3]
         r = mpv(cmd) if sock == SOCK else mpvipc.send(sock, cmd)  # pause, seek...: the stream the card shows
     ok = bool(r and r.get("error") == "success")
     if ok and action == "pause" and sel_info()[3] == SOCK:
         osd_paused(bool(prop("pause")))
-    if ok and action in ("volume", "volume_delta") and prop("volume") is not None:
+    if ok and action in ("volume", "volume_delta") and sel_info()[3] == SOCK and prop("volume") is not None:
         settings["volume"] = prop("volume")
         if data.get("final") or time.time() - _vol_saved["t"] > 2:  # a drag sends many: write the file when it ends, or every few seconds
             _vol_saved["t"] = time.time()
             save_settings()
-    if ok and action in ("volume", "volume_delta", "mute", "unmute"):
+    if ok and action in ("volume", "volume_delta", "mute", "unmute") and sel_info()[3] == SOCK:  # the on-screen level is the main window's
         osd_volume()
     return jsonify(ok=ok)
 
@@ -1334,13 +1337,8 @@ def pi_status():
         data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(url or "")
         data["chat_ok"] = source == "Twitch" and bool(chat.channel_of(url or ""))
         data["chat"] = bool(_chat["obj"])
-        if wall.active() and 0 not in wall.sound:  # the main stream is silent: the mute button shows the state of those that are not
-            if not wall.sound:
-                data["muted"] = True
-            else:
-                m = sprop(wall.sock(min(wall.sound), SOCK), "mute")
-                if m is not None:
-                    data["muted"] = m
+        if wall.active():  # the mute button is the controlled stream's sound switch
+            data["muted"] = wall.selected not in wall.sound
         # live = streamlink, or a stream with no duration
         data["live"] = player == "streamlink" or data["duration"] is None
     else:

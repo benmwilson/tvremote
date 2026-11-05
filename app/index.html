@@ -1606,7 +1606,8 @@ async function loadRecents() {
     b.onclick = () => playFav(it.url);
     b.onkeydown = e => { if (e.key === 'Enter') playFav(it.url); };
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
-    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, x);
+    const live = it.live === true ? [el('span', 'badge live', 'LIVE')] : [];  // the same chip and line as a favourite
+    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), ...live, el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, x);
     box.append(b);
   });
   markFavs();  // a list redrawn while a tap is still loading keeps its spinner
@@ -1790,9 +1791,12 @@ function renderWall() {
   $('walladdbox').classList.toggle('hide', !free && !replacing);
   $('walladdlabel').textContent = replacing ? 'Replace ' + ((rows.find(r => r.i === wallReplace) || {}).name || 'it') + ' with' : 'Add a stream';
   // suggestions: the favourites that are live now, then the live recents (the live site of a streamer who is on both)
-  const seen = new Set(onWall), sugg = [];
-  for (const f of favList) { const u = f.play_url || f.url; if (f.live === true && !seen.has(u)) { seen.add(u); sugg.push({name: f.name, url: u}); } }
-  for (const x of recentList) { if (x.live === true && !seen.has(x.url)) { seen.add(x.url); sugg.push({name: x.name, url: x.url}); } }
+  // never suggest a streamer who is already on the screen: compared by name, so another link form or the other site doesn't slip through
+  const key = u => { try { const p = new URL(u).pathname.split('/').filter(Boolean); return (p.length === 1 ? p[0] : String(u)).toLowerCase(); } catch (e) { return String(u).toLowerCase(); } };
+  const seen = new Set(rows.flatMap(r => [key(r.url), (r.name || '').toLowerCase()])), sugg = [];
+  const offer = (name, url) => { const k = key(url), n = (name || '').toLowerCase(); if (seen.has(k) || (n && seen.has(n))) return; seen.add(k); if (n) seen.add(n); sugg.push({name, url}); };
+  for (const f of favList) if (f.live === true) offer(f.name, f.play_url || f.url);
+  for (const x of recentList) if (x.live === true) offer(x.name, x.url);
   const favs = free || replacing ? sugg.slice(0, 8) : [];
   $('wallfavswrap').classList.toggle('hide', !favs.length);
   $('wallfavs').replaceChildren(...favs.map(f => { const b = el('button', null, f.name || f.url); b.onclick = () => busy(b, () => wallPut(f.url)); return b; }));

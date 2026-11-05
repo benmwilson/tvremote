@@ -216,6 +216,39 @@ class ReconcileTest(unittest.TestCase):
         self.assertFalse([c for s, c in sent[before:] if c[0] == "loadfile"])
 
 
+class ControlledStreamTest(unittest.TestCase):
+    """The volume slider and mute button belong to the stream the card controls, not to the first window."""
+
+    def setUp(self):
+        import app as server
+        self.server = server
+        server.wall.clear()
+        server.wall.layout, server.wall.main_url = "grid", "https://kick.com/a"
+        server.wall.extras = [{"url": "https://kick.com/b", "proc": None}]
+        server.wall.selected = 1
+
+    def tearDown(self):
+        self.server.wall.clear()
+
+    def post(self, body):
+        with self.server.app.test_request_context("/api/cmd", method="POST", json=body):
+            return self.server.api_cmd()
+
+    def test_volume_goes_to_the_controlled_stream_only(self):
+        sent = []
+        with mock.patch.object(self.server, "tgt", return_value=None),                 mock.patch.object(self.server.mpvipc, "send", lambda sock, cmd, timeout=1.0: sent.append((sock, cmd)) or {"error": "success"}),                 mock.patch.object(self.server, "osd_volume"):
+            self.post({"action": "volume", "value": 40})
+        self.assertEqual([s for s, c in sent if c[0] == "set_property"], [multi._sock(1)])
+
+    def test_mute_switches_the_controlled_streams_sound(self):
+        with mock.patch.object(self.server, "tgt", return_value=None), mock.patch.object(multi.mpvipc, "send") as send:
+            self.post({"action": "mute"})  # it had no sound: now it has
+            self.assertEqual(self.server.wall.sound, {0, 1})
+            self.post({"action": "mute"})
+            self.assertEqual(self.server.wall.sound, {0})
+        send.assert_any_call(multi._sock(1), ["set_property", "mute", False])
+
+
 class AddressCacheTest(unittest.TestCase):
     def test_a_stream_address_is_remembered_so_a_swap_does_not_wait_for_streamlink(self):
         import app as server
