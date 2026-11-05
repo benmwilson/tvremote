@@ -819,7 +819,8 @@ function render() {
   $('volrow').classList.toggle('hide', !up);
   $('ctlrow').classList.toggle('hide', !up && !starting);
   $('refresh').classList.toggle('hide', !up);
-  $('qual').classList.toggle('hide', !up || !$('qual').options.length || !!st.wall);  // starting: only Stop. With several streams each has its own picker, in Multi-view
+  syncQual();
+  $('qual').classList.toggle('hide', !up || !$('qual').options.length);  // starting: only Stop
   $('wallnote').classList.toggle('hide', !(st.wall && (up || starting)));
   if (st.wall && (up || starting)) {
     const snd = st.wall.audio ? ((st.wall.tiles.find(t => t.i === st.wall.audio) || {}).name || 'another stream') : 'this stream';
@@ -845,13 +846,21 @@ function render() {
   const saved = isSaved(st.url);
   setBtn($('fav'), saved ? 'star-fill' : 'star', saved ? 'Saved' : 'Favourite');
   // an empty answer (the Pi's stream check can fail while a cast is still starting) is asked again, a few times, 8 s apart
-  if (run && (st.url !== qualFor || (!$('qual').options.length && qualTries < 4 && Date.now() - qualAt > 8000))) loadQualities();
+  if (run && !st.wall && (st.url !== qualFor || (!$('qual').options.length && qualTries < 4 && Date.now() - qualAt > 8000))) loadQualities();
   checkFavLoading();
   chatShow();
   renderExtras();
   renderWall();
 }
 
+// With several streams on, this picker is the main stream's own, the same one as in Multi-view (both read and set wall.main_quality).
+function syncQual() {
+  const sel = $('qual');
+  if (st.wall) {
+    if (sel.dataset.mode !== 'wall') { sel.dataset.mode = 'wall'; sel.innerHTML = ''; WALL_Q.forEach(([v, label]) => { const o = el('option', null, label); o.value = v; sel.append(o); }); }
+    if (document.activeElement !== sel) sel.value = st.wall.main_quality || '';
+  } else if (sel.dataset.mode === 'wall') { sel.dataset.mode = ''; sel.innerHTML = ''; qualFor = null; }  // back to this stream's own list
+}
 async function loadQualities() {
   qualTries = st.url === qualFor ? qualTries + 1 : 1;
   qualFor = st.url; qualAt = Date.now();
@@ -1076,7 +1085,8 @@ $('fav').onclick = async () => {
   await api('/api/favourites', had ? 'DELETE' : 'POST', {url: st.url, name: had ? undefined : st.title});
   loadFavs();
 };
-$('qual').onchange = () => cmd('restart', null, {quality: $('qual').value}).then(() => setTimeout(poll, 1500));
+$('qual').onchange = () => $('qual').dataset.mode === 'wall' ? wallApi({action: 'quality', i: 0, quality: $('qual').value})
+  : cmd('restart', null, {quality: $('qual').value}).then(() => setTimeout(poll, 1500));
 // One volume request at a time, always the latest value: a drag no longer queues dozens the TV has to catch up on.
 let volBusy = false, volNext = null;
 async function sendVol(v, final) {
