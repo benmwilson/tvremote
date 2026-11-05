@@ -691,10 +691,10 @@ def api_sleep():
 def on_sleep(tid):
     """The timer ran out: stop what is playing and turn the TV off."""
     if tid == "living":
+        screen("idle")
         with lock:
             stop_player()
             state.update(url=None, source=None, quality=None)
-        screen("idle")
     elif CAST:
         try:
             CAST.cmd("stop")
@@ -786,10 +786,10 @@ def api_cmd():
             return jsonify(ok=False, error=str(e)), 502
         return jsonify(ok=ok, error=err), (200 if ok else 400)
     if action == "stop":
+        screen("idle")  # first: the home screen still shows its last screen (in the old site's colour) until it is redrawn
         with lock:
             stop_player()
             state.update(url=None, source=None, quality=None)  # a deliberate stop leaves no old error or "now playing" behind
-        screen("idle")
         return jsonify(ok=True)
     if action == "restart":
         if not state["url"]:
@@ -980,10 +980,10 @@ def on_tv_off(tv_id):
             if not pi_playing():
                 return
             if pi_status().get("live"):
+                screen("idle")
                 with lock:
                     stop_player()
                     state.update(url=None, source=None, quality=None)
-                screen("idle")
             elif prop("pause") is not True:
                 mpv(["set_property", "pause", True])
                 osd_paused(True)

@@ -568,6 +568,14 @@ class ShellFlow(unittest.TestCase):
         self.assertEqual([l["source"] for l in out["links"]], ["Kick", "Twitch"])
         self.assertEqual(out["url"], "https://kick.com/capped")  # the identity (reorder, remove) stays the main link
 
+    def test_stopping_draws_the_ready_screen_before_the_stream_window_closes(self):
+        order = []
+        self.home.show = lambda kind, detail="", accent=None: order.append("screen:" + kind) or True
+        server.state.update(url="https://kick.com/chan", proc=None)
+        with mock.patch.object(server, "stop_player", side_effect=lambda: order.append("stop")), mock.patch.object(server, "tgt", return_value=None):
+            self.client.post("/api/cmd", json={"action": "stop"})
+        self.assertEqual(order, ["screen:idle", "stop"])
+
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]
         saved = []
