@@ -433,6 +433,14 @@ class ShellFlow(unittest.TestCase):
             c.set_cookie("tv_auth", old)  # a copied cookie is dead after logout
             self.assertEqual(c.get("/api/favourites").status_code, 401)
             self.assertNotIn(old, open(os.path.join(d, "sessions.json")).read())  # only hashes on disk
+            tok = server.new_session()
+            with mock.patch.object(server, "_sess_save"):  # the disk write fails: logout must still work
+                server.drop_session(tok)
+            self.assertFalse(server.valid_session(tok))
+            tok2 = server.new_session()
+            self.assertTrue(server.valid_session(tok2))
+            with mock.patch.object(server, "PASSWORD", "changed"):  # a new password voids every session
+                self.assertFalse(server.valid_session(tok2))
 
     def test_refresh_has_its_own_screen_and_quality_keeps_its_own(self):
         server.state.update(url="https://kick.com/chan", quality="1080p60,best")

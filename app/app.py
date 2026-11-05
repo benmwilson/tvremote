@@ -125,8 +125,12 @@ def _sess_save(d):
         pass  # sessions then last until the next restart
 
 
+_revoked = set()  # logged-out tokens, kept in memory too so a failed disk write still ends the session
+
+
 def _h(tok):
-    return hashlib.sha256(tok.encode()).hexdigest()  # only hashes are stored, so the file can't be used as a cookie
+    # keyed with the password: only hashes are stored (the file can't be used as a cookie) and a new password voids every session
+    return hmac.new(PASSWORD.encode(), tok.encode(), hashlib.sha256).hexdigest()
 
 
 def new_session():
@@ -140,11 +144,12 @@ def new_session():
 
 
 def valid_session(tok):
-    return bool(tok) and _sess_load().get(_h(tok), 0) > time.time()
+    return bool(tok) and _h(tok) not in _revoked and _sess_load().get(_h(tok), 0) > time.time()
 
 
 def drop_session(tok):
     with _sessions_lock:
+        _revoked.add(_h(tok))
         d = _sess_load()
         if d.pop(_h(tok), None) is not None:
             _sess_save(d)
