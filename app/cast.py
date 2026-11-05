@@ -162,6 +162,8 @@ class CastTarget:
             self.state["via"] = "youtube"
             return
         media, ctype, stype = self._media_url(url, source, player, q)
+        if cast.app_id != APP_MEDIA_RECEIVER:  # e.g. the YouTube app is open and would ignore the LOAD
+            cast.start_app(APP_MEDIA_RECEIVER)
         cast.media_controller.play_media(media, ctype, title=self.title_fn(url), stream_type=stype)
         self.state["via"] = "direct"
 
@@ -220,6 +222,10 @@ class CastTarget:
         if not c or not st["url"]:
             return data
         ms, cs = c.media_controller.status, c.status
+        if c.app_id != (APP_YOUTUBE if st["source"] == "YouTube" else APP_MEDIA_RECEIVER):
+            # another app is in front (or ours hasn't started yet): its media status is not ours
+            data["starting"] = time.time() - (st["started"] or 0) < 25
+            return data
         if ms.idle_reason == "ERROR" and ms.player_state == "IDLE":
             try:
                 self._fallback_proxy()
