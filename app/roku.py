@@ -40,7 +40,7 @@ def info(ip):
     size = _tag(xml, "screen-size")
     return {"name": _tag(xml, "user-device-name"), "brand": _tag(xml, "vendor-name"),
             "model": _tag(xml, "model-name"), "size": int(size) if size and size.isdigit() else None,
-            "power": _tag(xml, "power-mode"), "app": app.group(2) if app else None,
+            "power": _tag(xml, "power-mode"), "app": html.unescape(app.group(2)).strip() if app else None,  # the TV sends "&amp;" for "&"
             "app_id": app_id.group(1) if app_id else None}
 
 

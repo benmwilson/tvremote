@@ -105,6 +105,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 select{min-height:52px;padding:0 8px;width:100%;font-size:15px}
 .danger{color:var(--bad)}
 input[type=text]{width:100%;padding:0 14px;min-height:52px}
+/* every text-like field gets the same inner padding (a field with no type attribute, or a password field, used to have almost none) */
+input:not([type]),input[type=text],input[type=password],input[type=search],input[type=url],input[type=email]{padding-left:14px;padding-right:14px;box-sizing:border-box}
 .seg button{background:var(--card2)}.seg button.on{background:var(--fg);color:#0b0e14;font-weight:700}
 .go{background:var(--tv);color:#0b0e14;font-weight:700}
 .pad button{min-height:56px}
@@ -462,10 +464,13 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
       <select id="invhours" aria-label="How long access lasts" style="font-size:16px;min-height:52px">
         <option value="1">Access lasts 1 hour</option><option value="24" selected>Access lasts 1 day</option>
         <option value="168">Access lasts 7 days</option><option value="720">Access lasts 30 days</option></select>
-      <button class="go" id="invmake">Create a one-time link</button>
+      <select id="invdevices" aria-label="How many devices may open the link" style="font-size:16px;min-height:52px">
+        <option value="1" selected>Works on 1 device (one-time)</option><option value="2">Works on up to 2 devices</option>
+        <option value="3">Works on up to 3 devices</option><option value="5">Works on up to 5 devices</option></select>
+      <button class="go" id="invmake">Create a guest link</button>
       <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. It is shown only now, so copy it before you leave this page.</p>
         <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button">Copy</button></div></div>
-      <p class="sub">A guest can play things and control the TVs. They can't change favourites, link accounts or see settings. Each link works once, and must be opened within 2 days.</p>
+      <p class="sub">A guest can play things and control the TVs. They can't change favourites, link accounts or see settings. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
     </div>
     <div class="card hide" id="guests"></div>
 
@@ -748,7 +753,7 @@ function render() {
   setBtn($('pp'), st.paused ? 'play' : 'pause', st.paused ? 'Paused' : '');
   $('seek').classList.toggle('hide', !run || st.live);
   if (!up && !starting && !st.error) $('meta').textContent = ext
-    ? (extCtl ? (ext.paused ? 'Paused' : 'Playing') : 'Open') + ' on the TV itself, not through this remote. Starting something here will switch the TV to the Pi.'
+    ? (extCtl ? (ext.paused ? 'Paused' : 'Playing') : 'Open') + ' on the TV itself, not through this remote. Starting something here will switch the TV to ' + (((targets.find(t => t.id === target) || {}).kind === 'chromecast') ? 'the Chromecast' : 'the Pi') + '.'
     : 'Pick something below, or open a favourite.';
   $('extpp').classList.toggle('hide', !extCtl);
   setBtn($('extpp'), ext && ext.paused ? 'play' : 'pause', ext && ext.paused ? 'Paused' : '');
@@ -1089,6 +1094,7 @@ function mk(tag, attrs, ...kids) {
   kids.flat().forEach(c => e.append(c == null || c === false ? '' : c));
   return e;
 }
+const hoursText = h => h < 48 ? h + ' h' : Math.round(h / 24) + ' days';
 const seen = ts => ts ? ago(ts) : 'never';  // `ago` is defined further up
 function inFuture(ts) {
   const s = Math.max(0, ts - Date.now() / 1000);
@@ -1177,7 +1183,7 @@ function renderAccess() {
   $('reqcount').textContent = n; $('reqcount').classList.toggle('hide', !n);
   $('requests').replaceChildren(...(n ? access.requests.map(requestRow) : [mk('p', {class: 's-empty'}, 'No requests waiting.')]));
   const now = Date.now() / 1000;
-  const used = (access.used || []).filter(u => !access.guests.some(g => g.since && Math.abs(g.since - u.opened) < 5))  // still in use: shown above
+  const used = (access.used || []).filter(u => !access.guests.some(g => g.entry === u.id))  // still in use: shown above
     .map(u => ({...u, ended: u.opened + u.hours * 3600 < now}));
   const rows = [
     ...access.guests.map(g => mk('div', {class: 's-row'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, (g.label || 'G').slice(0, 1)),
@@ -1186,14 +1192,16 @@ function renderAccess() {
         mk('span', {class: 'sub'}, g.last ? 'Last: ' + g.last.text + ' · ' + ago(g.last.ts) : 'No actions yet')),
       mk('button', {class: 's-danger', onclick: async () => { await api('/api/guests/' + g.id, 'DELETE'); loadAccess(); }}, 'Revoke'))),
     ...access.invites.map(i => mk('div', {class: 's-row'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✉'),
-      mk('div', {class: 'grow'}, mk('b', {}, i.label || 'Unopened link'), ' ', mk('span', {class: 'pill'}, 'not opened'),
-        mk('span', {class: 'sub'}, i.hours + ' h of access once opened · link expires in ' + inFuture(i.redeem_by))),
+      mk('div', {class: 'grow'}, mk('b', {}, i.label || 'Unopened link'), ' ', mk('span', {class: 'pill'}, i.uses ? 'partly used' : 'not opened'),
+        mk('span', {class: 'sub'}, (i.max_uses > 1 ? 'Opened on ' + (i.uses || 0) + ' of ' + i.max_uses + ' devices · ' : '') + hoursText(i.hours) + ' of access each · link expires in ' + inFuture(i.redeem_by))),
       mk('button', {class: 's-danger', onclick: async () => { await api('/api/invites/' + i.id, 'DELETE'); loadAccess(); }}, 'Revoke'))),
-    ...used.map(u => mk('div', {class: 's-row', style: 'opacity:.65'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✓'),
+    ...used.map(u => mk('div', {class: 's-row', style: 'opacity:.75'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✓'),
       mk('div', {class: 'grow'}, mk('b', {}, u.label || 'Guest link'), ' ', mk('span', {class: 'pill'}, u.ended ? 'ended' : 'revoked'),
-        mk('span', {class: 'sub'}, 'Opened ' + ago(u.opened) + ' · ' + u.hours + ' h of access'))))];
+        mk('span', {class: 'sub'}, 'Opened ' + ago(u.opened) + ' · ' + hoursText(u.hours) + ' of access')),
+      mk('button', {'aria-label': 'Remove this from the list', title: 'Remove from the list', onclick: async () => { await api('/api/guest-history/' + u.id, 'DELETE'); loadAccess(); }}, 'Remove')))];
   $('guests').classList.toggle('hide', !rows.length);
-  $('guests').replaceChildren(mk('div', {class: 's-cap'}, 'Active and recent links'), ...rows);
+  $('guests').replaceChildren(mk('div', {class: 's-cap', style: 'display:flex;align-items:center;justify-content:space-between'}, 'Active and recent links',
+    used.length ? mk('button', {style: 'min-height:36px;padding:0 12px;font-size:13px', onclick: async () => { await api('/api/guest-history', 'DELETE'); loadAccess(); }}, 'Clear finished') : null), ...rows);
 }
 async function loadPeople() {
   const r = await fetch('/api/accounts').then(x => x.json()).catch(() => ({}));
@@ -1225,7 +1233,7 @@ $('acctadd').onsubmit = async e => {
 };
 $('invmake').onclick = async e => {
   e.preventDefault();
-  const r = await busy($('invmake'), () => api('/api/invites', 'POST', {hours: Number($('invhours').value), label: $('invlabel').value}));
+  const r = await busy($('invmake'), () => api('/api/invites', 'POST', {hours: Number($('invhours').value), devices: Number($('invdevices').value), label: $('invlabel').value}));
   if (r && r.ok) { $('invurl').value = r.url; $('invout').classList.remove('hide'); $('invlabel').value = ''; loadAccess(); }
 };
 

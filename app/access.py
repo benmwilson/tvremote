@@ -79,14 +79,20 @@ def _h(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def create_invite(hours, label, now=None):
-    """A new link token. `hours` is how long the guest's access lasts once the link is opened."""
+MAX_DEVICES = 5
+
+
+def create_invite(hours, label, max_uses=1, now=None):
+    """A new link token. `hours` is how long each guest's access lasts once the link is opened; `max_uses` is how many devices may open it
+    (each one counts once, and the link stops working after that many)."""
     now = now or time.time()
     hours = max(1, min(int(hours), 24 * 30))
+    max_uses = max(1, min(int(max_uses or 1), MAX_DEVICES))
     token = secrets.token_urlsafe(24)
     with _lock:
         d = {k: v for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now}
-        d[_h(token)] = {"created": now, "redeem_by": now + REDEEM_WINDOW, "hours": hours, "label": (label or "").strip()[:30]}
+        d[_h(token)] = {"created": now, "redeem_by": now + REDEEM_WINDOW, "hours": hours, "label": (label or "").strip()[:30],
+                        "max_uses": max_uses, "uses": 0}
         _write("invites.json", d)
     return token
 
@@ -97,21 +103,37 @@ def peek_invite(token, now=None):
 
 
 def redeem_invite(token, now=None):
-    """Use up a link: returns its details once, then never again."""
+    """One device opens the link: returns the link's details, and counts it. After its last permitted use the link is gone."""
     with _lock:
         d = _read("invites.json", {})
-        v = d.pop(_h(token or ""), None)
+        key = _h(token or "")
+        v = d.get(key)
         if v is None or v["redeem_by"] <= (now or time.time()):
             return None
+        v["uses"] = v.get("uses", 0) + 1
+        if v["uses"] >= v.get("max_uses", 1):
+            del d[key]
         _write("invites.json", d)
-        used = (_read("invites_used.json", []) + [{"label": v["label"], "hours": v["hours"], "opened": now or time.time()}])[-10:]
+        opened = now or time.time()
+        entry = secrets.token_hex(4)
+        used = (_read("invites_used.json", []) + [{"id": entry, "label": v["label"], "hours": v["hours"], "opened": opened}])[-10:]
         _write("invites_used.json", used)  # kept short: just enough to see that a link was used, and when
-        return v
+        return {**v, "entry": entry}  # the guest's session carries this, so the list can tell which opening is still in use
 
 
 def invites_used():
-    """The last few links that were opened, newest first: {label, hours, opened}."""
-    return list(reversed(_read("invites_used.json", [])))
+    """The last few times a link was opened, newest first: {id, label, hours, opened}. (Entries saved before ids existed get one from their time.)"""
+    return [{"id": f"t{int(e['opened'])}", **e} for e in reversed(_read("invites_used.json", []))]
+
+
+def clear_used(uid=None):
+    """Remove one entry of that history (or all of it when no id is given). Returns how many were removed."""
+    with _lock:
+        keep = [e for e in _read("invites_used.json", []) if uid is not None and e.get("id", f"t{int(e['opened'])}") != uid]
+        removed = len(_read("invites_used.json", [])) - len(keep)
+        if removed:
+            _write("invites_used.json", keep)
+        return removed
 
 
 def invites_pending(now=None):

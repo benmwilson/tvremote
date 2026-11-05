@@ -91,7 +91,7 @@ def session_user(tok):
 
 
 def guest_sessions():
-    return [{"id": k[:8], "label": v.get("label", ""), "exp": v["exp"], "since": v.get("since"), "last": activity.last("guest:" + k[:8])}
+    return [{"id": k[:8], "label": v.get("label", ""), "exp": v["exp"], "since": v.get("since"), "entry": v.get("entry"), "last": activity.last("guest:" + k[:8])}
             for k, v in load().items()
             if isinstance(v, dict) and v.get("user") == accounts.GUEST and v["exp"] > time.time() and k not in revoked]
 

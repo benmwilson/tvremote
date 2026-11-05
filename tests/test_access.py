@@ -106,6 +106,69 @@ class AccessTest(unittest.TestCase):
         self.assertEqual(self.owner.get("/api/auth").get_json()["user"], "boss")
         self.assertEqual(server.app.test_client().get(path2).status_code, 200)  # still usable by the person it is for
 
+    def test_a_link_for_three_devices_works_three_times_then_stops(self):
+        url = self.owner.post("/api/invites", json={"hours": 2, "label": "Family", "devices": 3}).get_json()["url"]
+        path = "/" + url.split("/", 3)[3]
+        self.assertIn(b"up to 3 devices", server.app.test_client().get(path).data)
+        phones = [server.app.test_client() for _ in range(4)]
+        self.assertEqual([p.post(path).status_code for p in phones], [303, 303, 303, 410])  # the fourth device is turned away
+        for p in phones[:3]:
+            self.assertEqual(p.get("/api/favourites").status_code, 200)  # each of the three has its own working guest session
+        self.assertEqual(len(self.owner.get("/api/access").get_json()["guests"]), 3)
+        self.assertEqual(self.owner.get("/api/access").get_json()["invites"], [])  # the link is used up
+
+    def test_a_partly_used_link_shows_how_far_and_can_be_revoked(self):
+        url = self.owner.post("/api/invites", json={"hours": 1, "devices": 3}).get_json()["url"]
+        path = "/" + url.split("/", 3)[3]
+        server.app.test_client().post(path)
+        inv = self.owner.get("/api/access").get_json()["invites"][0]
+        self.assertEqual((inv["uses"], inv["max_uses"]), (1, 3))
+        self.owner.delete("/api/invites/" + inv["id"])
+        self.assertEqual(server.app.test_client().post(path).status_code, 410)  # revoking stops the remaining places
+
+    def test_each_guest_session_is_tied_to_the_opening_that_made_it(self):
+        url = self.owner.post("/api/invites", json={"hours": 1, "label": "Family", "devices": 2}).get_json()["url"]
+        path = "/" + url.split("/", 3)[3]
+        a, b = server.app.test_client(), server.app.test_client()
+        a.post(path)
+        b.post(path)  # opened in the same instant: they must not be mistaken for one another
+        state = self.owner.get("/api/access").get_json()
+        self.assertEqual(sorted(g["entry"] for g in state["guests"]), sorted(u["id"] for u in state["used"]))
+        self.owner.delete("/api/guests/" + state["guests"][0]["id"])
+        state = self.owner.get("/api/access").get_json()
+        live = {g["entry"] for g in state["guests"]}
+        self.assertEqual(len(live), 1)
+        self.assertEqual(len([u for u in state["used"] if u["id"] not in live]), 1)  # exactly the revoked one belongs in the history
+
+    def test_the_number_of_devices_is_kept_in_range(self):
+        for asked, kept in ((None, 1), (0, 1), (2, 2), (99, access.MAX_DEVICES)):
+            token = access.create_invite(1, "x", asked)
+            self.assertEqual(access.peek_invite(token)["max_uses"], kept)
+
+    def test_finished_links_can_be_removed_one_at_a_time_or_all_together(self):
+        for label in ("a", "b", "c"):
+            url = self.owner.post("/api/invites", json={"hours": 1, "label": label}).get_json()["url"]
+            server.app.test_client().post("/" + url.split("/", 3)[3])
+        used = self.owner.get("/api/access").get_json()["used"]
+        self.assertEqual([u["label"] for u in used], ["c", "b", "a"])
+        self.owner.delete("/api/guest-history/" + used[1]["id"])
+        self.assertEqual([u["label"] for u in self.owner.get("/api/access").get_json()["used"]], ["c", "a"])
+        self.owner.delete("/api/guest-history")
+        self.assertEqual(self.owner.get("/api/access").get_json()["used"], [])
+        self.assertEqual(len(self.owner.get("/api/access").get_json()["guests"]), 3)  # clearing the list does not end anyone's access
+
+    def test_only_an_admin_can_clear_the_history_and_old_entries_without_ids_can_still_be_removed(self):
+        accounts.add("sam", "secret1")
+        sam = server.app.test_client()
+        sam.post("/login", data={"username": "sam", "password": "secret1"})
+        self.assertEqual(sam.delete("/api/guest-history").status_code, 403)
+        self.assertEqual(sam.delete("/api/guest-history/anything").status_code, 403)
+        access._write("invites_used.json", [{"label": "old", "hours": 1, "opened": 1000.0}])  # saved before ids existed
+        entry = access.invites_used()[0]
+        self.assertEqual(entry["id"], "t1000")
+        self.assertEqual(access.clear_used("t1000"), 1)
+        self.assertEqual(access.invites_used(), [])
+
     def test_expired_and_revoked_links_are_dead(self):
         t = access.create_invite(1, "x", now=1000.0)
         self.assertIsNone(access.peek_invite(t, now=1000.0 + access.REDEEM_WINDOW + 1))

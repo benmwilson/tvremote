@@ -1939,7 +1939,7 @@ def invite_create():
     admin_only()
     data = request.get_json(silent=True) or {}
     try:
-        token = access.create_invite(int(data.get("hours") or 24), data.get("label"))
+        token = access.create_invite(int(data.get("hours") or 24), data.get("label"), int(data.get("devices") or 1))
     except (TypeError, ValueError):
         return jsonify(ok=False, error="Pick how long access lasts."), 400
     return jsonify(ok=True, url=request.host_url + "join/" + token)
@@ -1949,6 +1949,20 @@ def invite_create():
 def invite_revoke(iid):
     admin_only()
     access.revoke_invite(iid)
+    return access_state()
+
+
+@app.delete("/api/guest-history")
+def guest_history_clear():
+    admin_only()
+    access.clear_used()
+    return access_state()
+
+
+@app.delete("/api/guest-history/<uid>")
+def guest_history_remove(uid):
+    admin_only()
+    access.clear_used(uid)
     return access_state()
 
 
@@ -2004,16 +2018,17 @@ def join(token):
     if not inv:
         return page("Link expired", "<h1>Link expired</h1><p>This link was already used or has expired. Ask for a new one.</p>", 410)
     if request.method == "GET":  # opening the link only shows this page: a chat app's link preview must not use the link up
-        hrs = inv["hours"]
+        hrs, n = inv["hours"], inv.get("max_uses", 1)
         span = f"{hrs} hour{'s' if hrs != 1 else ''}" if hrs < 48 else f"{hrs // 24} days"
+        once = "This link works once." if n == 1 else f"This link works on up to {n} devices, once each."
         return page("Control the TV", f'<h1>Control the TV</h1><p>You can play things and control the TVs for {span} after you continue. '
-                    'This link works once.</p><form method="post" style="display:grid"><button>Continue</button></form>')
+                    f'{once}</p><form method="post" style="display:grid"><button>Continue</button></form>')
     inv = access.redeem_invite(token)
     if not inv:
         return page("Link expired", "<h1>Link expired</h1><p>This link was already used or has expired. Ask for a new one.</p>", 410)
     seconds = inv["hours"] * 3600
     r = redirect("/", 303)
-    r.set_cookie("tv_auth", new_session(accounts.GUEST, seconds, {"label": inv["label"], "since": time.time()}), max_age=seconds, httponly=True, samesite="Lax")
+    r.set_cookie("tv_auth", new_session(accounts.GUEST, seconds, {"label": inv["label"], "since": time.time(), "entry": inv["entry"]}), max_age=seconds, httponly=True, samesite="Lax")
     return r
 
 

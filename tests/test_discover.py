@@ -323,6 +323,14 @@ class RokuApps(unittest.TestCase):
             self.assertEqual(roku.apps("1.2.3.4"), [{"id": "837", "name": "YouTube"}, {"id": "12", "name": "Netflix"},
                                                     {"id": "13535", "name": "Plex - Free Movies & TV"}])  # no HDMI input, no menu; &amp; decoded
 
+    def test_an_app_name_with_an_ampersand_is_decoded(self):
+        def fake(ip, path, method="GET", timeout=4):
+            if path == "/query/device-info":
+                return "<device-info><power-mode>PowerOn</power-mode></device-info>"
+            return '<active-app><app id="13535" type="appl" version="5.1">Plex - Free Movies &amp; TV</app></active-app>'
+        with mock.patch.object(roku, "_call", side_effect=fake):
+            self.assertEqual(roku.info("1.2.3.4")["app"], "Plex - Free Movies & TV")
+
     def test_the_list_is_kept_for_a_while(self):
         with mock.patch.object(roku, "_call", return_value=APPS_XML) as call:
             self.assertEqual(len(self.client.get("/api/roku/apps?target=living").get_json()), 3)
