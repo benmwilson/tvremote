@@ -195,13 +195,19 @@ def start_player(url, quality=None):
     threading.Thread(target=switch_tv_to_pi, daemon=True).start()
 
 
-def last_error():
-    """Last error-looking line from the player log, e.g. 'HTTP error 404 Not Found'."""
+def log_lines(tail=100_000):
+    """Player log lines without mpv's per-frame 'AV:' status spam (it ends in CR, so splitlines splits it)."""
     try:
         with open(LOG_FILE, errors="replace") as f:
-            lines = f.read()[-4000:].splitlines()
+            lines = f.read()[-tail:].splitlines()
     except OSError:
-        return None
+        return []
+    return [l for l in lines if not re.match(r"\s*(AV|A|V):", l)]
+
+
+def last_error():
+    """Last error-looking line from the player log, e.g. 'HTTP error 404 Not Found'."""
+    lines = log_lines()
     # specific causes first; generic "Exiting..."/"Failed to open" lines are only a fallback
     for pat in (r"HTTP.?error|ERROR:|logged-in|login|not found|no playable|unsupported", r"error|failed"):
         for line in reversed(lines):
@@ -407,11 +413,7 @@ def versions():
 @app.get("/api/debug")
 def api_debug():
     p = state["proc"]
-    try:
-        with open(LOG_FILE, errors="replace") as f:
-            log = f.read()[-8000:]
-    except OSError:
-        log = ""
+    log = chr(10).join(log_lines())[-8000:]
     return jsonify(
         state={k: v for k, v in state.items() if k != "proc"},
         proc={"pid": p.pid if p else None, "returncode": p.poll() if p else None},

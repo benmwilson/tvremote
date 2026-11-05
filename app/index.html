@@ -67,7 +67,7 @@ select{min-height:52px;padding:0 10px}
     <button data-a="seek" data-v="10">+10</button><button data-a="seek" data-v="60">+60</button>
   </div>
   <div class="row"><input type="range" id="vol" min="0" max="100" step="1" aria-label="Volume">
-    <b id="volv" style="flex:0 0 40px;text-align:center">100</b>
+    <b id="volv" style="flex:0 0 40px;text-align:center;align-self:center">100</b>
     <button id="mute" data-a="mute" style="flex:0 0 72px">🔊</button></div>
   <div class="row"><select id="qual" aria-label="Quality"></select>
     <button id="fav">☆ Favourite</button><button id="stop" style="color:var(--bad)">■ Stop</button></div>
@@ -246,11 +246,12 @@ async function dbgTick() {
   fillTable('d-mpv', d.mpv); fillTable('d-ver', d.versions);
   $('d-cmd').textContent = (s.cmd || []).join(' ');
   const log = $('d-log'), stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
-  log.textContent = d.log.replace(/\r/g, '\n');
+  log.textContent = d.log;
   if (stick) log.scrollTop = log.scrollHeight;
   $('dage').textContent = new Date().toLocaleTimeString();
 }
 function dbg(open) {
+  if (open) $('dage').textContent = 'loading…';
   $('drawer').classList.toggle('hide', !open); $('scrim').classList.toggle('hide', !open);
   clearInterval(dbgTimer);
   if (open) { dbgTick(); dbgTimer = setInterval(dbgTick, 2000); }
