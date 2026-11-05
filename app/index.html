@@ -86,8 +86,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .go{background:var(--tv);color:#0b0e14;font-weight:700}
 .pad button{min-height:56px}
 /* favourites and search */
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.fav{position:relative;background:var(--card);border-radius:16px;padding:12px;min-height:72px;text-align:left;display:block;width:100%}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.fav{position:relative;background:var(--card);border-radius:16px;padding:12px;min-height:72px;text-align:left;display:block;width:100%;min-width:0}
 .fav b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:30px;margin-bottom:6px}
 .fav .x{position:absolute;top:0;right:0;width:44px;min-height:44px;background:none;color:var(--dim);padding:0}
 .res{display:flex;gap:10px;background:var(--card);border-radius:16px;padding:8px;margin-bottom:8px;width:100%;text-align:left;align-items:center;justify-content:flex-start}
