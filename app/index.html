@@ -35,8 +35,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 select{min-height:52px;padding:0 10px}
 .seg button{background:var(--card2)}.seg button.on{background:var(--fg);color:#000;font-weight:700}
 .hide{display:none!important}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.fav{position:relative;background:var(--card);border-radius:14px;padding:12px;min-height:68px;text-align:left}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.fav{position:relative;background:var(--card);border-radius:14px;padding:12px;min-height:68px;text-align:left;min-width:0}
 .fav b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:28px}
 .fav .x{position:absolute;top:0;right:0;width:44px;min-height:44px;background:none;color:var(--dim)}
 .res{display:flex;gap:10px;background:var(--card);border-radius:14px;padding:8px;margin-bottom:8px;width:100%;text-align:left;align-items:center}
