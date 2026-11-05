@@ -244,6 +244,36 @@ class LiveFacts(unittest.TestCase):
         self.assertEqual((data["game"], data["live_for"]), ("GTA V", 3700))
 
 
+class YoutubeLiveCheck(unittest.TestCase):
+    URL = "https://www.youtube.com/watch?v=abc12345678"
+
+    def setUp(self):
+        server._live_cache.clear()
+        self.addCleanup(server._live_cache.clear)
+
+    def run_check(self, results):
+        with mock.patch.object(server.subprocess, "run", side_effect=results) as run:
+            return [server.youtube_is_live(self.URL) for _ in results], run.call_count
+
+    def test_a_failed_check_is_not_remembered(self):
+        import subprocess
+        out = mock.Mock(stdout="True")
+        got, calls = self.run_check([subprocess.TimeoutExpired("yt-dlp", 20), out])
+        self.assertEqual((got, calls), ([False, True], 2))  # the blip said "not live" once; the next ask got the real answer
+
+    def test_a_real_answer_is_kept_for_a_while_then_asked_again(self):
+        out = mock.Mock(stdout="False")
+        with mock.patch.object(server.subprocess, "run", return_value=out) as run:
+            server.youtube_is_live(self.URL)
+            server.youtube_is_live(self.URL)
+            self.assertEqual(run.call_count, 1)
+            t = server.time.time()
+            with mock.patch.object(server.time, "time", return_value=t + server.LIVE_CHECK_TTL + 1):
+                server.youtube_is_live(self.URL)
+            self.assertEqual(run.call_count, 2)
+        self.assertEqual(len(server._live_cache), 1)  # the stale entry was replaced, not piled up
+
+
 class FakeHome:
     def __init__(self):
         self.shown, self.started, self.stopped, self.vo, self.error, self._running = [], 0, 0, "wlshm", None, True

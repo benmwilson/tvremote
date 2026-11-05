@@ -404,18 +404,25 @@ def route(url):
     return "Other", "ytdlp"
 
 
+LIVE_CHECK_TTL = 300  # a stream can start or end, so an answer is only good for a few minutes
+
+
 def youtube_is_live(url):
     if re.search(r"/live/?($|\?)", urlparse(url).path + "?"):
         return True
-    if url in _live_cache:
-        return _live_cache[url]
+    now = time.time()
+    hit = _live_cache.get(url)
+    if hit and now - hit[0] < LIVE_CHECK_TTL:
+        return hit[1]
     try:
         out = subprocess.run(["yt-dlp", "--no-playlist", "--print", "is_live", url],
                              capture_output=True, text=True, timeout=20).stdout
         live = out.strip().splitlines()[-1] == "True"
     except (OSError, subprocess.TimeoutExpired, IndexError):
-        live = False
-    _live_cache[url] = live
+        return False  # could not tell: say "not live" this once, but don't remember it (a blip must not stick until a restart)
+    for k in [k for k, v in _live_cache.items() if now - v[0] >= LIVE_CHECK_TTL]:
+        del _live_cache[k]  # and the cache can't only grow
+    _live_cache[url] = (now, live)
     return live
 
 
