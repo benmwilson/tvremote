@@ -361,7 +361,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 
 <script>
 const $ = id => document.getElementById(id);
-let site = 'kick', st = {}, dragging = false, qualFor = null, favList = [], targets = [];
+let site = 'kick', st = {}, dragging = false, qualFor = null, qualAt = 0, qualTries = 0, favList = [], targets = [];
 let target = '';  // the TV shown in the One TV view; set by the router
 const TV_COLOURS = ['#62b0ff', '#ff8aa8', '#5ad6b0', '#b3a2ff'];
 // While something plays, the remote takes the site's colour (Kick green, Twitch purple, YouTube red); otherwise the TV's own colour.
@@ -512,14 +512,16 @@ function render() {
   $('vol').style.setProperty('--p', $('vol').value + '%');
   const saved = isSaved(st.url);
   setBtn($('fav'), saved ? 'star-fill' : 'star', saved ? 'Saved' : 'Favourite');
-  if (run && st.url !== qualFor) loadQualities();
+  // an empty answer (the Pi's stream check can fail while a cast is still starting) is asked again, a few times, 8 s apart
+  if (run && (st.url !== qualFor || (!$('qual').options.length && qualTries < 4 && Date.now() - qualAt > 8000))) loadQualities();
   checkFavLoading();
   chatShow();
   renderExtras();
 }
 
 async function loadQualities() {
-  qualFor = st.url;
+  qualTries = st.url === qualFor ? qualTries + 1 : 1;
+  qualFor = st.url; qualAt = Date.now();
   const q = await api('/api/qualities');
   const sel = $('qual');
   sel.innerHTML = '';
