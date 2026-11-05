@@ -3,7 +3,6 @@
 The history is kept on disk, so "last live" survives restarts. It only knows what it has seen: a channel that was live
 and went offline while the app was off will show the last time it was seen live."""
 import json
-import os
 import threading
 import time
 

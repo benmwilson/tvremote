@@ -11,6 +11,7 @@ import access  # noqa: E402
 import activity  # noqa: E402
 import accounts  # noqa: E402
 import app as server  # noqa: E402
+import throttle  # noqa: E402
 import kick  # noqa: E402
 from helpers import founder_client  # noqa: E402
 
@@ -27,7 +28,7 @@ class AccessTest(unittest.TestCase):
             self.addCleanup(p.stop)
         access._last_by_ip.clear()
         activity.reset()
-        server._fails.clear()
+        throttle.fails.clear()
         self.owner = founder_client(server)
 
     def test_requesting_access_needs_no_login_and_lands_in_the_admin_list(self):

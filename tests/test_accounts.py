@@ -10,6 +10,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import accounts  # noqa: E402
 import app as server  # noqa: E402
+import throttle  # noqa: E402
 import kick  # noqa: E402
 from helpers import founder_client  # noqa: E402
 
@@ -17,7 +18,7 @@ from helpers import founder_client  # noqa: E402
 class AccountsTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
-        server._fails.clear()
+        throttle.fails.clear()
         self.addCleanup(shutil.rmtree, self.dir, True)
         for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir),
                   mock.patch.object(server, "FAV_FILE", os.path.join(self.dir, "favourites.json")),

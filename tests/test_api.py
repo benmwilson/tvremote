@@ -11,6 +11,8 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import app as server  # noqa: E402
+import throttle  # noqa: E402
+import sessions  # noqa: E402
 
 
 import accounts  # noqa: E402
@@ -470,8 +472,8 @@ class ShellFlow(unittest.TestCase):
         self.addCleanup(shutil.rmtree, d, True)
         with mock.patch.object(server, "session_user", _REAL["session_user"]), mock.patch.object(accounts, "initialised", _REAL["initialised"]), \
                 mock.patch.dict(os.environ, {"TVREMOTE_DATA": d}), mock.patch.object(server.time, "sleep"), mock.patch.object(server, "DATA", d), \
-                mock.patch.dict(server._key, {"v": None}):
-            server._fails.clear()
+                mock.patch.dict(sessions.key_cache, {"v": None}):
+            throttle.fails.clear()
             accounts.add("ben", "hunter22", "admin", founder=True)
             c = server.app.test_client()
             r = c.get("/", headers={"Accept": "text/html"})
@@ -493,13 +495,13 @@ class ShellFlow(unittest.TestCase):
             self.assertEqual(c.get("/api/favourites").status_code, 401)
             self.assertNotIn(old, open(os.path.join(d, "sessions.json")).read())  # only hashes on disk
             tok = server.new_session("ben")
-            with mock.patch.object(server, "_sess_save"):  # the disk write fails: logout must still work
+            with mock.patch.object(sessions, "save"):  # the disk write fails: logout must still work
                 server.drop_session(tok)
             self.assertIsNone(server.session_user(tok))
-            before = len(server._revoked)
+            before = len(sessions.revoked)
             for junk in ("a", "b", "c"):
                 server.drop_session(junk)
-            self.assertEqual(len(server._revoked), before)  # unknown tokens are not remembered
+            self.assertEqual(len(sessions.revoked), before)  # unknown tokens are not remembered
             accounts.add("amy", "secret1")
             tok2 = server.new_session("amy")
             self.assertEqual(server.session_user(tok2), "amy")

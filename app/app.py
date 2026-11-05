@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """TV Remote: web controller for mpv / streamlink on the Pi."""
 import functools
-import hashlib
 import hmac
 import html
 import ipaddress
@@ -10,7 +9,6 @@ import os
 import re
 import secrets
 import signal
-import socket
 import subprocess
 import threading
 import time
@@ -43,7 +41,9 @@ import accounts
 import activity
 import chat
 import discover
+import sessions
 import store
+import throttle
 import kick
 import mpvipc
 import roku
@@ -51,6 +51,7 @@ import shell
 import targets
 import tlscallback
 import tvconfig
+from sessions import SESSION_DAYS, drop_guest, drop_session, drop_user_sessions, guest_sessions, new_session, session_user
 
 try:
     from cast import CastTarget
@@ -118,19 +119,18 @@ def guard():
     # a browser page load needs the login cookie: Safari remembers the old password pop-up and would otherwise stay logged in after logout
     if a and not wants_page:  # curl and scripts: Basic auth with an account
         name = (a.username or "").strip().lower()
-        if _throttled(request.remote_addr, name):
+        if throttle.blocked(request.remote_addr, name):
             return too_many()
         if name and accounts.verify(name, a.password or ""):
             g.user = name
             return None
-        _note_fail(request.remote_addr, name)
+        throttle.fail(request.remote_addr, name)
         time.sleep(0.8)  # slows guessing, like the login page
     if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):  # a browser: show the login page
         return redirect("/login?next=" + quote(request.full_path.rstrip("?")), 303)
     return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="TV Remote"'})
 
 
-SESSION_DAYS = 180
 SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/setup"}  # what works before the first admin exists
 
 
@@ -149,180 +149,14 @@ def guest_blocked():
     return not (request.method == "POST" and path in GUEST_POST)
 
 
-_sessions_lock = threading.Lock()
-
-
-def _sess_file():
-    return os.path.join(DATA, "sessions.json")
-
-
-def _sess_load():
-    try:
-        with open(_sess_file()) as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return {}
-
-
-def _sess_save(d):
-    try:
-        store.write_json(_sess_file(), d, 0o600)  # only hashes, but nobody else needs to read them
-    except OSError:
-        pass  # sessions then last until the next restart
-
-
-_revoked = set()  # logged-out tokens, kept in memory too so a failed disk write still ends the session
-
-
 def auth_required():
     """Login is needed once accounts have ever been set up. A fresh install is closed to changes until setup makes the first admin.
     An unreadable accounts file counts as set up (fail closed)."""
     return accounts.initialised()
 
 
-# Failed logins (the form, a script, the setup code), newest last. Keys: "<address>" (everything from one address, IPv6 by /64),
-# "<address>|<name>" (one account from one address) and "setup" (every guess at the setup code, from anywhere).
-_fails = {}
-WINDOW = 600
-
-
-def _bucket(ip):
-    try:
-        a = ipaddress.ip_address(ip or "")
-        return str(ipaddress.ip_network(f"{a}/64", strict=False)) if a.version == 6 else str(a)
-    except ValueError:
-        return ip or "?"
-
-
-def _recent(key, now=None):
-    now = now or time.time()
-    r = [t for t in _fails.get(key, []) if now - t < WINDOW]
-    if r:
-        _fails[key] = r
-    else:
-        _fails.pop(key, None)  # no entry for anyone with no recent failures
-    return r
-
-
-def _prune(now):
-    if len(_fails) > 5000:  # only ever drops what has expired, then the oldest: a flood of addresses can't reset anyone's count
-        for k in list(_fails):
-            _recent(k, now)
-        for k in sorted(_fails, key=lambda k: _fails[k][-1])[:max(0, len(_fails) - 4000)]:
-            del _fails[k]
-
-
-def _throttled(ip, who=""):
-    now = time.time()
-    _prune(now)
-    ip = _bucket(ip)
-    return len(_recent(ip, now)) >= 30 or bool(who) and len(_recent(f"{ip}|{who}", now)) >= 10
-
-
-def _note_fail(ip, who=""):
-    ip, now = _bucket(ip), time.time()
-    for k in (ip, f"{ip}|{who}" if who else None):
-        if k:
-            _fails.setdefault(k, []).append(now)
-
-
-def _note_ok(ip, who):
-    _fails.pop(f"{_bucket(ip)}|{who}", None)  # only this account's count: a login that works can't wipe the failures against others
-
-
 def too_many():
     return Response("Too many failed tries. Wait a few minutes and try again.", 429)
-
-
-_key = {"v": None}
-
-
-def _session_key():
-    if _key["v"] is None:  # a random key kept in /data
-        path = os.path.join(DATA, "session.key")
-        try:
-            with open(path, "rb") as f:
-                _key["v"] = f.read()
-        except OSError:
-            _key["v"] = secrets.token_bytes(32)
-            try:
-                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-                with os.fdopen(fd, "wb") as f:
-                    f.write(_key["v"])
-            except OSError:
-                pass  # sessions then last until the next restart
-    return _key["v"]
-
-
-def _h(tok):
-    # keyed: only hashes are stored (the file can't be used as a cookie)
-    return hmac.new(_session_key(), tok.encode(), hashlib.sha256).hexdigest()
-
-
-def new_session(user=accounts.OWNER, seconds=None, extra=None):
-    """A random token for one login; the server remembers it (hashed) until it expires or the user logs out."""
-    tok = secrets.token_urlsafe(32)
-    with _sessions_lock:
-        d = {k: v for k, v in _sess_load().items() if _exp(v) > time.time()}
-        exp = time.time() + (seconds or SESSION_DAYS * 86400)
-        d[_h(tok)] = {"exp": exp, "user": user, **(extra or {})}
-        _sess_save(d)
-    return tok
-
-
-def _exp(v):
-    return v["exp"] if isinstance(v, dict) else v
-
-
-def session_user(tok):
-    """Who a login cookie belongs to ("owner" or an account name), or None when it is not a live session."""
-    if not tok or _h(tok) in _revoked:
-        return None
-    v = _sess_load().get(_h(tok))
-    if v is None or _exp(v) <= time.time():
-        return None
-    if not isinstance(v, dict):
-        return None  # an old-style session (from when the .env password existed) is not a login any more
-    return v["user"] if v["user"] == accounts.GUEST or accounts.exists(v["user"]) else None
-
-
-def guest_sessions():
-    return [{"id": k[:8], "label": v.get("label", ""), "exp": v["exp"], "since": v.get("since"), "last": activity.last("guest:" + k[:8])}
-            for k, v in _sess_load().items()
-            if isinstance(v, dict) and v.get("user") == accounts.GUEST and v["exp"] > time.time() and k not in _revoked]
-
-
-def drop_guest(gid):
-    activity.forget("guest:" + gid)
-    with _sessions_lock:
-        d = _sess_load()
-        gone = [k for k, v in d.items() if len(gid) >= 8 and k.startswith(gid) and isinstance(v, dict) and v.get("user") == accounts.GUEST]
-        for k in gone:
-            del d[k]
-            _revoked.add(k)
-        if gone:
-            _sess_save(d)
-        return bool(gone)
-
-
-def drop_user_sessions(name):
-    """End every login of an account (it was removed or its password changed)."""
-    with _sessions_lock:
-        d = _sess_load()
-        gone = [k for k, v in d.items() if isinstance(v, dict) and v.get("user") == name]
-        for k in gone:
-            del d[k]
-            _revoked.add(k)
-        if gone:
-            _sess_save(d)
-
-
-def drop_session(tok):
-    with _sessions_lock:
-        d = _sess_load()
-        if d.pop(_h(tok), None) is not None:  # only real sessions are remembered: /logout needs no login, so junk must not pile up
-            _revoked.add(_h(tok))
-            _sess_save(d)
 
 
 def safe_next(n):
@@ -354,17 +188,17 @@ def login():
     err = ""
     if request.method == "POST":
         who = request.form.get("username", "").strip().lower()
-        if _throttled(request.remote_addr, who):
+        if throttle.blocked(request.remote_addr, who):
             return too_many()
         user = who if accounts.verify(who, request.form.get("password", "")) else None  # always runs the slow hash, even for an unknown name
         if user:
-            _note_ok(request.remote_addr, user)
+            throttle.ok(request.remote_addr, user)
             accounts.touch(user)
             activity.note(user, "Logged in")
             r = redirect(nxt, 303)
             r.set_cookie("tv_auth", new_session(user), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
             return r
-        _note_fail(request.remote_addr, who)
+        throttle.fail(request.remote_addr, who)
         time.sleep(0.8)  # slows guessing
         err = "Wrong username or password"
     return Response(LOGIN_PAGE.replace("__NEXT__", html.escape(nxt, quote=True)).replace("__ERR__", err), 401 if err else 200,
@@ -383,7 +217,7 @@ def logout():
 def api_auth():
     info = {}
     if g.user == accounts.GUEST:
-        v = _sess_load().get(_h(request.cookies.get("tv_auth", ""))) or {}
+        v = sessions.load().get(sessions.token_hash(request.cookies.get("tv_auth", ""))) or {}
         info = {"guest_until": v.get("exp"), "label": v.get("label", "")}
     role = accounts.role(g.user)
     return jsonify(required=auth_required(), user=g.user, owner=accounts.is_owner(g.user), role=role,
@@ -1972,7 +1806,7 @@ def join(token):
 def actor():
     """The key activity is kept under: an account name, "owner", or one guest session."""
     if g.user == accounts.GUEST:
-        return "guest:" + _h(request.cookies.get("tv_auth", ""))[:8]
+        return "guest:" + sessions.token_hash(request.cookies.get("tv_auth", ""))[:8]
     return g.user
 
 
@@ -2003,8 +1837,8 @@ def note_action(resp):
             label = action_label()
             if label:
                 activity.note(actor(), label)
-    except Exception:  # remembering what someone did must never break what they did
-        pass
+    except Exception:  # remembering what someone did must never break what they did, but a mistake here must not hide either
+        app.logger.exception("could not note the action")
     return resp
 
 
@@ -2027,11 +1861,10 @@ def setup_code_error(data):
     ip = request.remote_addr
     if not host_ok():
         return jsonify(ok=False, error="Open the remote by its IP address (or a .local name) to set it up."), 403
-    if _throttled(ip, "setup") or len(_recent("setup")) >= 10:  # per address, and 10 wrong guesses from anywhere stop everyone for a while
+    if throttle.setup_blocked(ip):
         return too_many()
     if not hmac.compare_digest(str(data.get("code") or "").strip().lower().encode(), SETUP_CODE.encode()):
-        _note_fail(ip, "setup")
-        _fails.setdefault("setup", []).append(time.time())
+        throttle.setup_fail(ip)
         return jsonify(ok=False, error="That setup code isn't right. It is printed in the container's log: docker logs tvremote"), 403
     return None
 

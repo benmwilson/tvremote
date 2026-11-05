@@ -41,6 +41,11 @@ app/logo.svg, icon-*.png the project mark (tools/make_icons.py draws the PNGs)
 app/targets.py          cached TV cards (never waits on a slow TV) and playback health
 app/shell.py            the TV's home screen: a fullscreen mpv window behind the streams (idle / loading / not live / ended / error)
 app/mpvipc.py           one command over an mpv IPC socket (shared by the player and the home screen)
+app/accounts.py, access.py, activity.py   accounts and roles, access requests and guest links, last-action per person
+app/sessions.py, throttle.py   login tokens (hashed on disk) and failed-login counting: the security-sensitive state, kept out of app.py
+app/store.py            the one safe JSON writer (unique temp file, then rename); every data file goes through it
+app/kick.py, tlscallback.py   Kick API (live status, link, chat) and the self-signed https redirect listener
+app/discover.py, tvconfig.py  finding Rokus/Chromecasts/the Pi screen, and the saved TV settings (/data/targets.json)
 tests/                  unittest suite (python -m unittest discover -s tests) and a stub API server for checking the UI
 config/mpv.conf         baked into the image at /home/app/.config/mpv/mpv.conf
 docker/entrypoint.sh    set display to 1080p60, register CEC name, start the app

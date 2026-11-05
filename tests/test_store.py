@@ -11,6 +11,8 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import app as server  # noqa: E402
+import throttle  # noqa: E402
+import sessions  # noqa: E402
 import kick  # noqa: E402
 import store  # noqa: E402
 from helpers import founder_client  # noqa: E402
@@ -50,10 +52,10 @@ class Simultaneous(unittest.TestCase):
         for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir),
                   mock.patch.object(server, "FAV_FILE", os.path.join(self.dir, "favourites.json")),
                   mock.patch.object(server, "RECENT_FILE", os.path.join(self.dir, "recents.json")),
-                  mock.patch.object(kick, "DATA", self.dir), mock.patch.dict(server._key, {"v": None})):
+                  mock.patch.object(kick, "DATA", self.dir), mock.patch.dict(sessions.key_cache, {"v": None})):
             p.start()
             self.addCleanup(p.stop)
-        server._fails.clear()
+        throttle.fails.clear()
 
     def test_twenty_saves_at_once_all_survive(self):
         boss = founder_client(server)

@@ -12,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import accounts  # noqa: E402
 import activity  # noqa: E402
 import app as server  # noqa: E402
+import throttle  # noqa: E402
+import sessions  # noqa: E402
 import kick  # noqa: E402
 from helpers import founder_client  # noqa: E402
 
@@ -22,12 +24,12 @@ class SetupBase(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir, True)
         for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir),
                   mock.patch.object(server, "FAV_FILE", os.path.join(self.dir, "favourites.json")),
-                  mock.patch.object(kick, "DATA", self.dir), mock.patch.dict(server._key, {"v": None}),
+                  mock.patch.object(kick, "DATA", self.dir), mock.patch.dict(sessions.key_cache, {"v": None}),
                   mock.patch.object(server.time, "sleep")):
             p.start()
             self.addCleanup(p.stop)
         activity.reset()
-        server._fails.clear()
+        throttle.fails.clear()
 
     def create(self, c, name="ben", password="hunter22", **extra):
         return c.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": name, "password": password, **extra})
@@ -112,8 +114,8 @@ class FreshInstall(SetupBase):
         right = c.post("/api/setup/admin", json={"name": "ben", "password": "hunter22", "code": server.SETUP_CODE})
         self.assertEqual(right.status_code, 429)  # even the right code waits out the lockout
         self.assertFalse(accounts.exists("ben"))
-        server._fails.pop("127.0.0.1", None)
-        server._fails.pop("127.0.0.1|setup", None)  # a different address, same overall count: still held
+        throttle.fails.pop("127.0.0.1", None)
+        throttle.fails.pop("127.0.0.1|setup", None)  # a different address, same overall count: still held
         self.assertEqual(c.post("/api/setup/admin", json={"name": "ben", "password": "hunter22", "code": server.SETUP_CODE}).status_code, 429)
 
     def test_an_unreadable_accounts_file_never_reopens_the_install(self):
@@ -138,11 +140,11 @@ class FreshInstall(SetupBase):
         self.assertEqual(server.app.test_client().get("/api/favourites", headers=bad).status_code, 429)
 
     def test_the_throttle_keeps_its_memory_small_and_buckets_ipv6(self):
-        self.assertEqual(server._bucket("2001:db8::1"), server._bucket("2001:db8::ffff"))  # one /64 is one address
-        self.assertNotEqual(server._bucket("2001:db8::1"), server._bucket("2001:db9::1"))
-        self.assertEqual(server._bucket("192.168.1.5"), "192.168.1.5")
-        self.assertFalse(server._throttled("10.0.0.9", "x"))
-        self.assertNotIn("10.0.0.9", server._fails)  # asking about an address doesn't make an entry for it
+        self.assertEqual(throttle.bucket("2001:db8::1"), throttle.bucket("2001:db8::ffff"))  # one /64 is one address
+        self.assertNotEqual(throttle.bucket("2001:db8::1"), throttle.bucket("2001:db9::1"))
+        self.assertEqual(throttle.bucket("192.168.1.5"), "192.168.1.5")
+        self.assertFalse(throttle.blocked("10.0.0.9", "x"))
+        self.assertNotIn("10.0.0.9", throttle.fails)  # asking about an address doesn't make an entry for it
 
     def test_bad_names_and_passwords_do_not_end_setup(self):
         c = server.app.test_client()
@@ -213,7 +215,7 @@ class AfterSetup(SetupBase):
     def test_the_old_style_owner_session_is_not_a_login(self):
         accounts.add("ben", "hunter22", "admin", founder=True)
         tok = "legacy-token"
-        server._sess_save({server._h(tok): 9e12})  # a bare expiry, as the .env password used to make
+        sessions.save({sessions.token_hash(tok): 9e12})  # a bare expiry, as the .env password used to make
         self.assertIsNone(server.session_user(tok))
 
 

@@ -10,6 +10,8 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import accounts  # noqa: E402
 import app as server  # noqa: E402
+import throttle  # noqa: E402
+import sessions  # noqa: E402
 import discover  # noqa: E402
 import kick  # noqa: E402
 import roku  # noqa: E402
@@ -95,12 +97,12 @@ class Endpoints(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir, True)
         for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir),
                   mock.patch.object(server, "FAV_FILE", os.path.join(self.dir, "favourites.json")),
-                  mock.patch.object(kick, "DATA", self.dir), mock.patch.dict(server._key, {"v": None}),
+                  mock.patch.object(kick, "DATA", self.dir), mock.patch.dict(sessions.key_cache, {"v": None}),
                   mock.patch.dict(server.ROKU_IPS, {}), mock.patch.dict(server.INPUTS, {}), mock.patch.dict(server.LABELS, {}),
                   mock.patch.dict(server.TV_ENABLED, {}), mock.patch.object(server, "CAST", None), mock.patch.object(server.time, "sleep")):
             p.start()
             self.addCleanup(p.stop)
-        server._fails.clear()
+        throttle.fails.clear()
         self.admin = founder_client(server)
 
     def test_discovery_returns_what_it_found_with_guesses_and_is_admin_only(self):
