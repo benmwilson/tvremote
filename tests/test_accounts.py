@@ -95,7 +95,15 @@ class AccountsTest(unittest.TestCase):
         self.assertEqual(accounts.role("sam"), "admin")
         amy, _ = self.login("amy", "secret1")
         self.assertEqual(amy.delete("/api/accounts", json={"name": "amy"}).status_code, 400)  # not the one you're signed in with
-        self.assertEqual(amy.delete("/api/accounts", json={"name": "sam"}).status_code, 200)  # but an admin can remove others
+        self.assertEqual(amy.delete("/api/accounts", json={"name": "sam"}).status_code, 403)  # sam is an admin: only the owner may
+        self.assertEqual(amy.post("/api/accounts", json={"name": "sam", "password": "hijack1"}).status_code, 403)  # no password reset either
+        self.assertEqual(amy.patch("/api/accounts", json={"name": "sam", "role": "user"}).status_code, 403)  # nor demotion
+        self.assertTrue(accounts.verify("sam", "newpass1"))
+        owner.post("/api/accounts", json={"name": "tim", "password": "secret1"})
+        self.assertEqual(amy.post("/api/accounts", json={"name": "tim", "password": "reset-pw1"}).status_code, 200)  # ordinary users: any admin
+        self.assertEqual(amy.delete("/api/accounts", json={"name": "tim"}).status_code, 200)
+        self.assertEqual(owner.delete("/api/accounts", json={"name": "sam"}).status_code, 200)  # the owner can do all of it
+        self.assertEqual(amy.post("/api/accounts", json={"name": "amy", "password": "mynewpw1"}).status_code, 200)  # your own password is yours (and signs you out)
 
     def test_a_new_password_or_a_removed_and_recreated_name_ends_old_logins(self):
         owner, _ = self.login("", "owner-pw")

@@ -1491,6 +1491,17 @@ def admin_only():
         abort(Response(json.dumps({"ok": False, "error": "Only an admin can do that."}), 403, mimetype="application/json"))
 
 
+def may_change(name, own_password=False):
+    """Admins manage ordinary accounts; only the owner may reset, demote or remove another admin (no takeover between admins)."""
+    if g.user == accounts.OWNER or not accounts.exists(name) or accounts.role(name) != "admin":
+        return True
+    return own_password and name == g.user
+
+
+def refuse():
+    return jsonify(ok=False, error="Only the owner can change another admin."), 403
+
+
 @app.get("/api/accounts")
 def accounts_list():
     admin_only()
@@ -1501,6 +1512,9 @@ def accounts_list():
 def accounts_add():
     admin_only()
     data = request.get_json(silent=True) or {}
+    target = str(data.get("name") or "").strip().lower()
+    if not may_change(target, own_password=data.get("role") in (None, "admin")):
+        return refuse()
     try:
         name = accounts.add(data.get("name"), data.get("password"), data.get("role"))
     except ValueError as e:
@@ -1513,6 +1527,8 @@ def accounts_add():
 def accounts_role():
     admin_only()
     data = request.get_json(silent=True) or {}
+    if not may_change(str(data.get("name", ""))):
+        return refuse()
     try:
         accounts.set_role(str(data.get("name", "")), data.get("role"))
     except ValueError as e:
@@ -1526,6 +1542,8 @@ def accounts_del():
     name = str((request.get_json(silent=True) or {}).get("name", ""))
     if name == g.user:
         return jsonify(ok=False, error="You can't remove the account you're signed in with."), 400
+    if not may_change(name):
+        return refuse()
     if accounts.remove(name):
         drop_user_sessions(name)  # re-creating the name later must not revive old logins
         for p in (fav_file(name), kick._path(name)):  # its favourites and Kick link go with it
