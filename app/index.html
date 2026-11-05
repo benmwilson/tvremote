@@ -271,6 +271,13 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .wz-check{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:32px;background:rgba(123,226,154,.16);color:#7be29a}
 .wz-done .go{width:100%;margin-top:8px}#setupsummary{width:100%;text-align:left;display:grid;gap:8px;margin-top:6px}
 .wz-sum{display:flex;gap:12px;align-items:center;background:var(--bg,#0b0e14);border-radius:12px;padding:10px 12px}.wz-sum b{display:block}.wz-sum small{color:var(--dim);font-size:13px}
+
+/* iPhone Safari sizes grid columns and dropdowns to their longest content: let everything in the wizard shrink to the screen */
+#view-setup,#view-setup .card,.wz-slot,.wz-body,.wz-form,.wz-f,.wz-top,.wz-top .grow,.wz-test,.wz-sum{min-width:0;max-width:100%;box-sizing:border-box}
+#view-setup{overflow-x:hidden}
+.wz-slot,.wz-body,.wz-form,.wz-f{grid-template-columns:minmax(0,1fr)}
+.wz-f select,.wz-f input{min-width:0;max-width:100%;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
+.wz-top b,.wz-top small,.wz-sum b,.wz-sum small{overflow-wrap:anywhere}
 </style>
 </head>
 <body>
