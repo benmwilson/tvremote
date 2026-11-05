@@ -75,6 +75,12 @@ class TlsTest(unittest.TestCase):
             op.open(base + "/auth/kick/callback?code=c&state=s&evil=1")
         self.assertEqual(e.exception.code, 303)
         self.assertEqual(e.exception.headers["Location"], "http://127.0.0.1:8765/auth/kick/done?code=c&state=s")
+        import socket
+        idle = socket.create_connection(("127.0.0.1", srv.server_address[1]))  # connects, then says nothing
+        self.addCleanup(idle.close)
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            op.open(base + "/auth/kick/callback?code=c&state=s")  # still answered while the idle one waits
+        self.assertEqual(e.exception.code, 303)
         with self.assertRaises(urllib.error.HTTPError) as e:
             op.open(base + "/other")
         self.assertEqual(e.exception.code, 404)
