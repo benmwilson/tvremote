@@ -47,7 +47,7 @@ Remote on the Home Screen: open `http://<pi-ip>:8765` in Safari → Share → Ad
 
 ## Password
 
-Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose up -d`. The remote asks for it (any username; Safari can save it). Safari asks for the password once when the Shortcut opens `/share` (any username; let it save the password). A `/play` Shortcut that skips the picker can't show that prompt, so end its URL with `&t=<password>`: `http://<pi-ip>:8765/play?u=<encoded>&target=bedroom&t=<password>`. Plain HTTP on your LAN, so it keeps casual users out, not a determined sniffer.
+Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose up -d`. The remote then shows a password-only login page (no username) and remembers you for 180 days. The logout icon is at the top right. Each login is a random token kept (hashed) in `/data/sessions.json`; logging out ends it on the Pi, and changing the password logs every phone out. `curl -u :<password>` still works for scripts. A `/play` Shortcut that skips the picker can't show the login page, so end its URL with `&t=<password>`: `http://<pi-ip>:8765/play?u=<encoded>&target=bedroom&t=<password>`. Plain HTTP on your LAN, so it keeps casual users out, not a determined sniffer.
 
 ## Roku TVs, Chromecast and input switching
 
@@ -67,7 +67,17 @@ Between streams the living-room TV shows the app's own screens instead of the Pi
 - **Turn it off or on** from the living-room TV's remote: the "Home screen on this TV" switch. Off shows the Pi desktop again. The app and the remote keep running either way. Turning it on restarts anything playing, so the stream window opens on top.
 - Starts off with `TVREMOTE_SHELL=0` in the container environment; the switch's setting is saved in `/data/settings.json`.
 - Playing no longer re-selects an input the TV is already on (that relaunched the input and flashed the screen): the app asks the Roku what it is showing first. This needs `ROKU_LIVING` and `INPUT_LIVING` set.
-- If the home screen won't open: `docker exec tvremote cat /tmp/tvremote-shell.log`. It tries a plain software window first (`wlshm`), then `gpu`. The Debug drawer shows nothing about it yet.
+- The screens are written as a subtitle file timed ahead (one event per second for the clock, whose colon blinks), so nothing redraws; redrawing flashed the whole screen, and osd-overlay text never stayed on that window. The logo and text are centred as one group. If the home screen won't open: `docker exec tvremote cat /tmp/tvremote-shell.log`. It tries a plain software window first (`wlshm`), then `gpu`; on this Pi `SHELL_VO=gpu,wlshm` in `.env` is what is used. The Debug drawer shows nothing about it yet.
+
+## On the remote
+
+- **Colours:** while something plays, the remote takes the site's colour: Kick green, Twitch purple, YouTube red.
+- **Refresh** restarts the current stream (the TV shows a Refreshing screen with a wheel). Changing quality shows its own screen. Starting a new source cancels any older one still loading: the newest tap wins.
+- **Favourites** show a picture (Kick, fetched by your phone), a link to the channel, whether it is live, for how long, and the game. Live ones sort first. **Reorder** lets you drag a row by its handle.
+- **Chat** (read-only): under the player while a Twitch or Kick channel plays. Twitch is read by the Pi and shown as a list; Kick embeds Kick's own popout chat page. The link icon opens the chat on the site.
+- **TV off:** if the TV is in standby or not answering, the player shows "The TV is off" with a Turn on button. Switching the TV off stops a live stream on the Pi and pauses a video or the Chromecast, whether you used the app or the TV's own remote.
+- **Debug drawer:** a "Stats on the TV" switch draws dropped frames, buffer and fps on the TV. It costs frames, so keep it off for normal watching.
+- **Volume** on the TV shows as a block bar for 1.5 s; mute shows "Muted".
 
 ## Sources
 

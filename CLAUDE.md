@@ -36,7 +36,8 @@ app/index.html          single-file phone-first remote UI
 app/cast.py             Chromecast target (pychromecast: discovery, play, controls, status)
 app/hlsproxy.py         optional Pi-side HLS relay for the Chromecast (token-guarded)
 app/roku.py             Roku ECP control (power, volume, input, keys)
-app/chat.py             Twitch chat overlay drawn on the Pi's screen
+app/chat.py             Twitch chat: the TV overlay (off by default) and the feed for the phone's chat view
+app/logo.svg, icon-*.png the project mark (tools/make_icons.py draws the PNGs)
 app/targets.py          cached TV cards (never waits on a slow TV) and playback health
 app/shell.py            the TV's home screen: a fullscreen mpv window behind the streams (idle / loading / not live / ended / error)
 app/mpvipc.py           one command over an mpv IPC socket (shared by the player and the home screen)
