@@ -11,7 +11,7 @@
 <link rel="manifest" href="/manifest.json">
 <title>TV Remote</title>
 <style>
-:root{--bg:#0b0b0f;--card:#17171f;--card2:#22222d;--fg:#f2f2f7;--dim:#8e8e9a;--acc:#53fc18;--bad:#ff453a}
+:root{--bg:#0b0b0f;--card:#17171f;--card2:#22222d;--fg:#f2f2f7;--dim:#8e8e9a;--acc:#53fc18;--bad:#ff453a;--warn:#ffb020;--ok:#53fc18}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.3 -apple-system,system-ui,sans-serif;
   padding:max(12px,env(safe-area-inset-top)) 12px max(24px,env(safe-area-inset-bottom));max-width:560px;margin:auto}
@@ -51,13 +51,27 @@ select{min-height:52px;padding:0 10px}
 .db h3{font:700 11px sans-serif;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:14px 0 4px}
 .db td{padding:1px 8px 1px 0;vertical-align:top;word-break:break-all}.db td:first-child{color:var(--dim);white-space:nowrap}
 .db pre{margin:0;white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow:auto}
+#back{min-height:44px;background:none;color:var(--dim);padding:0 10px 0 0}
+.tvcard{display:block;width:100%;text-align:left;background:var(--card);border-radius:18px;padding:16px;margin-bottom:10px}
+.tvcard .ch{display:flex;align-items:center;gap:8px}.tvcard .ch b{font-size:20px;flex:1}
+.tvcard .sub{color:var(--dim);font-size:14px;margin-top:2px}
+.tvcard .now{margin-top:10px;overflow-wrap:anywhere}
+.tvcard .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.tvcard.down{opacity:.65}
+.hd{width:8px;height:8px;border-radius:50%;flex:none;background:transparent;border:1px solid var(--dim)}
+.hd.smooth{background:var(--ok);border-color:var(--ok);opacity:.55}
+.hd.buffering{background:var(--warn);border-color:var(--warn)}.hd.error{background:var(--bad);border-color:var(--bad)}
+.hw{font-size:13px;font-weight:600}.hw.buffering{color:var(--warn)}.hw.error{color:var(--bad)}
 #err{color:var(--bad);min-height:1em;margin:8px 4px 0;font-size:14px}
 </style>
 </head>
 <body>
 
-<header><h1>TV Remote</h1><span id="tv" style="flex:1;margin-left:10px;color:var(--dim);font-size:13px"></span><span id="dot" title="Connection"></span></header>
-<div class="row seg hide" id="targets" style="margin:0 0 10px"></div>
+<header><button id="back" class="hide" aria-label="Back to all TVs">‹ All TVs</button><h1>TV Remote</h1><span id="tv" style="flex:1;margin-left:10px;color:var(--dim);font-size:13px"></span><span id="dot" title="Connection"></span></header>
+
+<section id="view-all" class="hide"><div id="cards"></div></section>
+<section id="view-share" class="hide"></section>
+<section id="view-tv" class="hide">
 <div class="card" id="now">
   <div><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span></div>
   <div id="title">Nothing playing</div>
@@ -103,6 +117,7 @@ select{min-height:52px;padding:0 10px}
 <div class="grid" id="favs"></div>
 
 <p style="text-align:center;margin-top:24px"><button id="dbgOpen" style="min-height:44px;background:none;color:var(--dim);font-size:13px">Debug</button></p>
+</section>
 
 <div id="scrim" class="hide"></div>
 <aside id="drawer" class="hide" aria-label="Debug">
@@ -118,13 +133,12 @@ select{min-height:52px;padding:0 10px}
 <script>
 const $ = id => document.getElementById(id);
 let site = 'kick', st = {}, dragging = false, qualFor = null, favList = [], targets = [];
-let target = 'living';
-try { target = new URLSearchParams(location.search).get('target') || localStorage.getItem('target') || 'living'; } catch (e) {}
+let target = '';  // the TV shown in the One TV view; set by the router
 
 const err = m => { $('err').textContent = m || ''; if (m) setTimeout(() => $('err').textContent = '', 5000); };
 async function api(path, method = 'GET', body) {
   try {
-    const u = path + (path.includes('?') ? '&' : '?') + 'target=' + encodeURIComponent(target);
+    const u = path + (path.includes('?') ? '&' : '?') + 'target=' + encodeURIComponent(target || 'living');
     const r = await fetch(u, {method, headers: body ? {'Content-Type': 'application/json'} : {},
       body: body ? JSON.stringify(body) : undefined});
     const j = await r.json().catch(() => ({}));
@@ -173,8 +187,8 @@ async function loadQualities() {
 }
 
 async function poll() {
+  if (view() !== 'tv') return;
   const s = await api('/api/status');
-  $('dot').classList.toggle('on', !!s);
   if (s) { st = s; render(); }
 }
 
@@ -282,49 +296,103 @@ function dbg(open) {
 $('dbgOpen').onclick = () => dbg(true);
 $('dbgClose').onclick = $('scrim').onclick = () => dbg(false);
 
-// ---- TV info + Roku controls ----
+// ---- cards and router ----
 const POWER = {PowerOn: 'on', Ready: 'standby', DisplayOff: 'screen off'};
-async function tvInfo() {
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const view = () => location.pathname === '/share' ? 'share' : location.hash.startsWith('#/tv/') ? 'tv' : 'all';
+
+function healthWord(c) {
+  const h = (c.health || {}).state;
+  return !c.reachable ? '' : h === 'buffering' ? 'Buffering' : h === 'error' ? 'Problem' : '';
+}
+
+function cardEl(c, onTap, extra) {
+  const b = el('button', 'tvcard' + (c.reachable ? '' : ' down'));
+  b.type = 'button';
+  const head = el('div', 'ch');
+  const dot = el('i', 'hd ' + (c.reachable ? (c.health || {}).state || 'idle' : 'idle'));
+  dot.setAttribute('aria-hidden', 'true');
+  head.append(dot, el('b', null, c.name), el('span', 'hw ' + ((c.health || {}).state || ''), healthWord(c)));
+  const size = c.size ? c.size + '\u2033' : '';
+  const sub = [[c.brand, size].filter(Boolean).join(' '), c.model].filter(Boolean).join(' \u00b7 ');
+  const n = c.now;
+  const line = !c.reachable ? "Can't reach" : n && n.starting ? 'Starting\u2026' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : 'Idle';
+  b.append(head, el('div', 'sub', [sub, c.connection].filter(Boolean).join(' \u00b7 ')), el('div', 'now', line));
+  const tags = el('div', 'tags');
+  if (c.reachable && n && !n.starting) {
+    tags.append(el('span', 'badge ' + (n.source || ''), n.source || 'Other'));
+    if (n.live) tags.append(el('span', 'badge live', 'LIVE'));
+    if (n.stream) tags.append(el('span', 'badge', n.stream));
+  }
+  const pw = c.reachable ? [POWER[c.power] || c.power, c.input && c.input !== 'Roku' ? c.input : null].filter(Boolean).join(' \u00b7 ') : '';
+  if (pw) tags.append(el('span', 'sub', pw));
+  if (tags.childNodes.length) b.append(tags);
+  if (extra) b.append(extra);
+  b.setAttribute('aria-label', c.name + '. ' + line + (healthWord(c) ? '. ' + healthWord(c) : ''));
+  b.onclick = () => onTap(c);
+  return b;
+}
+
+function renderCards() {
+  if (view() !== 'all') return;
+  const box = $('cards');
+  box.replaceChildren(...targets.map(c => cardEl(c, t => { location.hash = '#/tv/' + encodeURIComponent(t.id); })));
+}
+
+function tvInfo() {  // the TV details in the One TV view come from the same cached card
   const cur = targets.find(t => t.id === target) || {};
   $('tvctl').classList.toggle('hide', !cur.roku);
   $('tvhead').classList.toggle('hide', !cur.roku);
-  const t = cur.roku ? await api('/api/roku') : target === 'living' ? await api('/api/tv') : null;
-  const name = t && (t.name || cur.name);
-  const bits = t ? [POWER[t.power] || t.power, t.app && t.app !== 'Roku' ? t.app : null] : [];
-  $('tv').textContent = name ? [name, ...bits.filter(Boolean)].join(' · ') : (cur.device || '');
-  $('tvhead').textContent = cur.roku ? [name || 'TV', t && t.error ? '(unreachable)' : ''].join(' ') : 'TV';
+  const bits = [cur.tv_name || cur.name, cur.reachable === false ? "can't reach" : POWER[cur.power] || cur.power,
+    cur.input && cur.input !== 'Roku' ? cur.input : null].filter(Boolean);
+  $('tv').textContent = bits.join(' \u00b7 ');
+  $('tvhead').textContent = cur.tv_name || 'TV';
 }
 
 async function loadTargets() {
-  const r = await fetch('/api/targets').then(x => x.json()).catch(() => null);
-  if (Array.isArray(r)) targets = r;
-  if (!targets.some(t => t.id === target)) target = 'living';
-  const box = $('targets');
-  box.innerHTML = '';
-  box.classList.toggle('hide', targets.length < 2);
-  targets.forEach(t => {
-    const b = document.createElement('button');
-    b.textContent = t.name + (t.online ? '' : ' (offline)');
-    b.className = t.id === target ? 'on' : '';
-    b.onclick = () => {
-      target = t.id; try { localStorage.setItem('target', target); } catch (e) {}
-      st = {}; qualFor = null; $('qual').innerHTML = ''; loadTargets(); loadFavs(); poll(); tvInfo();
-    };
-    box.appendChild(b);
-  });
-  tvInfo();
+  let ok = false;
+  try {
+    const r = await fetch('/api/targets');
+    const j = await r.json();
+    if (Array.isArray(j)) { targets = j; ok = true; }
+  } catch (e) {}
+  $('dot').classList.toggle('on', ok);
+  renderCards(); tvInfo();
+  if (view() === 'share' && window.renderPicker) window.renderPicker();
 }
+
+function show() {
+  const v = view();
+  if (v === 'tv') {
+    const id = decodeURIComponent(location.hash.slice(5));
+    if (id !== target) {
+      target = id; st = {}; qualFor = null; $('qual').innerHTML = '';
+      try { localStorage.setItem('target', id); } catch (e) {}
+      loadFavs(); poll();
+    }
+  }
+  ['all', 'share', 'tv'].forEach(n => $('view-' + n).classList.toggle('hide', n !== v));
+  $('back').classList.toggle('hide', v !== 'tv');
+  renderCards(); tvInfo();
+  if (v === 'share' && window.renderPicker) window.renderPicker();
+}
+window.addEventListener('hashchange', show);
+window.addEventListener('popstate', show);
+$('back').onclick = () => { location.hash = '#/'; };
 
 document.addEventListener('click', async e => {
   const b = e.target.closest('button[data-k]');
   if (!b) return;
   const r = await api('/api/roku/key', 'POST', {key: b.dataset.k});
-  if (r && r.ok) setTimeout(tvInfo, 1500);
+  if (r && r.ok) setTimeout(loadTargets, 1500);
 });
 
-loadTargets(); setInterval(loadTargets, 30000);
-setInterval(tvInfo, 30000);
-loadFavs(); poll(); setInterval(poll, 2000);
+// /?target=<id> is where /play redirects; send it to that TV's remote
+const redirectTarget = new URLSearchParams(location.search).get('target');
+if (location.pathname === '/' && !location.hash && redirectTarget) history.replaceState(null, '', '/#/tv/' + encodeURIComponent(redirectTarget));
+show();
+loadTargets(); setInterval(loadTargets, 3000);
+setInterval(poll, 2000);
 </script>
 </body>
 </html>
