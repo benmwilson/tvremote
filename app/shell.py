@@ -26,7 +26,7 @@ LOG = "/tmp/tvremote-shell.log"
 SCALE = 2.6                 # the mark is drawn at 260%
 GLYPH_OFF, GLYPH_H = 45, 180  # px from the drawing's top edge to the visible mark, and the visible height (stand included)
 GAP = 30                    # px between the stand and the text
-LINE = 1.17                 # a text line is about this many times its font size tall
+LINE = 1.0                  # measured on the Pi: a text line is about its font size tall (the estimate of 1.17 sat the group 30 px high)
 _L = r"{\an7\pos(830,%d)\fscx260\fscy260\shad0\p1"
 
 
