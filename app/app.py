@@ -154,7 +154,7 @@ def start_player(url, quality=None):
         # quality reaches argv: allow only stream names like "1080p60,best" (no leading "-")
         ok = quality and re.fullmatch(r"[a-z0-9_]+(,[a-z0-9_]+)*", quality) and not quality.isdigit()
         q = quality if ok else SL_DEFAULT
-        cmd = ["streamlink", "--verbose-player", "--player", "mpv", "--player-args", ipc]
+        cmd = ["streamlink", "--player-verbose", "--player", "mpv", "--player-args", ipc]
         if source == "Twitch":
             cmd.append("--twitch-disable-ads")
         cmd += [url, q]
