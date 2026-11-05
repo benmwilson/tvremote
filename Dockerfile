@@ -1,12 +1,11 @@
 FROM debian:trixie-slim
 
 # Raspberry Pi repo: its ffmpeg (+rpt) has the v4l2m2m hwdec patches that plain Debian ffmpeg lacks
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
-    && curl -fsSL https://archive.raspberrypi.com/debian/raspberrypi.gpg.key \
-       | gpg --dearmor -o /usr/share/keyrings/raspberrypi.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/raspberrypi.gpg] http://archive.raspberrypi.com/debian trixie main" \
-       > /etc/apt/sources.list.d/raspi.list \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
+# Same keyring + deb822 entry as the host (copied from its /usr/share/keyrings)
+COPY docker/raspberrypi-archive-keyring.pgp /usr/share/keyrings/raspberrypi-archive-keyring.pgp
+COPY docker/raspi.sources /etc/apt/sources.list.d/raspi.sources
 COPY docker/raspi.pref /etc/apt/preferences.d/raspi
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
