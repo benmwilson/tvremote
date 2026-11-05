@@ -306,6 +306,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .apps .note{grid-column:1/-1;margin:6px 2px;color:var(--dim);font-size:14px}
 #tvmute.muted{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}
 #tvmute.muted .ic{color:#ff8a8a}
+#tvpower.isoff,#tvpower.isoff .ic{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}#tvpower.isoff .ic{background:none}
 .dbmute{display:flex;gap:8px;margin:6px 0 12px}.dbmute button{flex:1;min-height:44px}
 </style>
 </head>
@@ -544,8 +545,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 <h2 id="tvhead">TV</h2>
 <p class="sub hide" id="tvnoroku" style="margin:6px 4px 0">No TV controls here yet (power, volume, input). In Settings, run the setup wizard again and pick this TV's Roku.</p>
 <div class="card hide" id="tvctl">
-  <div class="row"><button data-k="PowerOn"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg>On</button>
-    <button data-k="PowerOff"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg>Off</button></div>
+  <div class="row"><button id="tvpower" data-k="PowerOn" aria-pressed="false" aria-label="Turn the TV on"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg></button></div>
   <div class="row"><button data-k="VolumeDown" aria-label="TV volume down"><svg class="ic" aria-hidden="true"><use href="#i-volume-low"/></svg>&minus;</button>
     <button id="tvmute" data-k="VolumeMute" aria-label="Mute the TV" aria-pressed="false" title="Tap to mute or unmute. The TV doesn't report its mute state, so this shows what was last pressed here. Hold to correct what it shows." style="-webkit-touch-callout:none;-webkit-user-select:none;user-select:none"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg></button>
     <button data-k="VolumeUp" aria-label="TV volume up"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg>+</button></div>
@@ -1677,6 +1677,15 @@ function tvInfo() {  // the TV details in the One TV view come from the same cac
   $('tvoffsub').textContent = cur.reachable === false ? "It isn't answering. Check it has power, then tap Turn on."
     : st.running ? 'The stream keeps playing behind the black screen.' : 'Turn it on to watch. Playing something also wakes it.';
   accent();
+  const pb = $('tvpower'), isOff = tvOff(cur);  // one toggle: shows what the TV reports, and a tap does the opposite
+  pb.dataset.k = isOff ? 'PowerOn' : 'PowerOff';
+  pb.classList.toggle('isoff', isOff);
+  pb.setAttribute('aria-pressed', String(!isOff));
+  pb.setAttribute('aria-label', isOff ? 'Turn the TV on' : 'Turn the TV off');
+  if (pb.dataset.shown !== String(isOff) + (cur.reachable === false)) {  // redraw only on a change, so the spinner isn't wiped
+    pb.dataset.shown = String(isOff) + (cur.reachable === false);
+    setBtn(pb, 'power', cur.reachable === false ? 'No answer' : isOff ? 'Off' : 'On');
+  }
   $('tvctl').classList.toggle('hide', !cur.roku);
   $('tvnoroku').classList.toggle('hide', !!cur.roku || !cur.id);
   $('tvhead').classList.toggle('hide', !cur.roku);
@@ -1743,8 +1752,10 @@ document.addEventListener('click', async e => {
   if (!b) return;
   const k = b.dataset.k;
   if (b.id === 'tvmute' && muteHeld) { muteHeld = false; return; }  // that was a press-and-hold (a correction), not a tap
-  const hold = k === 'PowerOn' ? 4000 : /^Input/.test(k) ? 2500 : 0;  // the TV takes a moment to wake or change input
-  const r = await busy(b, () => api('/api/roku/key', 'POST', {key: k}), hold);
+  const pw = b.id === 'tvpower';  // the power button spins until the TV itself reports the new state (or 30 s)
+  const hold = pw ? 0 : k === 'PowerOn' ? 4000 : /^Input/.test(k) ? 2500 : 0;  // the TV takes a moment to wake or change input
+  const until = pw ? () => tvOff(targets.find(t => t.id === target) || {}) !== (k === 'PowerOn') : null;
+  const r = await busy(b, () => api('/api/roku/key', 'POST', {key: k}), hold, 450, until);
   if (r && r.ok) {
     // The TV can't tell us whether it is muted: we track what we do to it, starting from "sound on". If that is wrong, Debug > TV mute sets it.
     if (k === 'VolumeMute') tvMuted[target] = tvMuted[target] !== true;
