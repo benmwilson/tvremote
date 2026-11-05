@@ -1484,6 +1484,24 @@ def api_roku_apps():
         return jsonify(ok=False, error=str(e)), 502
 
 
+PNG_SIGNATURE = bytes([137, 80, 78, 71, 13, 10, 26, 10])
+JPEG_SIGNATURE = bytes([255, 216, 255])
+
+
+def raster_type(data):
+    """The image type judged by the file's own first bytes (png, jpeg, gif, webp), else None. A type named by another device is not trusted:
+    an SVG could carry a script that would run as part of this page."""
+    if data[:8] == PNG_SIGNATURE:
+        return "image/png"
+    if data[:3] == JPEG_SIGNATURE:
+        return "image/jpeg"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 @app.get("/api/roku/icon")
 def api_roku_icon():
     tid, ip, aid = request.args.get("target") or "living", roku_ip(), request.args.get("id", "")
@@ -1498,8 +1516,12 @@ def api_roku_icon():
             _icons[(tid, aid)] = roku.icon(ip, aid)
     except roku.RokuError:
         abort(404)
-    data, kind = _icons[(tid, aid)]
-    return Response(data, mimetype=kind if kind.startswith("image/") else "image/png", headers={"Cache-Control": "max-age=86400"})
+    data, _ = _icons[(tid, aid)]
+    kind = raster_type(data)
+    if not kind:  # whatever the "TV" sent is not a picture we know: never pass it on, whatever type it claims
+        abort(404)
+    return Response(data, mimetype=kind, headers={"Cache-Control": "max-age=86400", "X-Content-Type-Options": "nosniff",
+                                                  "Content-Security-Policy": "sandbox; default-src 'none'"})
 
 
 @app.post("/api/roku/launch")

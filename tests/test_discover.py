@@ -304,6 +304,9 @@ APPS_XML = """<apps>
 </apps>"""
 
 
+PNG = bytes([137, 80, 78, 71, 13, 10, 26, 10]) + b"pixels"
+
+
 class RokuApps(unittest.TestCase):
     def setUp(self):
         for p in (mock.patch.object(accounts, "initialised", lambda: True), mock.patch.object(server, "session_user", lambda tok: accounts.OWNER),
@@ -355,13 +358,24 @@ class RokuApps(unittest.TestCase):
         self.assertEqual(waits, [6])
 
     def test_icons_come_through_for_installed_apps_only(self):
-        with mock.patch.object(roku, "_call", return_value=APPS_XML), mock.patch.object(roku, "icon", return_value=(b"PNG-data", "image/png")) as icon:
+        with mock.patch.object(roku, "_call", return_value=APPS_XML), mock.patch.object(roku, "icon", return_value=(PNG, "image/png")) as icon:
             r = self.client.get("/api/roku/icon?target=living&id=837")
-            self.assertEqual((r.status_code, r.data, r.mimetype), (200, b"PNG-data", "image/png"))
+            self.assertEqual((r.status_code, r.data, r.mimetype), (200, PNG, "image/png"))
             self.client.get("/api/roku/icon?target=living&id=837")
             self.assertEqual(icon.call_count, 1)  # fetched once, then kept
+            self.assertEqual((r.headers["X-Content-Type-Options"], "sandbox" in r.headers["Content-Security-Policy"]), ("nosniff", True))
             self.assertEqual(self.client.get("/api/roku/icon?target=living&id=555").status_code, 404)
             self.assertEqual(self.client.get("/api/roku/icon?target=living&id=a/b").status_code, 404)
+
+    def test_an_icon_that_is_not_a_known_raster_picture_is_never_passed_on(self):
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+        for body in (svg, b"<html>hi</html>", b""):
+            server._icons.clear()
+            with mock.patch.object(roku, "_call", return_value=APPS_XML), mock.patch.object(roku, "icon", return_value=(body, "image/svg+xml")):
+                self.assertEqual(self.client.get("/api/roku/icon?target=living&id=837").status_code, 404)
+        webp = b"RIFF" + bytes(4) + b"WEBPxx"
+        for body, kind in ((bytes([255, 216, 255]) + b"jfif", "image/jpeg"), (b"GIF89a....", "image/gif"), (webp, "image/webp")):
+            self.assertEqual(server.raster_type(body), kind)
 
     def test_a_tv_with_no_roku_has_no_apps(self):
         self.assertEqual(self.client.get("/api/roku/apps?target=bedroom").status_code, 404)
