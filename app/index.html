@@ -147,10 +147,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 #chatbox .m{padding:3px 0;word-break:break-word}#chatbox .m b{margin-right:6px}#chatbox img{height:1.5em;vertical-align:middle;margin:0 1px}
 .seekbar{display:flex;align-items:center;gap:10px;margin-top:14px;font-variant-numeric:tabular-nums;color:var(--dim);font-size:14px}
 .seekbar input{flex:1;min-width:0}
-.extras{margin-top:12px;display:grid;gap:10px}
-.chips{display:flex;gap:8px}.chips button{flex:1;min-height:40px;border-radius:12px;background:var(--card2);color:var(--dim);font-size:14px}
-.chips button[aria-pressed=true]{background:var(--tv);color:#0b0e14;font-weight:700}
-.sleeprow{display:flex;align-items:center;gap:12px}.sleeprow select{flex:1;min-width:0}
+.extras{margin-top:8px}
+.sleeprow select{width:100%;min-height:52px;padding:0 14px}
 .fav.off{opacity:.62}
 .badge.chip{min-height:0;height:auto;padding:3px 10px;border:0;border-radius:99px;gap:0;display:inline-flex;align-items:center;font:inherit;font-size:12px;font-weight:700;line-height:1.35;cursor:pointer}
 .badge.chip::before{content:"";position:absolute;inset:-10px -3px}  /* a bigger tap area than the small pill */
@@ -277,8 +275,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
     <div class="pair"><button id="refresh" aria-label="Refresh the stream" title="Refresh the stream"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
     <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div></div>
   <div class="extras hide" id="extras">
-    <div class="chips hide" id="qpresets" role="group" aria-label="Quality shortcuts"><button data-p="best">Best</button><button data-p="balanced">Balanced</button><button data-p="saver">Data saver</button></div>
-    <div class="sleeprow"><select id="sleepsel" aria-label="Sleep timer"><option value="">Sleep timer</option><option value="15">Stop in 15 min</option><option value="30">Stop in 30 min</option><option value="60">Stop in 1 hour</option><option value="90">Stop in 90 min</option><option value="0">Cancel timer</option></select><span class="sub" id="sleepnote"></span></div>
+    <div class="sleeprow"><select id="sleepsel" aria-label="Sleep timer"><option value="">Sleep timer: off</option><option value="15">Stop in 15 min</option><option value="30">Stop in 30 min</option><option value="60">Stop in 1 hour</option><option value="90">Stop in 90 min</option><option value="0">Cancel timer</option></select></div>
   </div>
 </div>
 <div class="card hide" id="chatcard">
@@ -510,7 +507,6 @@ async function loadQualities() {
   (q || []).forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; sel.appendChild(o); });
   sel.value = [...sel.options].map(o => o.value).find(v => String(st.quality).split(',').includes(v)) || '';
   sel.classList.toggle('hide', !sel.options.length || !st.running);
-  renderPresets();
 }
 
 async function poll() {
@@ -730,16 +726,6 @@ fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").c
 
 // ---- seek bar, quality shortcuts, sleep timer ----
 let seekDrag = false;
-function renderPresets() {
-  const o = [...$('qual').options].map(x => x.value), box = $('qpresets');
-  box.classList.toggle('hide', o.length < 3 || !st.running);
-  const pick = {best: o[0], balanced: o[Math.floor(o.length / 2)], saver: o[o.length - 1]};
-  box.querySelectorAll('button').forEach(b => { b.dataset.q = pick[b.dataset.p] || ''; b.setAttribute('aria-pressed', String(b.dataset.q === $('qual').value)); });
-}
-$('qpresets').onclick = e => {
-  const b = e.target.closest('button');
-  if (b && b.dataset.q && $('qual').value !== b.dataset.q) { $('qual').value = b.dataset.q; $('qual').onchange(); renderPresets(); }
-};
 function renderExtras() {
   const vod = st.running && !st.live && st.duration > 0;
   $('seekbar').classList.toggle('hide', !vod);
@@ -751,8 +737,7 @@ function renderExtras() {
   }
   $('extras').classList.toggle('hide', !st.running);
   const left = st.sleep_at ? Math.max(0, Math.round((st.sleep_at * 1000 - Date.now()) / 60000)) : 0;
-  $('sleepnote').textContent = st.sleep_at ? 'TV stops in ' + (left < 1 ? 'under a minute' : left + ' min') : '';
-  renderPresets();
+  $('sleepsel').options[0].text = st.sleep_at ? 'Sleep timer: stops in ' + (left < 1 ? 'under a minute' : left + ' min') : 'Sleep timer: off';
 }
 $('seekr').oninput = () => { seekDrag = true; $('pos').textContent = fmt(+$('seekr').value); $('seekr').style.setProperty('--p', (100 * $('seekr').value / $('seekr').max) + '%'); };
 $('seekr').onchange = async () => { await cmd('seek_to', $('seekr').value); seekDrag = false; setTimeout(poll, 500); };
