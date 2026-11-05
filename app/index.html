@@ -235,6 +235,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <button id="back" class="hide" aria-label="Back to all TVs"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg>All TVs</button>
   <svg class="logo" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true"><use href="#i-logo"/></svg>
   <h1>TV Remote</h1><span class="grow"></span>
+  <a id="gear" href="#/settings" aria-label="Settings" title="Settings" style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim)"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg></a>
   <a id="logout" class="hide" href="/logout" aria-label="Log out" title="Log out"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg></a><span id="dot" role="img" aria-label="Connection to the Pi"></span>
 </header>
 
@@ -247,6 +248,25 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
       <div class="grow"><b>Remote on the Pi's screen</b><span class="sub" id="pistate">Checking&hellip;</span></div></div>
     <button id="desktop" class="pibtn"><svg class="ic" aria-hidden="true"><use id="piicon" href="#i-eye-off"/></svg><span id="pilabel">Hide the remote from the TV</span></button>
     <p class="sub" id="pihelp"></p>
+  </div>
+</section>
+
+<section id="view-settings" class="hide">
+  <h2 style="margin-top:6px">Settings</h2>
+  <div class="card"><b>Your account</b><p class="sub" id="acctsub">&hellip;</p></div>
+  <div class="card"><b>Linked platforms</b><p class="sub">Link your own accounts to chat and see your data. Each TV Remote account has its own links.</p>
+    <button id="kickrow" class="tvrow hide" style="margin:6px 0 0">
+  <div class="grow"><b>Kick account</b><span class="sub" id="kicksub"></span></div></button>
+  </div>
+  <div class="card hide" id="adminbox"><b>Admin</b>
+    <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:10px 0 6px">
+  <div class="grow"><b>Home screen on the TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
+    <h3>Accounts</h3>
+    <p class="sub">The owner (the password in .env) is always an admin. Admins can add and remove accounts, change roles and open Debug.</p>
+    <div id="acctlist"></div>
+    <form id="acctadd" class="row" style="flex-wrap:wrap"><input id="acctname" placeholder="New name" autocapitalize="none" autocomplete="off" aria-label="New account name"><input id="acctpw" type="password" placeholder="Password (6+)" autocomplete="new-password" aria-label="New account password">
+      <label style="flex:1 0 100%;display:flex;gap:8px;align-items:center;min-height:44px"><input id="acctadmin" type="checkbox" style="flex:0 0 auto;width:22px;height:22px"> Make this account an admin</label>
+      <button style="flex:1 0 100%">Add account</button></form>
   </div>
 </section>
 
@@ -335,20 +355,13 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <h2 id="recenthead" class="hide">Recent</h2>
 <div class="grid list" id="recents"></div>
 
-<p style="text-align:center;margin-top:26px"><button id="dbgOpen" style="min-height:44px;background:none;color:var(--dim);font-size:14px"><svg class="ic" aria-hidden="true"><use href="#i-terminal"/></svg>Debug</button></p>
+<p id="dbgrow" class="hide" style="text-align:center;margin-top:26px"><button id="dbgOpen" style="min-height:44px;background:none;color:var(--dim);font-size:14px"><svg class="ic" aria-hidden="true"><use href="#i-terminal"/></svg>Debug</button></p>
 </section>
 
 <div id="scrim" class="hide"></div>
 <aside id="drawer" class="hide" aria-label="Debug">
   <div class="dh"><b>Debug</b><span id="dage"></span><button id="dbgClose" aria-label="Close debug"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="db">
-    <div id="acct" class="hide" style="margin:0 0 10px"><b>Accounts</b> <span class="sub" id="acctsub"></span>
-      <div id="acctlist"></div>
-      <form id="acctadd" class="row hide"><input id="acctname" placeholder="New name" autocapitalize="none" autocomplete="off" aria-label="New account name"><input id="acctpw" type="password" placeholder="Password (6+)" autocomplete="new-password" aria-label="New account password"><button style="flex:0 0 auto;padding:0 16px">Add</button></form></div>
-    <button id="kickrow" class="tvrow hide" style="margin:0 0 6px">
-  <div class="grow"><b>Kick account</b><span class="sub" id="kicksub"></span></div></button>
-    <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:0 0 6px">
-  <div class="grow"><b>Home screen on the TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
     <button id="statsrow" class="tvrow" role="switch" aria-checked="false" style="margin:0 0 6px">
   <div class="grow"><b>Stats on the TV</b><span class="sub warn">Warning: this drops frames while it is on. Dropped frames, buffer and fps in the corner, redrawn every 2 s. Use it to diagnose, then switch it off.</span></div><span class="sw"></span></button>
     <h3>Player</h3><table id="d-player"></table>
@@ -378,7 +391,7 @@ const hiddenTvs = () => { try { return new Set(JSON.parse(localStorage.getItem('
 const saveHidden = s => { try { localStorage.setItem('hiddenTvs', JSON.stringify([...s])); } catch (e) {} };
 const visibleTvs = () => { const h = hiddenTvs(); return targets.filter(t => !h.has(t.id)); };
 let editing = false;
-const view = () => location.pathname === '/share' ? 'share' : location.hash.startsWith('#/tv/') ? 'tv' : 'all';
+const view = () => location.pathname === '/share' ? 'share' : location.hash === '#/settings' ? 'settings' : location.hash.startsWith('#/tv/') ? 'tv' : 'all';
 
 // Run a button's command with feedback: spinner while it is in flight (at least `min` ms so a quick tap is still
 // seen), then a brief confirm or shake. `hold` keeps the spinner a little longer after success for things that
@@ -741,7 +754,7 @@ function renderShell() {
 async function loadShell() {
   const cur = targets.find(t => t.id === target) || {};
   const pi = targets.some(t => t.kind === 'pi');
-  $('shellrow').classList.toggle('hide', cur.kind !== 'pi');
+  $('shellrow').classList.toggle('hide', !pi);  // now on the Settings page, so it no longer depends on the TV you opened
   $('homebox').classList.toggle('hide', !pi);
   loadStats();
   if (!pi) return;
@@ -787,26 +800,31 @@ fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }
 // ---- accounts (the owner adds people; each has their own favourites and Kick link) ----
 async function loadAccounts() {
   const me = await fetch('/api/auth').then(r => r.json()).catch(() => ({}));
-  $('acct').classList.toggle('hide', !me.required);
-  $('acctsub').textContent = 'Signed in as ' + (me.owner ? 'the owner' : me.user);
-  $('acctadd').classList.toggle('hide', !me.owner);
-  const list = me.owner ? await fetch('/api/accounts').then(r => r.json()).catch(() => ({})) : {};
-  $('acctlist').replaceChildren(...(list.users || []).map(name => {
-    const row = document.createElement('div'), b = document.createElement('button');
-    row.className = 'row'; row.style.alignItems = 'center';
-    const n = document.createElement('span'); n.textContent = name;
+  $('acctsub').textContent = me.required ? 'Signed in as ' + (me.owner ? 'the owner' : me.user) + ' (' + (me.admin ? 'admin' : 'user') + ')'
+    : 'No password is set, so everyone is the owner.';
+  $('adminbox').classList.toggle('hide', !me.admin);
+  $('dbgrow').classList.toggle('hide', !me.admin);
+  const list = me.admin ? await fetch('/api/accounts').then(r => r.json()).catch(() => ({})) : {};
+  $('acctlist').replaceChildren(...(list.users || []).map(u => {
+    const row = document.createElement('div'), n = document.createElement('span'), role = document.createElement('select'), b = document.createElement('button');
+    row.className = 'row'; row.style.alignItems = 'center'; row.style.marginBottom = '6px';
+    n.textContent = u.name;
+    ['user', 'admin'].forEach(r => { const o = document.createElement('option'); o.value = o.textContent = r; role.appendChild(o); });
+    role.value = u.role; role.setAttribute('aria-label', 'Role of ' + u.name); role.style.flex = '0 0 auto';
+    role.onchange = async () => { await api('/api/accounts', 'PATCH', {name: u.name, role: role.value}); loadAccounts(); };
     b.textContent = 'Remove'; b.style.flex = '0 0 auto'; b.style.padding = '0 14px';
     b.onclick = async () => {
       if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Tap again: deletes their favourites'; return; }
-      await api('/api/accounts', 'DELETE', {name}); loadAccounts();
+      await api('/api/accounts', 'DELETE', {name: u.name}); loadAccounts();
     };
-    row.append(n, b); return row;
+    row.append(n, role, b); return row;
   }));
 }
 $('acctadd').onsubmit = async e => {
   e.preventDefault();
-  const r = await busy($('acctadd').querySelector('button'), () => api('/api/accounts', 'POST', {name: $('acctname').value, password: $('acctpw').value}));
-  if (r && r.ok !== false) { $('acctname').value = ''; $('acctpw').value = ''; loadAccounts(); }
+  const r = await busy($('acctadd').querySelector('button'), () => api('/api/accounts', 'POST',
+    {name: $('acctname').value, password: $('acctpw').value, role: $('acctadmin').checked ? 'admin' : 'user'}));
+  if (r && r.ok !== false) { $('acctname').value = ''; $('acctpw').value = ''; $('acctadmin').checked = false; loadAccounts(); }
 };
 loadAccounts();
 
@@ -1109,8 +1127,9 @@ function show() {
       loadFavs(); poll(); loadShell();
     }
   }
-  ['all', 'share', 'tv'].forEach(n => $('view-' + n).classList.toggle('hide', n !== v));
-  $('back').classList.toggle('hide', v !== 'tv');
+  ['all', 'share', 'tv', 'settings'].forEach(n => $('view-' + n).classList.toggle('hide', n !== v));
+  $('back').classList.toggle('hide', v !== 'tv' && v !== 'settings');
+  if (v === 'settings') { loadAccounts(); loadShell(); fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {}); }
   renderCards(); tvInfo();
   if (v === 'all') loadShell();
   if (v === 'share') renderPicker();

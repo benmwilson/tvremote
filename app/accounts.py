@@ -1,6 +1,8 @@
 """Named accounts beside the owner (whose password is TVREMOTE_PASSWORD). Each account has its own favourites and its own
 Kick link; everything else (what is playing, recents, settings) is shared, since there is one TV.
-Passwords are stored as salted scrypt hashes in /data/users.json."""
+Passwords are stored as salted scrypt hashes in /data/users.json.
+Two roles: "admin" (manages accounts and settings) and "user". The owner (the .env password) is always an admin, so
+nobody can be locked out by demoting accounts."""
 import hashlib
 import hmac
 import json
@@ -10,6 +12,7 @@ import secrets
 import threading
 
 OWNER = "owner"
+ROLES = ("user", "admin")
 _lock = threading.Lock()
 
 
@@ -38,6 +41,27 @@ def exists(name):
     return name in _load()
 
 
+def role(name):
+    if name == OWNER:
+        return "admin"
+    return _load().get(name, {}).get("role", "user") if name in _load() else "user"
+
+
+def listing():
+    return [{"name": n, "role": role(n)} for n in names()]
+
+
+def set_role(name, new_role):
+    if new_role not in ROLES:
+        raise ValueError("Role must be user or admin.")
+    with _lock:
+        d = _load()
+        if name not in d:
+            raise ValueError("No such account.")
+        d[name]["role"] = new_role
+        _write(d)
+
+
 def valid_name(name):
     return bool(re.fullmatch(r"[a-z0-9_-]{2,20}", name or "")) and name != OWNER
 
@@ -50,17 +74,20 @@ def _write(d):
     os.replace(tmp, _file())
 
 
-def add(name, password):
-    """Create an account (or change its password). Raises ValueError for a bad name or a short password."""
+def add(name, password, new_role=None):
+    """Create an account (or change its password, keeping its role unless one is given). Raises ValueError for a bad name,
+    a short password or an unknown role."""
     name = (name or "").strip().lower()
     if not valid_name(name):
         raise ValueError("Names are 2 to 20 letters, digits, - or _ (and not 'owner').")
     if len(password or "") < 6:
         raise ValueError("Use a password of at least 6 characters.")
+    if new_role not in (None, *ROLES):
+        raise ValueError("Role must be user or admin.")
     salt = secrets.token_hex(16)
     with _lock:
         d = _load()
-        d[name] = {"salt": salt, "hash": _hash(password, salt)}
+        d[name] = {"salt": salt, "hash": _hash(password, salt), "role": new_role or d.get(name, {}).get("role", "user")}
         _write(d)
     return name
 

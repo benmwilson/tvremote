@@ -65,7 +65,7 @@ class AccountsTest(unittest.TestCase):
     def test_only_the_owner_manages_accounts(self):
         owner, _ = self.login("", "owner-pw")
         r = owner.post("/api/accounts", json={"name": "sam", "password": "secret1"})
-        self.assertEqual(r.get_json()["users"], ["sam"])
+        self.assertEqual(r.get_json()["users"], [{"name": "sam", "role": "user"}])
         self.assertEqual(owner.post("/api/accounts", json={"name": "x", "password": "secret1"}).status_code, 400)
         sam, _ = self.login("sam", "secret1")
         self.assertEqual(sam.get("/api/accounts").status_code, 403)
@@ -75,6 +75,27 @@ class AccountsTest(unittest.TestCase):
         self.assertEqual(sam.get("/api/favourites").status_code, 401)  # its session ended with it
         self.assertFalse(os.path.exists(os.path.join(self.dir, "favourites.sam.json")))
 
+
+    def test_roles(self):
+        owner, _ = self.login("", "owner-pw")
+        self.assertEqual(owner.get("/api/auth").get_json()["role"], "admin")  # the owner can never be locked out
+        owner.post("/api/accounts", json={"name": "sam", "password": "secret1"})
+        owner.post("/api/accounts", json={"name": "amy", "password": "secret1", "role": "admin"})
+        self.assertEqual(owner.get("/api/accounts").get_json()["users"], [{"name": "amy", "role": "admin"}, {"name": "sam", "role": "user"}])
+        sam, _ = self.login("sam", "secret1")
+        for path in ("/api/accounts", "/api/debug", "/api/screen.png"):
+            self.assertEqual(sam.get(path).status_code, 403, path)
+        self.assertEqual(sam.post("/api/stats", json={"enabled": True}).status_code, 403)
+        self.assertEqual(sam.patch("/api/accounts", json={"name": "sam", "role": "admin"}).status_code, 403)  # no promoting yourself
+        self.assertEqual(sam.get("/api/auth").get_json()["admin"], False)
+        owner.patch("/api/accounts", json={"name": "sam", "role": "admin"})
+        self.assertEqual(sam.get("/api/accounts").status_code, 200)  # takes effect on the next request, no new login
+        self.assertEqual(owner.patch("/api/accounts", json={"name": "sam", "role": "root"}).status_code, 400)
+        owner.post("/api/accounts", json={"name": "sam", "password": "newpass1"})  # a password change keeps the role
+        self.assertEqual(accounts.role("sam"), "admin")
+        amy, _ = self.login("amy", "secret1")
+        self.assertEqual(amy.delete("/api/accounts", json={"name": "amy"}).status_code, 400)  # not the one you're signed in with
+        self.assertEqual(amy.delete("/api/accounts", json={"name": "sam"}).status_code, 200)  # but an admin can remove others
 
     def test_a_new_password_or_a_removed_and_recreated_name_ends_old_logins(self):
         owner, _ = self.login("", "owner-pw")

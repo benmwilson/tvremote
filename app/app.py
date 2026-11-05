@@ -247,7 +247,8 @@ def logout():
 
 @app.get("/api/auth")
 def api_auth():
-    return jsonify(required=bool(PASSWORD), user=g.user, owner=g.user == accounts.OWNER)
+    return jsonify(required=bool(PASSWORD), user=g.user, owner=g.user == accounts.OWNER, role=accounts.role(g.user),
+                   admin=accounts.role(g.user) == "admin")
 
 
 # ---------- routing ----------
@@ -1118,6 +1119,7 @@ SCREEN_SHOT = "/tmp/tvremote-screen.png"
 @app.get("/api/screen.png")
 def api_screen():
     """The Pi's real screen, as the desktop is showing it right now (for debugging what the TV displays)."""
+    admin_only()
     try:
         subprocess.run(["grim", "-o", os.environ.get("TVREMOTE_OUTPUT", "HDMI-A-1"), SCREEN_SHOT],
                        check=True, capture_output=True, timeout=10)
@@ -1133,6 +1135,7 @@ def api_stats():
 
 @app.post("/api/stats")
 def api_stats_set():
+    admin_only()
     settings["stats"] = bool((request.get_json(silent=True) or {}).get("enabled"))
     save_settings()
     return jsonify(enabled=settings["stats"])
@@ -1162,6 +1165,7 @@ def api_chat_feed():
 @app.get("/api/shell/screenshot")
 def api_shell_screenshot():
     """What the home screen window is drawing right now, as a PNG (for debugging)."""
+    admin_only()
     r = mpvipc.send(shell.SOCK, ["screenshot-to-file", SHELL_SHOT, "window"], 4)
     if not (r and r.get("error") == "success"):
         return jsonify(ok=False, error="The home screen isn't running, or couldn't take a screenshot."), 502
@@ -1291,6 +1295,7 @@ def versions():
 
 @app.get("/api/debug")
 def api_debug():
+    admin_only()
     c = tgt()
     if c:
         d = c.debug()
@@ -1455,10 +1460,10 @@ def kick_done():
         if request.args.get("error"):
             raise ValueError(request.args["error"])
         kick.link_finish(request.args.get("code"), request.args.get("state"), g.user)
-        return redirect("/?kick=linked", 303)
+        return redirect("/?kick=linked#/settings", 303)
     except Exception as e:  # a bad state, a refused code or a Kick outage: all end the same way for the user
         print("Kick link failed:", kick.describe(e), flush=True)
-        return redirect("/?kick=failed", 303)
+        return redirect("/?kick=failed#/settings", 303)
 
 
 @app.post("/api/kick/unlink")
@@ -1481,33 +1486,46 @@ def kick_chat():
     return jsonify(ok=True)
 
 
-def owner_only():
-    if g.user != accounts.OWNER:
-        abort(Response(json.dumps({"ok": False, "error": "Only the owner can manage accounts."}), 403, mimetype="application/json"))
+def admin_only():
+    if accounts.role(g.user) != "admin":
+        abort(Response(json.dumps({"ok": False, "error": "Only an admin can do that."}), 403, mimetype="application/json"))
 
 
 @app.get("/api/accounts")
 def accounts_list():
-    owner_only()
-    return jsonify(users=accounts.names())
+    admin_only()
+    return jsonify(users=accounts.listing())
 
 
 @app.post("/api/accounts")
 def accounts_add():
-    owner_only()
+    admin_only()
     data = request.get_json(silent=True) or {}
     try:
-        name = accounts.add(data.get("name"), data.get("password"))
+        name = accounts.add(data.get("name"), data.get("password"), data.get("role"))
     except ValueError as e:
         return jsonify(ok=False, error=str(e)), 400
     drop_user_sessions(name)  # a new password signs that account out everywhere
     return accounts_list()
 
 
+@app.patch("/api/accounts")
+def accounts_role():
+    admin_only()
+    data = request.get_json(silent=True) or {}
+    try:
+        accounts.set_role(str(data.get("name", "")), data.get("role"))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    return accounts_list()
+
+
 @app.delete("/api/accounts")
 def accounts_del():
-    owner_only()
+    admin_only()
     name = str((request.get_json(silent=True) or {}).get("name", ""))
+    if name == g.user:
+        return jsonify(ok=False, error="You can't remove the account you're signed in with."), 400
     if accounts.remove(name):
         drop_user_sessions(name)  # re-creating the name later must not revive old logins
         for p in (fav_file(name), kick._path(name)):  # its favourites and Kick link go with it
