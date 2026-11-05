@@ -151,6 +151,12 @@ class CastTarget:
         q = self._quality(player, quality)
         if cancelled():
             return  # a newer tap replaced this one while its link was being worked out
+        # Work out the new stream before touching anything. If that fails (a channel that is offline), whatever is playing keeps
+        # playing and the status keeps describing it, instead of showing the playing stream under the failed channel's name.
+        if source == "YouTube":
+            vid = youtube_id(url) or run(["yt-dlp", "--no-playlist", "--print", "id", url]).splitlines()[0]
+        else:
+            media, ctype, stype = self._media_url(url, source, player, q)
         cast = self._connect()
         if cancelled():
             return
@@ -159,24 +165,20 @@ class CastTarget:
             self.state.update(url=url, source=source, player=player, quality=q, error=None,
                               started=time.time(), via=None, proxy_tried=False, mode=via, first_play=None)
         if source == "YouTube":
-            vid = youtube_id(url) or run(["yt-dlp", "--no-playlist", "--print", "id", url]).splitlines()[0]
             quick_play(cast, "youtube", {"media_id": vid})
             self.state["via"] = "youtube"
             return
         if via == "proxy" and player == "streamlink":
             self.state["proxy_tried"] = True
-            return self._start_proxy(url, source, q)
-        media, ctype, stype = self._media_url(url, source, player, q)
-        if cancelled():
-            return
+            return self._start_proxy(url, source, q, media)
         if cast.app_id != APP_MEDIA_RECEIVER:  # e.g. the YouTube app is open and would ignore the LOAD
             cast.start_app(APP_MEDIA_RECEIVER)
         cast.media_controller.play_media(media, ctype, title=self.title_fn(url), stream_type=stype)
         self.state["via"] = "direct"
 
-    def _start_proxy(self, url, source, q):
+    def _start_proxy(self, url, source, q, media=None):
         """The Pi fetches the HLS segments (wired) and relays them; the Chromecast only talks plain HTTP to the Pi."""
-        media = self._media_url(url, source, "streamlink", q)[0]
+        media = media or self._media_url(url, source, "streamlink", q)[0]
         hlsproxy.set_upstream(media)
         cast = self._connect()
         if cast.app_id != APP_MEDIA_RECEIVER:
