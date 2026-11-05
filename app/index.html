@@ -143,6 +143,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
 .chathead .chev{color:var(--dim);transition:transform .15s}.chathead[aria-expanded=true] .chev{transform:rotate(180deg)}
 #chatbox iframe{display:block;width:100%;height:340px;border:0;border-radius:12px;background:#0b0e14}
+/* our own box sends the messages, so Kick's message bar (and its Google login, which Google refuses to show inside a frame) is pushed out of view */
+#chatbox.crop{height:340px;overflow:hidden}#chatbox.crop iframe{height:470px}
 #chatbox{margin-top:10px;max-height:340px;overflow-y:auto;overscroll-behavior:contain;font-size:15px;line-height:1.35;-webkit-overflow-scrolling:touch}
 #chatbox .m{padding:3px 0;word-break:break-word}#chatbox .m b{margin-right:6px}#chatbox img{height:1.5em;vertical-align:middle;margin:0 1px}
 .seekbar{display:flex;align-items:center;gap:10px;margin-top:14px;font-variant-numeric:tabular-nums;color:var(--dim);font-size:14px}
@@ -952,6 +954,7 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   $('chatbox').classList.toggle('hide', !want);
   const canSend = want && !!kick && !!(kickInfo || {}).can_chat;  // typing needs a Kick account linked with chat permission
   $('kicksend').classList.toggle('hide', !canSend);
+  $('chatbox').classList.toggle('crop', canSend);
   if (canSend) $('kicktext').placeholder = 'Chat as ' + kickInfo.name;
   $('chatTog').setAttribute('aria-expanded', String(want));
   const key = want ? (kick ? 'kick:' + kick : 'twitch:' + (st.url || '')) : '';
