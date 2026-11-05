@@ -69,7 +69,7 @@ class CastTarget:
         self.cast = None
         self.port = os.environ.get("TVREMOTE_PORT", "8765")
         self.state = {"url": None, "source": None, "player": None, "quality": None, "error": None,
-                      "started": None, "via": None, "proxy_tried": False}
+                      "started": None, "via": None, "proxy_tried": False, "first_play": None}
         self.zc = zeroconf.Zeroconf()
         listener = SimpleCastListener(self._seen, self._gone, self._seen)
         self.browser = CastBrowser(listener, self.zc)
@@ -153,7 +153,7 @@ class CastTarget:
         hlsproxy.clear()  # any previous relay session ends; _start_proxy sets a new one
         with self.lock:
             self.state.update(url=url, source=source, player=player, quality=q, error=None,
-                              started=time.time(), via=None, proxy_tried=False, mode=via)
+                              started=time.time(), via=None, proxy_tried=False, mode=via, first_play=None)
         if source == "YouTube":
             vid = youtube_id(url) or run(["yt-dlp", "--no-playlist", "--print", "id", url]).splitlines()[0]
             quick_play(cast, "youtube", {"media_id": vid})
@@ -239,13 +239,16 @@ class CastTarget:
             if st["proxy_tried"] and st["via"] != "pi-proxy" and not st["error"]:
                 st["error"] = "Chromecast couldn't load the stream"
             data["error"] = st["error"] or None
+        if ms.player_state == "PLAYING" and st.get("first_play") is None:
+            st["first_play"] = time.time()
         if ms.player_state in ("PLAYING", "PAUSED", "BUFFERING"):
             dur = ms.duration
             data.update(running=True, title=ms.title or self.title_fn(st["url"]), paused=ms.player_is_paused,
                         position=ms.adjusted_current_time, duration=dur,
                         live=bool(ms.stream_type_is_live or not dur),
                         volume=(cs.volume_level or 0) * 100 if cs else None, muted=bool(cs and cs.volume_muted),
-                        height=None, hwdec=st["via"], drops=None)
+                        height=None, hwdec=st["via"], drops=None, buffering=ms.player_state == "BUFFERING",
+                        start_s=round(st["first_play"] - st["started"], 1) if st.get("first_play") and st.get("started") else None)
         else:
             data["starting"] = time.time() - (st["started"] or 0) < 25 and not data.get("error") and ms.player_state != "IDLE" \
                 or time.time() - (st["started"] or 0) < 8

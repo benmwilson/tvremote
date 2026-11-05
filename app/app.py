@@ -35,6 +35,7 @@ YTDL_HEIGHTS = ("1080", "720", "480")
 import hlsproxy
 import chat
 import roku
+import targets
 
 try:
     from cast import CastTarget
@@ -49,7 +50,9 @@ def tgt():
     """The Chromecast target when ?target=bedroom, else None (= the Pi)."""
     if request.args.get("target") == "bedroom":
         if not CAST:  # never fall back to the Pi: that would control the wrong TV
-            abort(Response("Chromecast support is not running", 503))
+            abort(Response(json.dumps({"ok": False, "error": "The bedroom Chromecast isn't available. "
+                                       "Check that it is powered on and on the same Wi-Fi."}),
+                           503, mimetype="application/json"))
         return CAST
     return None
 lock = threading.Lock()
@@ -319,6 +322,7 @@ def fav_name(url):
 # ---------- routes ----------
 
 @app.get("/")
+@app.get("/share")
 def index():
     return send_from_directory(BASE, "index.html", max_age=0)
 
@@ -374,8 +378,9 @@ def api_play():
                     data.get("site", "kick"))
     if not url:
         return jsonify(ok=False, error="No link found"), 400
+    c = tgt()  # outside the try: its 503 must reach the client, not be turned into a 502
     try:
-        play_on(tgt(), url, data.get("quality"), data.get("via"))
+        play_on(c, url, data.get("quality"), data.get("via"))
     except Exception as e:
         return jsonify(ok=False, error=str(e)), 502
     return jsonify(ok=True, url=url)
@@ -439,7 +444,7 @@ def osd_volume():
 PROPS = {
     "title": "media-title", "paused": "pause", "volume": "volume", "muted": "mute",
     "position": "time-pos", "duration": "duration", "height": "height",
-    "hwdec": "hwdec-current", "drops": "frame-drop-count",
+    "hwdec": "hwdec-current", "drops": "frame-drop-count", "buffering": "paused-for-cache",
 }
 
 
@@ -451,6 +456,11 @@ def api_status():
             return jsonify(c.status())
         except Exception as e:
             return jsonify(running=False, target=c.id, error=str(e))
+    return jsonify(pi_status())
+
+
+def pi_status():
+    """Status of the Pi's own player (mpv); also feeds the living-room card."""
     running = prop("pid") is not None
     data = {"running": running, "url": state["url"], "quality": state["quality"],
             "source": state["source"], "streamlink": state["player"] == "streamlink"}
@@ -468,7 +478,7 @@ def api_status():
         data["starting"] = bool(p and p.poll() is None)
         if state["url"] and not data["starting"]:
             data["error"] = last_error()
-    return jsonify(data)
+    return data
 
 
 _tv = {"t": 0, "v": None}
@@ -531,13 +541,63 @@ def cast_segment(token):
     return Response(data, mimetype="video/mp2t", headers={"Access-Control-Allow-Origin": "*"})
 
 
+ORDER = ["living", "bedroom"]
+LABELS = {"living": "Living room", "bedroom": "Bedroom"}
+KINDS = {"living": ("pi", "Pi on HDMI"), "bedroom": ("chromecast", "Chromecast")}
+
+
+def stream_label(quality):
+    """'1080p60,best' -> '1080p60'; '720' -> '720p'."""
+    first = (quality or "").split(",")[0]
+    return (first if "p" in first else first + "p") if first else None
+
+
+def roku_details(tv_id):
+    ip = ROKU_IPS.get(tv_id)
+    if not ip:
+        return {}
+    try:
+        return roku.info(ip)
+    except (roku.RokuError, OSError):
+        return {}  # a TV that won't talk ECP still gets a card from its player status
+
+
+def make_card(tv_id, status):
+    kind, connection = KINDS[tv_id]
+    r = roku_details(tv_id)
+    busy = status.get("running") or status.get("starting")
+    now = {"title": status.get("title") or fav_name(status.get("url") or ""), "source": status.get("source"),
+           "live": bool(status.get("live")), "paused": bool(status.get("paused")),
+           "starting": bool(status.get("starting")), "position": status.get("position"),
+           "stream": stream_label(status.get("quality"))} if busy else None
+    return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection,
+            "brand": r.get("brand"), "model": r.get("model"), "size": r.get("size"), "tv_name": r.get("name"),
+            "power": r.get("power"), "input": r.get("app"), "now": now, "health": targets.health(kind, status)}
+
+
+def living_card():
+    return make_card("living", pi_status())
+
+
+def bedroom_card():
+    if not CAST or not CAST.info()["online"]:
+        raise OSError("Chromecast not found")
+    card = make_card("bedroom", CAST.status())
+    card["device"] = CAST.info()["device"]
+    return card
+
+
+cards = targets.Cards({"living": living_card, "bedroom": bedroom_card}, ORDER)
+
+
 @app.get("/api/targets")
 def api_targets():
-    out = [{"id": "living", "name": "Living room", "type": "pi", "online": True}]
-    if CAST:
-        out.append(CAST.info())
-    for t in out:
-        t["roku"] = bool(ROKU_IPS.get(t["id"]))
+    """One card per TV from the background cache; never waits on a TV. type/online/roku are kept for the old UI."""
+    out = []
+    for c in cards.snapshot():
+        kind, connection = KINDS[c["id"]]
+        out.append({"name": LABELS[c["id"]], "kind": kind, "connection": connection, **c,
+                    "type": kind, "online": c["reachable"], "roku": bool(ROKU_IPS.get(c["id"]))})
     return jsonify(out)
 
 
@@ -659,5 +719,6 @@ if __name__ == "__main__":
     os.makedirs(DATA, exist_ok=True)
     if CastTarget:
         CAST = CastTarget(DATA, resolve, display_title, YTDL_HEIGHTS, SL_DEFAULT)
+    cards.start()
     from waitress import serve
     serve(app, host="0.0.0.0", port=PORT, threads=8)
