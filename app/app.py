@@ -420,11 +420,6 @@ def api_debug():
         versions=versions(), last_error=last_error(), log=log)
 
 
-@app.get("/debug.html")
-def debug_page():
-    return send_from_directory(BASE, "debug.html", max_age=0)
-
-
 @app.get("/api/favourites")
 def favs_get():
     return jsonify(load_favs())
