@@ -8,6 +8,7 @@ window on the Pi, subtitles are not). While a stream plays the shell is paused a
 shortcut: relies on the desktop stacking a newer fullscreen window above this one; if a stream ever appears behind it,
 turn the home screen off from the remote and tell me what the Pi's desktop does."""
 import os
+import re
 import socket
 import struct
 import subprocess
@@ -43,18 +44,28 @@ def lan_ip():
         return "this Pi"
 
 
+def clean(s):
+    """Drop emoji and other characters the screen's font can't draw (they come out as empty boxes)."""
+    return re.sub(r"[𐀀-􏿿‍️☀-➿]", "", s or "").strip()
+
+
+def clock12(now):
+    return "%d:%02d %s" % (now.hour % 12 or 12, now.minute, "AM" if now.hour < 12 else "PM")
+
+
 def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
     """ASS text for one screen, centred. The Ready screen carries the clock, date and favourites."""
     head, colour = HEADS[kind]
+    detail = clean(detail)
     if kind == "idle":
         now = now or datetime.now()
-        lines = [r"{\fs190\b1\c&H%s&}%s" % (TEXT, now.strftime("%H:%M")),
+        lines = [r"{\fs190\b1\c&H%s&}%s" % (TEXT, clock12(now)),
                  r"{\fs48\b0\c&H%s&}%s %d" % (DIM, now.strftime("%A, %B"), now.day),
                  r"{\fs50} ",
                  r"{\fs60\b1\c&H%s&}TV Remote   {\c&H%s&}%s" % (TEXT, colour, head)]
         if hint:
             lines.append(r"{\fs34\b0\c&H%s&}%s" % (DIM, esc(hint)))
-        names = [esc(n) for n in favs if n]
+        names = [esc(clean(n.split(":")[0])) for n in favs if clean(n.split(":")[0])]
         if names:
             lines.append(r"{\fs34\c&H%s&}Favourites   %s" % (TEXT, "  ·  ".join(names)))
         return r"{\an5\pos(960,540)\bord0\shad0}" + r"\N".join(lines)

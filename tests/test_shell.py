@@ -60,11 +60,18 @@ class Screens(unittest.TestCase):
 class Idle(unittest.TestCase):
     def test_the_ready_screen_shows_clock_date_address_and_favourites(self):
         t = shell.screen("idle", hint="Open http://pi.example:8765 on your phone", now=datetime(2026, 11, 4, 21, 5), favs=["capped", "xqc"])
-        for want in ("21:05", "Wednesday", "November", "Ready", "Open http://pi.example:8765 on your phone", "capped", "xqc"):
+        for want in ("9:05 PM", "Wednesday", "November", "Ready", "Open http://pi.example:8765 on your phone", "capped", "xqc"):
             self.assertIn(want, t)
 
+    def test_favourites_lose_emoji_and_the_title_after_the_colon(self):
+        t = shell.screen("idle", now=datetime(2026, 11, 4, 0, 5), favs=["xqc: 🐈LIVE🐈 DRAMA", "capped"])
+        self.assertIn("xqc", t)
+        self.assertNotIn("DRAMA", t)
+        self.assertNotIn("🐈", t)
+        self.assertIn("12:05 AM", t)
+
     def test_other_screens_have_no_clock(self):
-        self.assertNotIn("21:05", shell.screen("ended", "chan", now=datetime(2026, 11, 4, 21, 5)))
+        self.assertNotIn("9:05", shell.screen("ended", "chan", now=datetime(2026, 11, 4, 21, 5)))
 
     def test_the_clock_is_redrawn_while_idle(self):
         minutes = iter(range(10, 59))
