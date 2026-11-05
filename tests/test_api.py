@@ -413,6 +413,8 @@ class ShellFlow(unittest.TestCase):
             self.assertEqual((r.status_code, r.headers["Location"].split("?")[0]), (303, "/login"))
             self.assertEqual(c.get("/api/favourites").status_code, 401)  # scripts still get a plain 401
             self.assertEqual(c.get("/api/favourites", headers={"Authorization": "Basic " + __import__("base64").b64encode(b":pw123").decode()}).status_code, 200)
+            basic = {"Authorization": "Basic " + __import__("base64").b64encode(b":pw123").decode()}
+            self.assertEqual(c.get("/", headers={**basic, "Accept": "text/html"}).status_code, 303)  # a browser's remembered pop-up login no longer counts for pages
             self.assertEqual(c.post("/login", data={"password": "nope"}).status_code, 401)
             self.assertEqual(c.get("/api/favourites").status_code, 401)
             r = c.post("/login", data={"password": "pw123", "next": "//evil.example"})

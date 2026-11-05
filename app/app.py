@@ -91,7 +91,9 @@ def guard():
     if valid_session(request.cookies.get("tv_auth", "")):
         return None
     a = request.authorization
-    if a and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
+    wants_page = "text/html" in request.headers.get("Accept", "")
+    # a browser page load needs the login cookie: Safari remembers the old password pop-up and would otherwise stay logged in after logout
+    if a and not wants_page and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
         return None  # curl and scripts
     if request.path == "/play" and token_ok:
         return None
