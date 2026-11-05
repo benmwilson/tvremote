@@ -476,6 +476,15 @@ class ShellFlow(unittest.TestCase):
             server.play_on(c, "https://kick.com/a", None)
         self.assertEqual(calls, [False])
 
+    def test_dragging_the_volume_redraws_the_tv_text_only_twice_a_second(self):
+        server._osd_last[0] = 0.0
+        with mock.patch.object(server, "osd_volume") as osd, mock.patch.object(server, "mpv", return_value={"error": "success"}), mock.patch.object(server, "prop", lambda n: 1), mock.patch.object(server, "tgt", return_value=None):
+            for v in (10, 20, 30):
+                self.client.post("/api/cmd", json={"action": "volume", "value": v, "drag": True})
+            self.assertEqual(osd.call_count, 1)
+            self.client.post("/api/cmd", json={"action": "volume", "value": 40})  # released: always shown
+            self.assertEqual(osd.call_count, 2)
+
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]
         saved = []

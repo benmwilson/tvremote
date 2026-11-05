@@ -93,7 +93,7 @@ class Idle(unittest.TestCase):
         s._clock = lambda: datetime(2026, 11, 4, 21, 5, 58, 250000)
         s.start()
         f = [c for c in sent if c[0] == "ass-file"][-1][1]
-        self.assertEqual(f.count("Dialogue:"), shell.IDLE_SPAN + 2)  # a second each, plus the two logo pieces
+        self.assertEqual(f.count("Dialogue:"), shell.IDLE_SPAN + len(shell.LOGO))  # a second each, plus the logo pieces
         self.assertIn("9:05 PM", f)
         self.assertIn("9:06 PM", f)  # the minute rolls over inside the file
         self.assertIn("alpha&HFF&", f)  # the hidden-colon seconds
@@ -168,9 +168,9 @@ class Refresh(unittest.TestCase):
 class Logo(unittest.TestCase):
     def test_the_logo_is_drawn_once_for_the_whole_file_and_the_text_sits_below_it(self):
         f = shell.ass_file([(0, 1, shell.screen("idle")), (1, 2, shell.screen("idle"))])
-        self.assertEqual(f.count(r"\p1"), 2)  # the square and the triangle, once each
-        self.assertEqual(len([l for l in f.split("\n") if r"\p1" in l and "0:00:00.00,0:00:02.00" in l]), 2)
-        self.assertIn(r"pos(960,620)", shell.screen("loading", "c"))
+        self.assertEqual(f.count(r"\p1"), len(shell.LOGO))  # each piece of the mark, once
+        self.assertEqual(len([l for l in f.split("\n") if r"\p1" in l and "0:00:00.00,0:00:02.00" in l]), len(shell.LOGO))
+        self.assertIn(r"\an8\pos(960,%d)" % shell.TEXT_TOP, shell.screen("loading", "c"))
 
 
 class Process(unittest.TestCase):

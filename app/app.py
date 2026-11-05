@@ -82,7 +82,7 @@ def guard():
         return Response("Cross-site request blocked", 403)
     if request.path == "/play" and request.headers.get("Sec-Fetch-Site") == "cross-site" and not token_ok:
         return Response("Cross-site request blocked", 403)
-    if not PASSWORD or re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)", request.path):
+    if not PASSWORD or re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/logo\.svg|/icon-\d+\.png|/manifest\.json", request.path):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
@@ -165,7 +165,7 @@ LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta
 form{width:min(340px,86vw);display:grid;gap:14px}h1{margin:0 0 6px;font-size:28px}
 input,button{font:inherit;min-height:52px;border-radius:14px;border:0;padding:0 16px;box-sizing:border-box;width:100%}
 input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em;margin:0}</style></head>
-<body><form method="post" action="/login"><svg width="72" height="72" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="24" fill="#62b0ff"/><path d="M38 28 74 50 38 72Z" fill="#0b0e14" stroke="#0b0e14" stroke-width="8" stroke-linejoin="round"/></svg><h1>TV Remote</h1>
+<body><form method="post" action="/login"><img src="/logo.svg" width="84" height="84" alt="" style="justify-self:center;border-radius:20px"><h1 style="text-align:center">TV Remote</h1>
 <input type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password" autofocus required>
 <input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button></form></body></html>"""
 
@@ -582,10 +582,20 @@ def logo():
     return send_from_directory(BASE, "logo.svg", max_age=86400)
 
 
+@app.get("/icon-<int:n>.png")
+def icon(n):
+    if n not in (180, 512):
+        abort(404)
+    return send_from_directory(BASE, f"icon-{n}.png", max_age=86400)
+
+
 @app.get("/manifest.json")
 def manifest():
     return jsonify(name="TV Remote", short_name="TV Remote", start_url="/", display="standalone",
-                   background_color="#0b0b0f", theme_color="#0b0b0f")
+                   background_color="#0b0e14", theme_color="#0b0e14",
+                   icons=[{"src": "/icon-180.png", "sizes": "180x180", "type": "image/png"},
+                          {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                          {"src": "/logo.svg", "sizes": "any", "type": "image/svg+xml"}])
 
 
 @app.get("/play")
@@ -701,7 +711,10 @@ def api_cmd():
     if ok and action == "pause":
         osd_paused(bool(prop("pause")))
     if ok and action in ("volume", "volume_delta", "mute", "unmute"):
-        osd_volume()
+        # while the slider is being dragged, redraw the on-screen text at most every 0.5 s (each redraw costs the picture a little)
+        if not data.get("drag") or time.time() - _osd_last[0] > 0.5:
+            _osd_last[0] = time.time()
+            osd_volume()
     return jsonify(ok=ok)
 
 
@@ -728,6 +741,9 @@ def volume_text(vol, muted):
     """Plain text for show-text: a block bar and the number, or Muted. (osd-overlay drawing flashed and lagged the stream.)"""
     v = max(0, min(100, round(vol)))
     return "Muted" if muted else "Volume %d%%  %s%s" % (v, "█" * (v // 5), "░" * (20 - v // 5))
+
+
+_osd_last = [0.0]
 
 
 def osd_volume():

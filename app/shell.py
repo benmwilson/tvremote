@@ -21,13 +21,17 @@ from chat import _esc as esc
 
 SOCK = "/tmp/tvremote-shell.sock"
 LOG = "/tmp/tvremote-shell.log"
-# The logo as ASS drawings (a rounded square, then the play triangle), 100 units wide, shown at 150% above the text
-LOGO = (r"{\an7\pos(885,130)\fscx150\fscy150\bord0\shad0\p1\1c&HFFB062&}"
-        "m 24 0 l 76 0 b 90 0 100 10 100 24 l 100 76 b 100 90 90 100 76 100 l 24 100 b 10 100 0 90 0 76 l 0 24 b 0 10 10 0 24 0"
-        r"{\p0}")
-LOGO_PLAY = (r"{\an7\pos(885,130)\fscx150\fscy150\bord6\shad0\p1\1c&H140E0B&\3c&H140E0B&}"
-             r"m 38 28 l 74 50 l 38 72"
-             r"{\p0}")
+# The logo as ASS drawings (same shapes as app/logo.svg, solid accent colour), 160% size, centred at x=960. The screen's
+# outline is a hollow shape with a thick border; the stand strokes are zero-width shapes whose border gives them width.
+LOGO_TOP = 250  # y of the drawing's top edge; the text block starts at TEXT_TOP, just under the stand
+TEXT_TOP = 398
+_L = r"{\an7\pos(880,%d)\fscx160\fscy160\shad0\p1" % LOGO_TOP
+LOGO = [
+    _L + r"\1a&HFF&\3c&HFFB062&\bord5}m 26 22 l 74 22 b 80 22 86 28 86 34 l 86 58 b 86 64 80 70 74 70 l 26 70 b 20 70 14 64 14 58 l 14 34 b 14 28 20 22 26 22{\p0}",
+    _L + r"\1c&HFFB062&\3c&HFFB062&\bord3}m 44 36 l 44 56 l 61 46{\p0}",
+    _L + r"\1a&HFF&\3c&HFFB062&\bord5}m 38 82 l 62 82{\p0}",
+    _L + r"\1a&HFF&\3c&HFFB062&\bord5}m 50 73 l 50 82{\p0}",
+]
 ASS_FILES = ("/tmp/tvremote-shell-a.ass", "/tmp/tvremote-shell-b.ass")  # alternate, so a new one loads before the old goes
 IDLE_SPAN = 300  # seconds of clock written ahead; the file is renewed a little before it runs out
 FOREVER = 3 * 86400  # a still screen stays up for days of video time
@@ -74,7 +78,7 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
                  r"{\fs60\b1\c&H%s&}TV Remote   {\c&H%s&}%s" % (TEXT, colour, head)]
         if hint:
             lines.append(r"{\fs34\b0\c&H%s&}%s" % (DIM, esc(hint)))
-        return r"{\an5\pos(960,620)\bord0\shad0}" + r"\N".join(lines)
+        return r"{\an8\pos(960,398)\bord0\shad0}" + r"\N".join(lines)
     if kind == "refresh":  # a spinning wheel: four quarter-filled circles in turn
         head = "◐◓◑◒"[dots % 4] + "  " + head
     elif kind in ("loading", "quality"):
@@ -85,7 +89,7 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
         lines.append(r"{\fs44\c&H%s&}%s" % (TEXT, esc(detail)))
     if hint:
         lines.append(r"{\fs34\c&H%s&}%s" % (DIM, esc(hint)))
-    return r"{\an5\pos(960,620)\bord0\shad0}" + r"\N".join(lines)
+    return r"{\an8\pos(960,398)\bord0\shad0}" + r"\N".join(lines)
 
 
 def stamp(sec):
@@ -107,7 +111,7 @@ def ass_file(events):
     body = "".join(f"Dialogue: 0,{stamp(a)},{stamp(b)},Default,,0,0,0,,{t}\n" for a, b, t in events)
     if events:  # the logo is its own pair of events spanning the file, so it never flickers when the text changes
         span = f"{stamp(min(e[0] for e in events))},{stamp(max(e[1] for e in events))}"
-        body += f"Dialogue: 0,{span},Default,,0,0,0,,{LOGO}\nDialogue: 1,{span},Default,,0,0,0,,{LOGO_PLAY}\n"
+        body += "".join(f"Dialogue: 0,{span},Default,,0,0,0,,{piece}\n" for piece in LOGO)
     return head + body
 
 
