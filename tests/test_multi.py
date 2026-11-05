@@ -130,6 +130,19 @@ class WallScreenTest(unittest.TestCase):
         self.assertIn("fscx260", shell.ass_file([(0, 1, "x")]))
 
 
+class AddIsRecentTest(unittest.TestCase):
+    def test_a_stream_added_to_the_screen_is_remembered(self):
+        import app as server
+        try:
+            with mock.patch.object(server, "remember") as remember, mock.patch.object(server, "wall_later"), mock.patch.object(server, "tgt", return_value=None),                     mock.patch.object(server, "pi_status", return_value={"running": True}), mock.patch.dict(server.state, {"url": "https://kick.com/a"}):
+                with server.app.test_request_context("/api/wall", method="POST", json={"action": "add", "url": "https://kick.com/b"}):
+                    r = server.api_wall()
+        finally:
+            server.wall.clear()
+        self.assertTrue(r.get_json()["ok"])
+        remember.assert_called_once_with("https://kick.com/b")
+
+
 class OnlyThisTest(unittest.TestCase):
     def test_keeping_only_an_added_stream_ends_the_wall_and_starts_that_stream_alone(self):
         import app as server

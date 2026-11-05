@@ -776,8 +776,10 @@ const cmd = (action, value, extra) => api('/api/cmd', 'POST', {action, value, ..
 const fmt = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
 
+let recentFor = '';
 function render() {
   const run = st.running;
+  if (st.url && st.url !== recentFor) { recentFor = st.url; loadRecents(); }  // a new stream started (from here or the Shortcut): it is a recent one now
   accent();
   const ext = !run && !st.starting && !st.error ? st.external : null;  // the TV is playing something by itself (its own YouTube app, say)
   $('src').textContent = run || st.starting ? (st.source || 'Other') : ext ? 'On the TV' : 'Idle';
@@ -1660,7 +1662,7 @@ $('chatTog').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem(
 
 // ---- Multi-view (Pi TV only): several streams on the screen at once ----
 // The Pi answers at once with how the wall will look, while the windows restart in the background: show that now.
-const wallApi = async body => { const r = await api('/api/wall', 'POST', body); if (r && r.ok) { if ('wall' in r) { st.wall = r.wall; wallSig = ''; renderWall(); } poll(); } return r; };
+const wallApi = async body => { const r = await api('/api/wall', 'POST', body); if (r && r.ok) { if ('wall' in r) { st.wall = r.wall; wallSig = ''; renderWall(); } if (body.action === 'add') loadRecents(); poll(); } return r; };
 let wallSig = '';
 const WALL_Q = [['', 'Auto quality'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']];
 function renderWall() {

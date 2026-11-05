@@ -980,6 +980,7 @@ def api_wall():
                 wall.saved_quality = state["quality"]
         if not wall.add(url, state["url"]):
             return jsonify(ok=False, error=f"That one is already on screen, or the screen is full ({multi.MAX_TILES})."), 400
+        remember(url)  # a stream added to the screen is a recent one too
         wall_later(wall_relayout)
     elif act == "remove":
         wall.remove(i)
