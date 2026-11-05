@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TV Remote">
+<meta name="theme-color" content="#0b0b0f">
+<link rel="manifest" href="/manifest.json">
+<title>TV Remote</title>
+<style>
+:root{--bg:#0b0b0f;--card:#17171f;--card2:#22222d;--fg:#f2f2f7;--dim:#8e8e9a;--acc:#53fc18;--bad:#ff453a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.3 -apple-system,system-ui,sans-serif;
+  padding:max(12px,env(safe-area-inset-top)) 12px max(24px,env(safe-area-inset-bottom));max-width:560px;margin:auto}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:22px 4px 8px}
+.card{background:var(--card);border-radius:18px;padding:16px}
+button,select,input{font:inherit;color:var(--fg);border:0;border-radius:14px;background:var(--card2)}
+button{min-height:52px;padding:0 14px;cursor:pointer}
+button:active{filter:brightness(1.4)}
+.row{display:flex;gap:8px;margin-top:10px}.row>*{flex:1}
+.badge{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--card2);color:var(--dim)}
+.badge.Kick{background:#53fc18;color:#000}.badge.Twitch{background:#9146ff;color:#fff}
+.badge.YouTube{background:#ff0033;color:#fff}.badge.live{background:var(--bad);color:#fff;margin-left:6px}
+#title{font-size:20px;font-weight:600;margin:10px 0 4px;overflow-wrap:anywhere}
+#meta{color:var(--dim);font-size:14px}
+#pp{min-height:84px;font-size:34px;background:var(--acc);color:#000;border-radius:20px}
+input[type=range]{padding:0;height:52px;width:100%;accent-color:var(--acc);background:none}
+input[type=text]{width:100%;padding:0 14px;min-height:52px}
+select{min-height:52px;padding:0 10px}
+.seg button{background:var(--card2)}.seg button.on{background:var(--fg);color:#000;font-weight:700}
+.hide{display:none!important}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fav{position:relative;background:var(--card);border-radius:14px;padding:12px;min-height:68px;text-align:left}
+.fav b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:28px}
+.fav .x{position:absolute;top:0;right:0;width:44px;min-height:44px;background:none;color:var(--dim)}
+.res{display:flex;gap:10px;background:var(--card);border-radius:14px;padding:8px;margin-bottom:8px;width:100%;text-align:left;align-items:center}
+.res img{width:112px;aspect-ratio:16/9;border-radius:8px;object-fit:cover;background:#000}
+.res small{color:var(--dim);display:block}
+#err{color:var(--bad);min-height:1em;margin:8px 4px 0;font-size:14px}
+</style>
+</head>
+<body>
+
+<div class="card" id="now">
+  <div><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span></div>
+  <div id="title">Nothing playing</div>
+  <div id="meta"></div>
+  <div class="row"><button id="pp" data-a="pause">⏯</button></div>
+  <div class="row" id="seek">
+    <button data-a="seek" data-v="-60">−60</button><button data-a="seek" data-v="-10">−10</button>
+    <button data-a="seek" data-v="10">+10</button><button data-a="seek" data-v="60">+60</button>
+  </div>
+  <div class="row"><input type="range" id="vol" min="0" max="100" step="1" aria-label="Volume">
+    <button id="mute" data-a="mute" style="flex:0 0 72px">🔇</button></div>
+  <div class="row"><select id="qual" aria-label="Quality"></select>
+    <button id="fav">☆ Favourite</button><button id="stop" style="color:var(--bad)">■ Stop</button></div>
+</div>
+<div id="err"></div>
+
+<h2>Play</h2>
+<div class="card">
+  <input type="text" id="link" placeholder="Paste a link, channel or search" autocapitalize="off" autocorrect="off" enterkeyhint="go">
+  <div class="row seg" id="site">
+    <button data-s="kick" class="on">Kick</button><button data-s="twitch">Twitch</button><button data-s="youtube">YouTube</button>
+  </div>
+  <div class="row"><button id="go" style="background:var(--acc);color:#000;font-weight:700">Play</button></div>
+</div>
+<div id="results" style="margin-top:10px"></div>
+
+<h2>Favourites</h2>
+<div class="grid" id="favs"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let site = 'kick', st = {}, dragging = false, qualFor = null, favList = [];
+
+const err = m => { $('err').textContent = m || ''; if (m) setTimeout(() => $('err').textContent = '', 5000); };
+async function api(path, method = 'GET', body) {
+  try {
+    const r = await fetch(path, {method, headers: body ? {'Content-Type': 'application/json'} : {},
+      body: body ? JSON.stringify(body) : undefined});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) err(j.error || 'Request failed');
+    return j;
+  } catch (e) { err('Pi unreachable'); return null; }
+}
+const cmd = (action, value, extra) => api('/api/cmd', 'POST', {action, value, ...extra});
+const fmt = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
+
+function render() {
+  const run = st.running;
+  $('src').textContent = run || st.starting ? (st.source || 'Other') : 'Idle';
+  $('src').className = 'badge ' + (st.source || '');
+  $('live').classList.toggle('hide', !(run && st.live));
+  $('title').textContent = run ? (st.title || st.url) : st.starting ? 'Starting…' : 'Nothing playing';
+  let meta = [];
+  if (run) {
+    if (!st.live && st.position != null) meta.push(fmt(st.position) + (st.duration ? ' / ' + fmt(st.duration) : ''));
+    if (st.height) meta.push(st.height + 'p');
+    if (st.hwdec) meta.push('hw: ' + st.hwdec);
+    if (st.drops != null) meta.push(st.drops + ' dropped');
+  }
+  $('meta').textContent = meta.join(' · ');
+  $('pp').textContent = st.paused ? '▶' : '⏸';
+  $('seek').classList.toggle('hide', !run || st.live);
+  $('mute').style.opacity = st.muted ? .4 : 1;
+  if (!dragging && st.volume != null) $('vol').value = st.volume;
+  $('fav').textContent = favList.some(f => f.url === st.url) ? '★ Saved' : '☆ Favourite';
+  if (run && st.url !== qualFor) loadQualities();
+}
+
+async function loadQualities() {
+  qualFor = st.url;
+  const q = await api('/api/qualities');
+  const sel = $('qual');
+  sel.innerHTML = '';
+  (q || []).forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; sel.appendChild(o); });
+  sel.value = st.quality;
+  sel.classList.toggle('hide', !sel.options.length);
+}
+
+async function poll() {
+  const s = await api('/api/status');
+  if (s) { st = s; render(); }
+}
+
+async function loadFavs() {
+  favList = await api('/api/favourites') || [];
+  const g = $('favs');
+  g.innerHTML = '';
+  favList.forEach(f => {
+    const b = document.createElement('div');
+    b.className = 'fav'; b.setAttribute('role', 'button');
+    const n = document.createElement('b'); n.textContent = f.name;
+    const s = document.createElement('span'); s.className = 'badge ' + (f.source || ''); s.textContent = f.source || 'Other';
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.setAttribute('aria-label', 'Remove');
+    x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'DELETE', {url: f.url}); loadFavs(); };
+    b.onclick = () => play(f.url);
+    b.append(n, s, x);
+    g.appendChild(b);
+  });
+  render();
+}
+
+async function play(text) {
+  err();
+  const r = await api('/api/play', 'POST', {url: text, site});
+  if (r && r.ok) { $('link').value = ''; $('results').innerHTML = ''; setTimeout(poll, 1500); }
+}
+
+async function search(q) {
+  $('results').textContent = 'Searching…';
+  const r = await api('/api/search?q=' + encodeURIComponent(q));
+  const box = $('results');
+  box.innerHTML = '';
+  if (!Array.isArray(r) || !r.length) { box.textContent = 'No results'; return; }
+  r.forEach(v => {
+    const b = document.createElement('button'); b.className = 'res';
+    const img = document.createElement('img'); img.src = v.thumb; img.loading = 'lazy'; img.alt = '';
+    const d = document.createElement('div');
+    const t = document.createElement('div'); t.textContent = v.title;
+    const c = document.createElement('small');
+    c.textContent = [v.channel, v.live ? 'LIVE' : v.duration ? fmt(v.duration) : ''].filter(Boolean).join(' · ');
+    d.append(t, c); b.append(img, d);
+    b.onclick = () => play(v.url);
+    box.appendChild(b);
+  });
+}
+
+function go() {
+  const t = $('link').value.trim();
+  if (!t) return;
+  if (site === 'youtube' && !/https?:\/\//.test(t)) search(t); else play(t);
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[data-a]');
+  if (b) { cmd(b.dataset.a, b.dataset.v).then(poll); return; }
+  const s = e.target.closest('#site button');
+  if (s) { site = s.dataset.s; document.querySelectorAll('#site button').forEach(x => x.classList.toggle('on', x === s)); }
+});
+$('go').onclick = go;
+$('link').onkeydown = e => { if (e.key === 'Enter') go(); };
+$('stop').onclick = () => cmd('stop').then(poll);
+$('fav').onclick = async () => {
+  if (!st.url) return;
+  const had = favList.some(f => f.url === st.url);
+  await api('/api/favourites', had ? 'DELETE' : 'POST', {url: st.url, name: had ? undefined : st.title});
+  loadFavs();
+};
+$('qual').onchange = () => cmd('restart', null, {quality: $('qual').value}).then(() => setTimeout(poll, 1500));
+$('vol').oninput = () => { dragging = true; cmd('volume', $('vol').value); };
+$('vol').onchange = () => { dragging = false; };
+
+loadFavs(); poll(); setInterval(poll, 2000);
+</script>
+</body>
+</html>
