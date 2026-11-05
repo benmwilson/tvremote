@@ -141,7 +141,7 @@ async function loadFavs() {
   favList = await api('/api/favourites') || [];
   const g = $('favs');
   g.innerHTML = '';
-  if (!favList.length) { const e = document.createElement('div'); e.style.cssText = 'grid-column:1/-1;color:var(--dim);padding:4px'; e.textContent = 'No favourites yet — tap ☆ while something's playing.'; g.appendChild(e); }
+  if (!favList.length) { const e = document.createElement('div'); e.style.cssText = 'grid-column:1/-1;color:var(--dim);padding:4px'; e.textContent = "No favourites yet — tap ☆ while something's playing."; g.appendChild(e); }
   favList.forEach(f => {
     const b = document.createElement('div');
     b.className = 'fav'; b.setAttribute('role', 'button');
