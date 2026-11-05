@@ -323,6 +323,10 @@ body:has(dialog.sheet[open]){overflow:hidden}
 .wtile .ctl>*{min-height:44px}.wtile .ctl select{flex:1;min-width:0}.wtile .ctl .snd{flex:none;display:flex;align-items:center;gap:6px;padding:0 14px}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
 .wtile .top button{flex:none;width:44px;min-height:44px;padding:0}.wtile .ctl .ib{flex:none;width:44px;padding:0}.wtile .err{color:#ff8a8a;font-size:13px;margin-top:8px}
 .wtile .acts{display:flex;gap:8px;margin-top:8px}.wtile .acts button{flex:1;min-height:40px;font-size:14px;background:var(--card)}
+.wallstrip{display:flex;gap:8px;overflow-x:auto;margin:0 0 12px;-webkit-overflow-scrolling:touch}
+.wstream{flex:1 1 0;min-width:78px;height:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;border-radius:14px;background:var(--card2,var(--line));position:relative}
+.wstream .av{width:46px;height:46px}.wstream .wn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600}
+.wstream[aria-pressed=true]{box-shadow:inset 0 0 0 2px var(--tv,#6bb2ff)}.wstream .ws{position:absolute;top:6px;right:6px;display:flex;color:var(--tv,#6bb2ff)}.wstream .ws .ic{width:16px;height:16px}
 .wallnote{display:block;width:100%;min-height:44px;margin:12px 0 0;padding:0 14px;border-radius:12px;background:var(--card2,var(--line));font-size:14px;font-weight:600;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wtile .ctl button,.wtile .ctl select,.wtile .top button{background:var(--card)}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff)}
 .wlabel{margin:18px 2px 8px;color:var(--dim);font-size:13px;font-weight:600;letter-spacing:.02em}.wrow{display:flex;align-items:center;gap:10px;margin-top:10px}.wrow .sub{flex:1}
@@ -531,6 +535,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="tvoff hide" id="tvoff" role="status"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg>
     <div class="grow"><b>The TV is off</b><span class="sub" id="tvoffsub"></span></div>
     <button id="tvwake">Turn on</button></div>
+  <div id="wallstrip" class="wallstrip hide" role="group" aria-label="Streams on the screen"></div>
   <div class="nowhead"><span id="nowav" class="hide"></span><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span><span class="grow"></span><a id="nowlink" class="iconlink hide" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a></div>
   <button id="wallnote" class="wallnote hide" aria-haspopup="dialog"></button>
   <div id="title" class="ttl">Nothing playing</div>
@@ -729,6 +734,25 @@ function avatarEl(name, url, cls) {
   });
   return a;
 }
+// While several streams are on: a picture and name for each, along the top. The one with the sound is outlined; a tap gives it the sound.
+let stripSig = '';
+function renderWallStrip(show) {
+  const w = st.wall, strip = $('wallstrip');
+  strip.classList.toggle('hide', !(w && show));
+  if (!(w && show)) { stripSig = ''; return; }
+  const items = [{i: 0, name: chanName(st.url || '') || st.title || 'Main', url: st.url, source: st.source}, ...w.tiles];
+  const sig = JSON.stringify([items.map(t => [t.url, t.name]), w.audio]);
+  if (sig === stripSig) return;
+  stripSig = sig;
+  strip.replaceChildren(...items.map(t => {
+    const b = el('button', 'wstream'), name = t.i ? t.name : items[0].name;
+    b.setAttribute('aria-pressed', String(w.audio === t.i)); b.setAttribute('aria-label', 'Sound from ' + name);
+    b.append(avatarEl(name, t.url), el('span', 'wn', name));
+    if (w.audio === t.i) { const s = el('span', 'ws'); s.innerHTML = ic('volume'); b.append(s); }
+    b.onclick = () => wallApi({action: 'audio', i: t.i});
+    return b;
+  }));
+}
 function linkEl(url, source) {
   const a = document.createElement('a'); a.className = 'iconlink'; a.href = url; a.target = '_blank'; a.rel = 'noopener';
   a.setAttribute('aria-label', 'Open on ' + (source || 'the site')); a.innerHTML = ic('external');
@@ -770,6 +794,8 @@ function render() {
     $('nowlink').classList.toggle('hide', !nowUrl);
     if (nowUrl) { $('nowlink').href = nowUrl; $('nowlink').setAttribute('aria-label', 'Open on ' + (st.source || 'the site')); }
   }
+  $('nowav').classList.toggle('hide', !nowAvFor || !!st.wall);  // the strip below shows every stream's picture instead
+  renderWallStrip(run || swapping);
   const gameLine = run ? [st.game, st.live_for != null ? 'live for ' + dur(st.live_for) : null].filter(Boolean).join(' \u00b7 ') : '';
   $('game').textContent = gameLine;
   $('game').classList.toggle('hide', !gameLine);
