@@ -59,16 +59,22 @@ class Screens(unittest.TestCase):
 
 class Idle(unittest.TestCase):
     def test_the_ready_screen_shows_clock_date_address_and_favourites(self):
-        t = shell.screen("idle", hint="Open http://pi.example:8765 on your phone", now=datetime(2026, 11, 4, 21, 5), favs=["capped", "xqc"])
-        for want in ("9:05 PM", "Wednesday", "November", "Ready", "Open http://pi.example:8765 on your phone", "capped", "xqc"):
+        t = shell.screen("idle", hint="Open http://pi.example:8765 on your phone", now=datetime(2026, 11, 4, 21, 5, 2))
+        for want in ("9:05 PM", "Wednesday", "November", "Ready", "Open http://pi.example:8765 on your phone"):
             self.assertIn(want, t)
 
-    def test_favourites_lose_emoji_and_the_title_after_the_colon(self):
-        t = shell.screen("idle", now=datetime(2026, 11, 4, 0, 5), favs=["xqc: 🐈LIVE🐈 DRAMA", "capped"])
-        self.assertIn("xqc", t)
-        self.assertNotIn("DRAMA", t)
-        self.assertNotIn("🐈", t)
-        self.assertIn("12:05 AM", t)
+    def test_the_ready_screen_no_longer_lists_favourites(self):
+        self.assertNotIn("Favourites", shell.screen("idle", now=datetime(2026, 11, 4, 21, 5), favs=["capped"]))
+
+    def test_the_colon_blinks_with_the_seconds_without_moving_the_digits(self):
+        on = shell.clock12(datetime(2026, 11, 4, 0, 5, 2))
+        off = shell.clock12(datetime(2026, 11, 4, 0, 5, 3))
+        self.assertEqual(on, "12:05 AM")
+        self.assertIn("alpha&HFF&", off)
+        self.assertEqual(off.replace(r"{\alpha&HFF&}:{\alpha&H00&}", ":"), on)
+
+    def test_loading_names_lose_emoji(self):
+        self.assertNotIn("\U0001F408", shell.screen("loading", "xqc \U0001F408"))
 
     def test_other_screens_have_no_clock(self):
         self.assertNotIn("9:05", shell.screen("ended", "chan", now=datetime(2026, 11, 4, 21, 5)))

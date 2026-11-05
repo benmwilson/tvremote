@@ -50,11 +50,13 @@ def clean(s):
 
 
 def clock12(now):
-    return "%d:%02d %s" % (now.hour % 12 or 12, now.minute, "AM" if now.hour < 12 else "PM")
+    """12-hour time; the colon blinks with the seconds (hidden, not removed, so the digits never shift)."""
+    colon = ":" if now.second % 2 == 0 else r"{\alpha&HFF&}:{\alpha&H00&}"
+    return "%d%s%02d %s" % (now.hour % 12 or 12, colon, now.minute, "AM" if now.hour < 12 else "PM")
 
 
 def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
-    """ASS text for one screen, centred. The Ready screen carries the clock, date and favourites."""
+    """ASS text for one screen, centred. The Ready screen carries the clock, date and the remote's address."""
     head, colour = HEADS[kind]
     detail = clean(detail)
     if kind == "idle":
@@ -65,9 +67,6 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
                  r"{\fs60\b1\c&H%s&}TV Remote   {\c&H%s&}%s" % (TEXT, colour, head)]
         if hint:
             lines.append(r"{\fs34\b0\c&H%s&}%s" % (DIM, esc(hint)))
-        names = [esc(clean(n.split(":")[0])) for n in favs if clean(n.split(":")[0])]
-        if names:
-            lines.append(r"{\fs34\c&H%s&}Favourites   %s" % (TEXT, "  ·  ".join(names)))
         return r"{\an5\pos(960,540)\bord0\shad0}" + r"\N".join(lines)
     if kind in ("loading", "quality"):
         n = dots % 4
@@ -108,7 +107,7 @@ def write_file(path, data):
 
 class Shell:
     interval = 0.6        # seconds between loading-dot frames
-    idle_interval = 20    # seconds between clock redraws on the Ready screen
+    idle_interval = 1     # the Ready screen redraws every second (the colon blinks); nothing is playing then, so it costs nothing
 
     def __init__(self, hint="", spawn=subprocess.Popen, ipc=mpvipc.send, ready=None, sleep=time.sleep,
                  clock=datetime.now, favs=lambda: [], write=write_file):
@@ -227,7 +226,8 @@ class Shell:
         dots, deadline = 0, time.time() + 90
         wait = self.idle_interval if kind == "idle" else self.interval
         while kind == "idle" or time.time() < deadline:
-            threading.Event().wait(wait)
+            # idle: wake just after each whole second so the colon blinks in step with the real clock
+            threading.Event().wait(wait if kind != "idle" or wait < 1 else (1.0 - time.time() % 1.0) + 0.02)
             if gen != self._gen:
                 return
             dots += 1
