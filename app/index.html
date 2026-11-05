@@ -1796,7 +1796,8 @@ function renderWall() {
   // suggestions: the favourites that are live now, then the live recents (the live site of a streamer who is on both)
   // never suggest a streamer who is already on the screen: compared by name, so another link form or the other site doesn't slip through
   const key = u => { try { const p = new URL(u).pathname.split('/').filter(Boolean); return (p.length === 1 ? p[0] : String(u)).toLowerCase(); } catch (e) { return String(u).toLowerCase(); } };
-  const seen = new Set(rows.flatMap(r => [key(r.url), (r.name || '').toLowerCase()])), sugg = [];
+  const playing = rows.length ? rows : (st.url ? [{url: st.url, name: chanName(st.url) || ''}] : []);  // before multi-view starts, what is playing is the one stream
+  const seen = new Set(playing.flatMap(r => [key(r.url), (r.name || '').toLowerCase()])), sugg = [];
   const offer = (name, url) => { const k = key(url), n = (name || '').toLowerCase(); if (seen.has(k) || (n && seen.has(n))) return; seen.add(k); if (n) seen.add(n); sugg.push({name, url}); };
   for (const f of favList) if (f.live === true) offer(f.name, f.play_url || f.url);
   for (const x of recentList) if (x.live === true) offer(x.name, x.url);
