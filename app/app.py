@@ -34,7 +34,9 @@ YTDL_HEIGHTS = ("1080", "720", "480")
 
 import hlsproxy
 import chat
+import mpvipc
 import roku
+import shell
 import targets
 
 try:
@@ -137,27 +139,7 @@ def normalise(text, site="kick"):
 
 def mpv(cmd, timeout=1.0):
     """Send one command over mpv's IPC socket and return the reply."""
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(timeout)
-            s.connect(SOCK)
-            s.sendall((json.dumps({"command": cmd, "request_id": 1}) + "\n").encode())
-            buf = b""
-            while True:
-                chunk = s.recv(65536)
-                if not chunk:
-                    return None
-                buf += chunk
-                while b"\n" in buf:
-                    line, buf = buf.split(b"\n", 1)
-                    try:
-                        msg = json.loads(line)
-                    except ValueError:
-                        continue
-                    if msg.get("request_id") == 1:
-                        return msg
-    except OSError:
-        return None
+    return mpvipc.send(SOCK, cmd, timeout)
 
 
 def prop(name):
@@ -175,13 +157,68 @@ def cec(*args):
         pass
 
 
+SETTINGS_FILE = os.path.join(DATA, "settings.json")
+settings = {"shell": os.environ.get("TVREMOTE_SHELL", "1") != "0"}  # the TV's home screen; TVREMOTE_SHELL=0 starts with it off
+HOME = None  # the home screen (shell.Shell), created at startup
+
+
+def load_settings():
+    try:
+        with open(SETTINGS_FILE) as f:
+            return {**settings, **json.load(f)}
+    except (OSError, ValueError):
+        return dict(settings)
+
+
+def save_settings():
+    tmp = SETTINGS_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(settings, f)
+    os.replace(tmp, SETTINGS_FILE)
+
+
+def screen(kind, detail=""):
+    """Show a screen on the TV's home screen, if it is on."""
+    if HOME and settings.get("shell"):
+        HOME.show(kind, detail)
+
+
+def describe_error(raw):
+    """Plain words for the player's last error."""
+    if not raw:
+        return None
+    if re.search(r"No playable streams|offline", raw, re.I):
+        return "Isn't live right now"
+    if re.search(r"HTTP.?error 404|Not Found", raw, re.I):
+        return "That link wasn't found (404)"
+    if re.search(r"logged-in|log in|login|sign in", raw, re.I):
+        return "That needs a login, which isn't supported"
+    return raw
+
+
+def on_input(tv_id):
+    """True when this TV is awake and already showing the HDMI input its target uses. Re-selecting an input the
+    TV is already on relaunches it, which flashes the screen."""
+    ip, hdmi = ROKU_IPS.get(tv_id), INPUTS.get(tv_id)
+    if not (ip and hdmi):
+        return False
+    try:
+        info = roku.info(ip)
+    except (roku.RokuError, OSError):
+        return False
+    return info.get("power") == "PowerOn" and info.get("app_id") == "tvinput." + hdmi.lower()
+
+
 def switch_tv_to_pi():
+    if on_input("living"):
+        return
     cec("--to", "0", "--image-view-on")
     cec("--active-source", f"phys-addr={CEC_PHYS}")
 
 
 def stop_player():
     p = state["proc"]
+    state["proc"] = None  # first, so the watcher knows this end was on purpose
     if p and p.poll() is None:
         try:
             os.killpg(p.pid, signal.SIGTERM)
@@ -191,7 +228,6 @@ def stop_player():
         except ProcessLookupError:
             pass
     chat_stop()
-    state["proc"] = None
 
 
 _chat = {"obj": None, "pref": False}  # off by default: redrawing the overlay drops about 2 frames/s on the Pi
@@ -217,7 +253,29 @@ def chat_sync():
         _chat["obj"] = chat.TwitchChat(ch, chat_send)
 
 
+def _watch(proc):
+    """Follow one player: hide the loading screen once it is up, and show how it ended."""
+    for _ in range(120):  # up to a minute for mpv to open its window
+        if proc.poll() is not None or prop("pid") is not None:
+            break
+        time.sleep(0.5)
+    if proc.poll() is None:
+        screen("playing")
+    proc.wait()
+    if state["proc"] is not proc:
+        return  # replaced, or stopped on purpose
+    raw = last_error()
+    name = fav_name(state["url"] or "")
+    if raw and re.search(r"No playable streams|offline", raw, re.I):
+        screen("offline", name)
+    elif proc.returncode or raw:
+        screen("error", describe_error(raw) or "The player stopped unexpectedly.")
+    else:
+        screen("ended", name)
+
+
 def start_player(url, quality=None):
+    screen("loading", fav_name(url))  # before the old stream stops, so the swap never shows the desktop
     stop_player()
     source, player = resolve(url)
     try:
@@ -243,6 +301,7 @@ def start_player(url, quality=None):
                             stderr=subprocess.STDOUT, start_new_session=True)
     state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time())
     chat_sync()
+    threading.Thread(target=_watch, args=(proc,), daemon=True).start()
     if player == "streamlink":  # warm the metadata cache for the title
         threading.Thread(target=sl_info, args=(url,), daemon=True).start()
     threading.Thread(target=switch_tv_to_pi, daemon=True).start()
@@ -359,9 +418,12 @@ def switch_input(tid):
     if not (ip and hdmi):
         return
     try:
-        if roku.info(ip).get("power") != "PowerOn":
+        info = roku.info(ip)
+        if info.get("power") != "PowerOn":
             roku.key(ip, "PowerOn")
             time.sleep(6)  # TV needs a few seconds before it accepts an input change
+        elif info.get("app_id") == "tvinput." + hdmi.lower():
+            return  # already on it: re-selecting relaunches the input
         roku.key(ip, "Input" + hdmi)
     except (roku.RokuError, OSError):
         pass  # best effort: playback already started
@@ -415,6 +477,7 @@ def api_cmd():
     if action == "stop":
         with lock:
             stop_player()
+        screen("idle")
         return jsonify(ok=True)
     if action == "restart":
         if not state["url"]:
@@ -504,7 +567,7 @@ def pi_status():
         p = state["proc"]
         data["starting"] = bool(p and p.poll() is None)
         if state["url"] and not data["starting"]:
-            data["error"] = last_error()
+            data["error"] = describe_error(last_error())
     return data
 
 
@@ -614,7 +677,7 @@ def make_card(tv_id, status):
            "stream": stream_label(status.get("quality"))} if busy else None
     return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection,
             "brand": r.get("brand"), "model": r.get("model"), "size": r.get("size"), "tv_name": r.get("name"),
-            "power": r.get("power"), "input": r.get("app"), "now": now, "error": status.get("error"),
+            "power": r.get("power"), "input": r.get("app"), "input_id": r.get("app_id"), "now": now, "error": status.get("error"),
             "health": targets.health(kind, status)}
 
 
@@ -631,6 +694,32 @@ def bedroom_card():
 
 
 cards = targets.Cards({"living": living_card, "bedroom": bedroom_card}, ORDER)
+
+
+def shell_state():
+    return {"enabled": bool(settings.get("shell")), "running": bool(HOME and HOME.running()),
+            "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None}
+
+
+@app.get("/api/shell")
+def api_shell():
+    return jsonify(shell_state())
+
+
+@app.post("/api/shell")
+def api_shell_set():
+    """Turn the TV's home screen on or off (off shows the Pi desktop again). The app and this remote keep running."""
+    settings["shell"] = bool((request.get_json(silent=True) or {}).get("enabled"))
+    save_settings()
+    if HOME:
+        if settings["shell"]:
+            HOME.start()
+            if state["proc"] and state["url"]:  # the new window opens on top of a playing stream, so bring the stream back up
+                with lock:
+                    start_player(state["url"], state["quality"])
+        else:
+            HOME.stop()
+    return jsonify(shell_state())
 
 
 @app.get("/api/targets")
@@ -763,5 +852,9 @@ if __name__ == "__main__":
     if CastTarget:
         CAST = CastTarget(DATA, resolve, display_title, YTDL_HEIGHTS, SL_DEFAULT)
     cards.start()
+    settings.update(load_settings())
+    HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone")
+    if settings["shell"]:
+        threading.Thread(target=HOME.start, daemon=True).start()
     from waitress import serve
     serve(app, host="0.0.0.0", port=PORT, threads=8)

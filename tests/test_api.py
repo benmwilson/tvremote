@@ -1,4 +1,6 @@
+import os
 import sys
+import tempfile
 import time
 import unittest
 from pathlib import Path
@@ -164,6 +166,145 @@ class PausedOverlay(unittest.TestCase):
         text = [c for c in self.sent if c[0] == "osd-overlay"][0][3]
         self.assertNotIn(r"{\p1}", text.split("title")[0].split("bad")[-1])  # the title's own braces and backslashes are stripped
         self.assertIn("bad p1title Nmore", text)
+
+
+class FakeHome:
+    def __init__(self):
+        self.shown, self.started, self.stopped, self.vo, self.error, self._running = [], 0, 0, "wlshm", None, True
+
+    def show(self, kind, detail=""):
+        self.shown.append((kind, detail))
+        return True
+
+    def running(self):
+        return self._running
+
+    def start(self):
+        self.started += 1
+        self._running = True
+        return True
+
+    def stop(self):
+        self.stopped += 1
+        self._running = False
+
+
+class ShellFlow(unittest.TestCase):
+    """The TV's home screen follows what the player does."""
+
+    def setUp(self):
+        self.client = server.app.test_client()
+        self.home = FakeHome()
+        tmp = tempfile.mkdtemp()
+        for p in (mock.patch.object(server, "HOME", self.home),
+                  mock.patch.object(server, "SETTINGS_FILE", os.path.join(tmp, "settings.json")),
+                  mock.patch.object(server, "LOG_FILE", os.path.join(tmp, "player.log")),
+                  mock.patch.dict(server.settings, {"shell": True}),
+                  mock.patch.dict(server.state, {"proc": None, "url": "https://kick.com/chan"})):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def watch(self, returncode, error, replaced=False):
+        proc = mock.Mock()
+        proc.poll.return_value = returncode
+        proc.returncode = returncode
+        server.state["proc"] = mock.Mock() if replaced else proc
+        with mock.patch.object(server, "last_error", return_value=error):
+            server._watch(proc)
+
+    def test_a_new_stream_shows_loading_before_the_old_one_stops(self):
+        order = []
+        self.home.show = lambda kind, detail="": order.append("screen:" + kind) or True
+        with mock.patch.object(server, "stop_player", side_effect=lambda: order.append("stop")),                 mock.patch.object(server.subprocess, "Popen"), mock.patch.object(server, "_watch"),                 mock.patch.object(server, "chat_sync"), mock.patch.object(server, "switch_tv_to_pi"):
+            server.start_player("https://kick.com/chan")
+        self.assertEqual(order[:2], ["screen:loading", "stop"])
+
+    def test_stopping_shows_the_idle_screen(self):
+        with mock.patch.object(server, "stop_player"):
+            self.client.post("/api/cmd", json={"action": "stop"})
+        self.assertEqual(self.home.shown[-1], ("idle", ""))
+
+    def test_a_player_that_dies_shows_why(self):
+        self.watch(1, "HTTP error 404 Not Found")
+        self.assertEqual(self.home.shown[-1], ("error", "That link wasn't found (404)"))
+
+    def test_a_channel_that_is_not_live_says_so(self):
+        server.state["url"] = "https://kick.com/capped"
+        self.watch(1, "error: No playable streams found on this URL: https://kick.com/capped")
+        self.assertEqual(self.home.shown[-1], ("offline", "capped"))
+
+    def test_a_stream_that_finishes_shows_ended(self):
+        self.watch(0, None)
+        self.assertEqual(self.home.shown[-1], ("ended", "chan"))
+
+    def test_a_replaced_player_shows_nothing(self):
+        self.watch(1, "boom", replaced=True)
+        self.assertEqual(self.home.shown, [])
+
+    def test_playing_hides_the_loading_screen(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        server.state["proc"] = mock.Mock()  # replaced as soon as it ends, so only "playing" is shown
+        with mock.patch.object(server, "prop", return_value=1234):
+            server._watch(proc)
+        self.assertEqual(self.home.shown, [("playing", "")])
+
+    def test_error_text_is_friendly(self):
+        d = server.describe_error
+        self.assertEqual(d("error: No playable streams found on this URL: x"), "Isn't live right now")
+        self.assertEqual(d("HTTP error 404 Not Found"), "That link wasn't found (404)")
+        self.assertEqual(d("The web client only works when logged-in"), "That needs a login, which isn't supported")
+        self.assertEqual(d("something odd"), "something odd")
+        self.assertIsNone(d(None))
+
+    def test_the_switch_persists_and_starts_or_stops_the_screen(self):
+        r = self.client.post("/api/shell", json={"enabled": False})
+        self.assertEqual((r.status_code, r.get_json()["enabled"]), (200, False))
+        self.assertEqual(self.home.stopped, 1)
+        self.assertFalse(server.load_settings()["shell"])
+        r = self.client.post("/api/shell", json={"enabled": True})
+        self.assertTrue(r.get_json()["enabled"])
+        self.assertEqual(self.home.started, 1)
+        self.assertTrue(self.client.get("/api/shell").get_json()["running"])
+
+    def test_with_the_screen_off_nothing_is_drawn(self):
+        server.settings["shell"] = False
+        server.screen("loading", "x")
+        self.assertEqual(self.home.shown, [])
+
+
+class InputSwitch(unittest.TestCase):
+    """Playing must not re-select an input the TV is already showing (it relaunches the input and flashes the screen)."""
+
+    def setUp(self):
+        for p in (mock.patch.dict(server.ROKU_IPS, {"living": "203.0.113.1"}), mock.patch.dict(server.INPUTS, {"living": "HDMI1"}),
+                  mock.patch.object(server.time, "sleep")):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def run_switch(self, power, app_id):
+        with mock.patch.object(server.roku, "info", return_value={"power": power, "app_id": app_id}),                 mock.patch.object(server.roku, "key") as key:
+            server.switch_input("living")
+        return [c.args[1] for c in key.call_args_list]
+
+    def test_no_switch_when_the_tv_is_already_on_the_input(self):
+        self.assertEqual(self.run_switch("PowerOn", "tvinput.hdmi1"), [])
+
+    def test_switches_when_the_tv_is_on_another_input(self):
+        self.assertEqual(self.run_switch("PowerOn", "tvinput.hdmi2"), ["InputHDMI1"])
+
+    def test_wakes_a_tv_that_is_off_then_switches(self):
+        self.assertEqual(self.run_switch("Ready", "tvinput.hdmi1"), ["PowerOn", "InputHDMI1"])
+
+    def test_cec_is_skipped_when_the_tv_is_already_on_the_input(self):
+        with mock.patch.object(server.roku, "info", return_value={"power": "PowerOn", "app_id": "tvinput.hdmi1"}),                 mock.patch.object(server, "cec") as cec:
+            server.switch_tv_to_pi()
+        cec.assert_not_called()
+
+    def test_cec_is_sent_when_the_tv_is_on_something_else(self):
+        with mock.patch.object(server.roku, "info", return_value={"power": "PowerOn", "app_id": "tvinput.hdmi3"}),                 mock.patch.object(server, "cec") as cec:
+            server.switch_tv_to_pi()
+        self.assertTrue(cec.called)
 
 
 if __name__ == "__main__":

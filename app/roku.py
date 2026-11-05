@@ -34,11 +34,13 @@ def _tag(xml, name):
 
 def info(ip):
     xml = _call(ip, "/query/device-info")
-    app = re.search(r"<app[^>]*>([^<]+)<", _call(ip, "/query/active-app"))
+    app = re.search(r"<app\b([^>]*)>([^<]+)<", _call(ip, "/query/active-app"))
+    app_id = re.search(r'id="([^"]*)"', app.group(1)) if app else None  # e.g. tvinput.hdmi1 for an HDMI input
     size = _tag(xml, "screen-size")
     return {"name": _tag(xml, "user-device-name"), "brand": _tag(xml, "vendor-name"),
             "model": _tag(xml, "model-name"), "size": int(size) if size and size.isdigit() else None,
-            "power": _tag(xml, "power-mode"), "app": app.group(1) if app else None}
+            "power": _tag(xml, "power-mode"), "app": app.group(2) if app else None,
+            "app_id": app_id.group(1) if app_id else None}
 
 
 def key(ip, name):

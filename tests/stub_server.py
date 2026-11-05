@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 APP = Path(__file__).resolve().parents[1] / "app"
+SHELL = {"on": True}
 STATE = {"living": "playing", "bedroom": "idle", "play_fail": ""}
 INFO = {
     "living": {"name": "Living room", "kind": "pi", "connection": "Pi on HDMI", "brand": "TCL", "model": "55C803", "size": 55,
@@ -88,6 +89,7 @@ class H(BaseHTTPRequestHandler):
             "/api/tv": lambda: {"name": "TV One", "power": "on"},
             "/api/debug": lambda: {"state": {}, "proc": {}, "mpv": {"hwdec-current": "v4l2m2m"}, "versions": {}, "log": "stub"},
             "/manifest.json": lambda: {"name": "TV Remote"},
+            "/api/shell": lambda: {"enabled": SHELL["on"], "running": SHELL["on"], "vo": "wlshm", "error": None},
         }
         if u.path in routes:
             return self._send(routes[u.path]())
@@ -96,7 +98,11 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
-        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        if u.path == "/api/shell":
+            time.sleep(0.8)
+            SHELL["on"] = bool(json.loads(body or b"{}").get("enabled"))
+            return self._send({"enabled": SHELL["on"], "running": SHELL["on"], "vo": "wlshm", "error": None})
         if u.path == "/api/play":
             time.sleep(0.3)
             if STATE["play_fail"] == q.get("target"):

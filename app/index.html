@@ -116,6 +116,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .fav{position:relative;background:var(--card);border-radius:16px;padding:12px;min-height:72px;text-align:left;display:block;width:100%;min-width:0}
 .fav b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:30px;margin-bottom:6px}
 .fav{overflow:hidden}
+.fav .note{display:block;color:var(--warn);font-size:13px;margin-top:4px}
+.fav .note:empty{display:none}
 .fav .starting{display:none;font-size:13px;color:var(--dim)}
 .fav .spin{display:none;position:absolute;right:12px;bottom:12px;width:18px;height:18px;border-radius:50%;
   border:3px solid var(--line);border-top-color:var(--tv,var(--fg));animation:spin .8s linear infinite}
@@ -236,6 +238,9 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
     </div>
   </details>
 </div>
+
+<button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin-top:12px">
+  <div class="grow"><b>Home screen on this TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
 
 <h2>Play something</h2>
 <div class="card">
@@ -372,7 +377,7 @@ async function loadFavs() {
     b.onclick = () => playFav(f.url);
     b.onkeydown = e => { if (e.key === 'Enter') playFav(f.url); };
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
-    b.append(el('b', null, f.name), el('span', 'badge ' + (f.source || ''), f.source || 'Other'), el('span', 'starting', 'Starting\u2026'), spin, x);
+    b.append(el('b', null, f.name), el('span', 'badge ' + (f.source || ''), f.source || 'Other'), el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, x);
     g.appendChild(b);
   });
   markFavs();
@@ -381,8 +386,11 @@ async function loadFavs() {
 
 // A tapped favourite shows a spinner until that stream is playing (or fails, or 30 s pass).
 let favLoading = null;  // {url, t0}
+let favNote = null;  // {url, text, until}: why the last tapped favourite didn't start
 function markFavs() {
   document.querySelectorAll('#favs .fav').forEach(b => {
+    const n = b.querySelector('.note');
+    if (n) n.textContent = favNote && favNote.url === b.dataset.url && Date.now() < favNote.until ? favNote.text : '';
     const on = !!favLoading && b.dataset.url === favLoading.url;
     b.classList.toggle('loading', on);
     if (on) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
@@ -397,7 +405,11 @@ async function playFav(url) {
 function checkFavLoading() {
   if (!favLoading) return;
   const age = Date.now() - favLoading.t0;
-  if ((st.running && st.url === favLoading.url) || (st.error && age > 1500) || age > 30000) { favLoading = null; markFavs(); }
+  const failed = !!st.error && age > 1500;
+  if ((st.running && st.url === favLoading.url) || failed || age > 30000) {
+    if (failed) { favNote = {url: favLoading.url, text: st.error, until: Date.now() + 8000}; setTimeout(markFavs, 8100); }
+    favLoading = null; markFavs();
+  }
 }
 
 async function play(text) {
@@ -463,6 +475,28 @@ function applyFavView() {
 $('favList').onclick = () => { favView = 'list'; applyFavView(); };
 $('favTiles').onclick = () => { favView = 'tiles'; applyFavView(); };
 applyFavView();
+
+// ---- the TV's home screen switch (Pi TV only) ----
+let shellInfo = null;
+function renderShell() {
+  const s = shellInfo;
+  if (!s) return;
+  $('shellrow').setAttribute('aria-checked', String(s.enabled));
+  $('shellsub').textContent = !s.enabled ? 'Off: the Pi desktop shows between streams. Turning it on restarts anything playing.'
+    : s.running ? 'On: this TV stays on the app between streams.'
+    : s.error ? "Couldn't start: " + s.error : 'Starting\u2026';
+}
+async function loadShell() {
+  const cur = targets.find(t => t.id === target) || {};
+  $('shellrow').classList.toggle('hide', cur.kind !== 'pi');
+  if (cur.kind !== 'pi') return;
+  try { shellInfo = await (await fetch('/api/shell')).json(); renderShell(); } catch (e) {}
+}
+$('shellrow').onclick = async () => {
+  const want = $('shellrow').getAttribute('aria-checked') !== 'true';
+  const r = await busy($('shellrow'), () => api('/api/shell', 'POST', {enabled: want}));
+  if (r) { shellInfo = r; renderShell(); }
+};
 
 // ---- debug drawer ----
 let dbgTimer = null;
@@ -590,7 +624,7 @@ async function loadTargets() {
     }
   } catch (e) {}
   $('dot').classList.toggle('on', ok);
-  if (changed) { renderCards(); tvInfo(); if (view() === 'share') renderPicker(); }
+  if (changed) { renderCards(); tvInfo(); if (view() === 'share') renderPicker(); if (view() === 'tv') loadShell(); }
 }
 
 function show() {
@@ -600,7 +634,7 @@ function show() {
     if (id !== target) {
       target = id; st = {}; qualFor = null; $('qual').innerHTML = '';
       try { localStorage.setItem('target', id); } catch (e) {}
-      loadFavs(); poll();
+      loadFavs(); poll(); loadShell();
     }
   }
   ['all', 'share', 'tv'].forEach(n => $('view-' + n).classList.toggle('hide', n !== v));

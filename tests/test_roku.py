@@ -28,6 +28,13 @@ class RokuInfo(unittest.TestCase):
         self.assertEqual(i["power"], "PowerOn")
         self.assertEqual(i["app"], "YouTube")
 
+    def test_info_reports_the_id_of_what_is_on_screen(self):
+        def call(ip, path, method="GET", timeout=4):
+            return '<active-app><app id="tvinput.hdmi1" type="tvin">Nintendo Switch</app></active-app>' if "active-app" in path else DEVICE.format(size="")
+        with mock.patch.object(roku, "_call", call):
+            i = roku.info("203.0.113.5")
+        self.assertEqual((i["app_id"], i["app"]), ("tvinput.hdmi1", "Nintendo Switch"))
+
     def test_info_missing_fields_are_none(self):
         with mock.patch.object(roku, "_call", fake_call("")):
             self.assertIsNone(roku.info("203.0.113.5")["size"])
