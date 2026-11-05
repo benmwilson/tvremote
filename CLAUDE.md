@@ -1,0 +1,187 @@
+# tvremote
+
+Play Kick / Twitch / YouTube / any link on the living-room TV from a Raspberry Pi, controlled from an iPhone.
+Runs as a single Docker container on the Pi.
+
+## Target flow
+1. On iPhone: copy a link (or Share from Safari) → run the "Play on Pi" Shortcut.
+2. Shortcut opens `http://192.168.1.138:8765/play?u=<url-encoded link>` in Safari.
+3. Pi starts playback on the TV, switches the TV input to the Pi (CEC), then redirects to the web remote.
+4. Web remote shows what's playing and has controls: pause, volume, mute, seek, quality, stop, favourites.
+
+The Shortcut needs no SSH: Receive any input (fallback: Get Clipboard) → URL Encode → Text `http://192.168.1.138:8765/play?u=<encoded>` → Open URLs.
+
+## Supported sources
+Route by URL host. Keep the routing in one table in app.py so new sites are one line.
+
+| Source | Player path | Notes |
+|---|---|---|
+| Kick (live) | streamlink → mpv | `1080p60,best`. |
+| Twitch (live + VODs) | streamlink → mpv | `1080p60,best`, add `--twitch-disable-ads`. Channel names like `twitch.tv/xqc`. |
+| YouTube (videos) | mpv + yt-dlp | Force H.264 (`vcodec^=avc1`, max 1080p). Pi 4 can't hardware-decode VP9/AV1. |
+| YouTube (live) | streamlink → mpv | HLS is H.264 already. Detect `/live`, `/@channel/live` or `is_live` via yt-dlp. |
+| Everything else | mpv + yt-dlp | Whatever yt-dlp supports (Reddit, X, Vimeo, direct .mp4/.m3u8…). Same H.264 preference. |
+
+- Shared text can arrive as "Watch X on Kick https://…", so always extract the first URL.
+- A bare word typed in the UI = Kick channel by default, with a site toggle (Kick / Twitch / YouTube search).
+- YouTube search from the UI: `yt-dlp "ytsearch10:<query>" --flat-playlist -J`, show results as tappable cards.
+- Quality picker: streamlink sources list `streamlink --json <url>` streams; yt-dlp sources offer 1080/720/480.
+- Show the source (Kick/Twitch/YouTube/other) as a badge on the now-playing card.
+- Favourites store `{name, url, source}` and work for any source.
+
+## Repo layout (to build)
+```
+app/app.py              Flask + waitress backend (draft exists, review and finish)
+app/index.html          single-file phone-first remote UI
+config/mpv.conf         baked into the image at /home/app/.config/mpv/mpv.conf
+docker/entrypoint.sh    set display to 1080p60, register CEC name, start the app
+Dockerfile
+compose.yaml            Portainer-compatible stack
+.env.example            PI_UID/PI_GID, WAYLAND_DISPLAY, CEC_PHYS, PORT
+README.md               setup, iPhone Shortcut steps, troubleshooting
+```
+
+## Docker design
+mpv runs inside the container but draws on the Pi's host Wayland desktop and plays through the host's PipeWire,
+using the Pi's hardware decoder. So the container needs the host's sockets and devices passed through.
+
+- Base: `debian:trixie-slim` (arm64), matching the host OS so mpv/libdrm/v4l2 versions behave the same as on the host.
+- apt: `mpv cec-utils v4l-utils wlr-randr python3 python3-venv pipx ca-certificates curl libpipewire-0.3-0 pipewire-bin`.
+- Python venv: `flask waitress`. pipx (or venv): `streamlink yt-dlp`, latest. Rebuilding the image updates them.
+- Run as uid/gid 1000 (ben) so the host's Wayland and PipeWire sockets accept the connection.
+- compose.yaml essentials:
+  ```yaml
+  services:
+    tvremote:
+      build: .
+      image: tvremote:latest
+      container_name: tvremote
+      restart: unless-stopped
+      network_mode: host            # port 8765 on the LAN, no NAT
+      user: "1000:1000"
+      group_add: ["video", "render"] # use numeric GIDs from the host if names don't resolve
+      devices:
+        - /dev/dri:/dev/dri
+        - /dev/cec0:/dev/cec0
+        - /dev/video10:/dev/video10   # H.264 decoder (v4l2m2m); add 11-19 if mpv probes them
+        - /dev/video11:/dev/video11
+        - /dev/video12:/dev/video12
+      volumes:
+        - /run/user/1000:/run/user/1000   # Wayland + PipeWire sockets
+        - tvremote-data:/data             # favourites.json, player.log
+      environment:
+        - XDG_RUNTIME_DIR=/run/user/1000
+        - WAYLAND_DISPLAY=wayland-0
+        - PIPEWIRE_RUNTIME_DIR=/run/user/1000
+        - TVREMOTE_PORT=8765
+        - TVREMOTE_CEC_PHYS=1.0.0.0
+        - TVREMOTE_CEC_NAME=HunnidPi
+  volumes:
+    tvremote-data:
+  ```
+- `entrypoint.sh`: wait for `$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY` to exist (the desktop may still be starting after boot),
+  run `wlr-randr --output HDMI-A-1 --mode 1920x1080@60`, run `cec-ctl -d /dev/cec0 --playback -o HunnidPi`, then exec the app.
+- Healthcheck: `curl -fs http://127.0.0.1:8765/api/status`.
+- Watchtower runs on the homelab server, not the Pi, and this image is built locally anyway. Update by rebuilding.
+- If something can't work in the container (most likely hardware decode or CEC permissions), find out from the logs,
+  try the fixes (numeric GIDs, more /dev/video nodes, `privileged: true` as a last-resort test only), and tell Ben what
+  you found before falling back to a native install.
+
+## Dev workflow
+- Code is edited on Ben's Windows PC and pushed to GitHub.
+- No SSH from Claude Code. Ben runs every Pi-side command himself in Termius and pastes the output back.
+  Give him one copy-paste block at a time, in a code block, with what to look for in the output.
+- Deploy (Ben runs on the Pi): `cd ~/tvremote && git pull && docker compose up -d --build`
+- Test from the PC over HTTP (no SSH needed): `curl http://192.168.1.138:8765/api/status`
+- Logs (Ben runs on the Pi): `docker logs --tail 50 tvremote`
+
+## Hardware
+- Raspberry Pi 4 `hunnidpi`, 192.168.1.138, user `ben` (uid 1000), Debian Trixie (Raspberry Pi OS), labwc Wayland desktop, wired Ethernet, Docker installed, ben in the docker group
+- HDMI-A-1 → TCL Roku TV 55C803; the Pi appears in TV CEC as "HDMI 1: HunnidPi", physical address 1.0.0.0
+
+## Verified working on the host (keep these in the container)
+- `mpv.conf`: `vo=dmabuf-wayland`, `hwdec=v4l2m2m`, `fs`
+  - The only smooth combo (1–2 dropped frames/min at 1080p60).
+  - `vo=gpu` (Vulkan or OpenGL) drops 40+ frames/sec. Vulkan also fails swapchain under labwc.
+- Display must be 1920x1080@60. The 4K@30 default caused drops. dmabuf-wayland does not scale,
+  so stream resolution should match the display (720p sits small and off-centre at 1080p display).
+- Kick: `streamlink --player mpv <url> 1080p60,best` (the Kick plugin works in streamlink 8.6.3).
+- Other sites: mpv + yt-dlp with `--ytdl-format="bv*[vcodec^=avc1][height<=1080]+ba/b[height<=1080]/b"`.
+- CEC input switch: `cec-ctl -d /dev/cec0 --playback -o HunnidPi`, then `--to 0 --image-view-on` and
+  `--active-source phys-addr=1.0.0.0`.
+
+## Constraints
+- The TV remote can't control the Pi (the TCL Roku TV forwards no CEC key presses). The phone is the remote.
+- The Kick iOS app hides Shortcuts from its share sheet, hence Copy → run Shortcut (Back Tap).
+
+## Setup instructions for Claude Code
+Work through these in order. Use the TaskCreate list to track them. Stop and ask Ben before anything destructive on the Pi.
+
+### 0. Preflight
+- On the PC: `gh auth status` must be logged in. If the GitHub remote doesn't exist yet: `gh repo create tvremote --public --source . --push`
+  (public so the Pi can clone without credentials. Ask Ben first; if he wants private, he runs `gh auth login` on the Pi.)
+- Ask Ben to run this on the Pi and paste the output:
+  ```
+  docker --version; docker compose version; id; getent group video render
+  ls -l /dev/cec0 /dev/video1* /dev/dri; ls /run/user/1000 | grep -E 'wayland|pipewire'
+  ```
+  Use the real GIDs from this output in compose.yaml.
+
+### 1. Build the repo
+- Create every file in "Repo layout". Review the draft `app/app.py` against this document and fix anything wrong.
+  Store favourites and the player log under `/data`.
+- `app.py` endpoints: `GET /` (UI), `GET /play?u=&q=` (start + 303 redirect to `/`), `POST /api/play`, `POST /api/cmd`
+  (pause, mute, volume, volume_delta, seek, stop, restart with quality), `GET /api/status`, `GET /api/qualities`,
+  `GET /api/search?q=` (YouTube), `GET/POST/DELETE /api/favourites`.
+  mpv IPC socket at `/tmp/tvremote-mpv.sock` inside the container. Kill any existing player before starting a new one.
+  CEC input switch in a background thread so `/play` returns fast.
+- `index.html`: now-playing card (title, source badge, live/position), big play/pause, volume slider + mute,
+  seek ±10s/±60s (hidden for live), quality picker, stop, paste-a-link box with Kick/Twitch/YouTube toggle,
+  YouTube search results, favourites grid with add/remove. Poll `/api/status` every 2s.
+  Add apple-mobile-web-app meta tags and a manifest so it works from the Home Screen.
+- `.gitignore`: `.env`, `__pycache__/`.
+- Commit in logical chunks and push.
+
+### 2. Deploy
+Ben runs on the Pi (give him the exact block with the real repo URL filled in):
+```
+pkill -x mpv; pkill -f streamlink
+git clone https://github.com/<user>/tvremote ~/tvremote || (cd ~/tvremote && git pull)
+cd ~/tvremote && docker compose up -d --build
+docker logs --tail 30 tvremote
+```
+The first build on a Pi 4 takes several minutes. He pastes the output back. Fix any failures in the repo, push, and have him
+run `git pull && docker compose up -d --build` again.
+
+### 3. Test (all must pass)
+- `curl -s http://192.168.1.138:8765/api/status` returns JSON.
+- For each source, start via `curl "http://192.168.1.138:8765/play?u=<encoded>"`, wait 10s, then check `/api/status`
+  shows running with a title. If something fails, ask Ben for `docker logs --tail 50 tvremote`:
+  - Kick: `https://kick.com/capped` (or any live channel)
+  - Twitch: a live channel from `https://www.twitch.tv/directory`
+  - YouTube video: `https://www.youtube.com/watch?v=aqz-KE-bpKQ`
+  - YouTube live: any `youtube.com/@<channel>/live` that's live
+  - Other: a Reddit or Vimeo video link
+- Status must show hardware decoding is active (expose mpv's `hwdec-current` in `/api/status`; it should be `v4l2m2m`).
+- Controls: pause, volume 50, mute, seek +10 on the YouTube video, quality switch on Kick, stop. Check that each changes `/api/status`.
+- Dropped frames: `frame-drop-count` should stay under ~5/min at 1080p60.
+- Reboot test: ask Ben to run `sudo reboot` on the Pi, then confirm `/api/status` responds and he sees 1080p on the TV.
+- Ask Ben to confirm the picture and sound on the TV for at least Kick and YouTube. You can't see the screen.
+
+### 4. iPhone Shortcut (give Ben these steps; you can't do this part)
+"Play on Pi":
+1. Receive **Any** input from **Share Sheet**; if there's no input: **Get Clipboard**.
+2. **URL Encode** → Shortcut Input.
+3. **Text**: `http://192.168.1.138:8765/play?u=` + URL Encoded Text.
+4. **Open URLs** → Text.
+5. Details: Show in Share Sheet on, Add to Home Screen. Optional: Settings → Accessibility → Touch → Back Tap → Double Tap → Play on Pi.
+Replace the old SSH-based "Play on Pi" action with these steps.
+Also: in Safari, open `http://192.168.1.138:8765` → Share → Add to Home Screen ("TV Remote").
+
+### 5. Done when
+- All tests in step 3 pass, Ben confirms picture and sound on the TV, README matches what was built, everything is pushed.
+
+## Conventions
+- Canadian spelling in UI text (favourites, colour).
+- Keep the UI a single dependency-free HTML file, dark, large touch targets, works as an iOS home-screen web app.
+- No secrets in the repo.
