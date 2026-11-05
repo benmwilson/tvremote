@@ -23,15 +23,32 @@ SOCK = "/tmp/tvremote-shell.sock"
 LOG = "/tmp/tvremote-shell.log"
 # The logo as ASS drawings (same shapes as app/logo.svg, solid accent colour), 260% size, centred at x=960. The screen's
 # outline is a hollow shape with a thick border; the stand strokes are zero-width shapes whose border gives them width.
-LOGO_TOP = 150  # y of the drawing's top edge; the text block starts at TEXT_TOP, just under the stand
-TEXT_TOP = 398
-_L = r"{\an7\pos(830,%d)\fscx260\fscy260\shad0\p1" % LOGO_TOP
-LOGO = [
-    _L + r"\1a&HFF&\3c&HFFB062&\bord8}m 26 22 l 74 22 b 80 22 86 28 86 34 l 86 58 b 86 64 80 70 74 70 l 26 70 b 20 70 14 64 14 58 l 14 34 b 14 28 20 22 26 22{\p0}",
-    _L + r"\1c&HFFB062&\3c&HFFB062&\bord5}m 44 36 l 44 56 l 61 46{\p0}",
-    _L + r"\1a&HFF&\3c&HFFB062&\bord8}m 38 82 l 62 82{\p0}",
-    _L + r"\1a&HFF&\3c&HFFB062&\bord8}m 50 73 l 50 82{\p0}",
-]
+SCALE = 2.6                 # the mark is drawn at 260%
+GLYPH_OFF, GLYPH_H = 45, 180  # px from the drawing's top edge to the visible mark, and the visible height (stand included)
+GAP = 30                    # px between the stand and the text
+LINE = 1.17                 # a text line is about this many times its font size tall
+_L = r"{\an7\pos(830,%d)\fscx260\fscy260\shad0\p1"
+
+
+def logo_pieces(y):
+    """The mark as ASS drawings with its drawing origin at height y (solid accent colour; subtitles have no gradients)."""
+    return [
+        (_L % y) + r"\1a&HFF&\3c&HFFB062&\bord8}m 26 22 l 74 22 b 80 22 86 28 86 34 l 86 58 b 86 64 80 70 74 70 l 26 70 b 20 70 14 64 14 58 l 14 34 b 14 28 20 22 26 22{\p0}",
+        (_L % y) + r"\1c&HFFB062&\3c&HFFB062&\bord5}m 44 36 l 44 56 l 61 46{\p0}",
+        (_L % y) + r"\1a&HFF&\3c&HFFB062&\bord8}m 38 82 l 62 82{\p0}",
+        (_L % y) + r"\1a&HFF&\3c&HFFB062&\bord8}m 50 73 l 50 82{\p0}",
+    ]
+
+
+def layout(text):
+    """(logo y, text y): the mark and the text below it, as one group centred on the screen. The text height is worked out
+    from its font sizes, one line per \\N."""
+    body = re.sub(r"^\{[^}]*\}", "", text, count=1)
+    h = sum(max([int(n) for n in re.findall(r"\\fs(\d+)", line)] or [0]) for line in body.split(r"\N")) * LINE
+    top = (H - (GLYPH_H + GAP + h)) / 2
+    return round(top - GLYPH_OFF), round(top + GLYPH_H + GAP)
+
+
 ASS_FILES = ("/tmp/tvremote-shell-a.ass", "/tmp/tvremote-shell-b.ass")  # alternate, so a new one loads before the old goes
 IDLE_SPAN = 300  # seconds of clock written ahead; the file is renewed a little before it runs out
 FOREVER = 3 * 86400  # a still screen stays up for days of video time
@@ -78,7 +95,7 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
                  r"{\fs60\b1\c&H%s&}TV Remote   {\c&H%s&}%s" % (TEXT, colour, head)]
         if hint:
             lines.append(r"{\fs34\b0\c&H%s&}%s" % (DIM, esc(hint)))
-        return r"{\an8\pos(960,398)\bord0\shad0}" + r"\N".join(lines)
+        return r"{\an8\pos(960,@@Y@@)\bord0\shad0}" + r"\N".join(lines)
     if kind == "refresh":  # a spinning wheel: four quarter-filled circles in turn
         head = "◐◓◑◒"[dots % 4] + "  " + head
     elif kind in ("loading", "quality"):
@@ -89,7 +106,7 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
         lines.append(r"{\fs44\c&H%s&}%s" % (TEXT, esc(detail)))
     if hint:
         lines.append(r"{\fs34\c&H%s&}%s" % (DIM, esc(hint)))
-    return r"{\an8\pos(960,398)\bord0\shad0}" + r"\N".join(lines)
+    return r"{\an8\pos(960,@@Y@@)\bord0\shad0}" + r"\N".join(lines)
 
 
 def stamp(sec):
@@ -108,10 +125,11 @@ def ass_file(events):
             "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
             "Style: Default,DejaVu Sans,60,&H00F6F1EE,&H00F6F1EE,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n\n"
             "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
-    body = "".join(f"Dialogue: 0,{stamp(a)},{stamp(b)},Default,,0,0,0,,{t}\n" for a, b, t in events)
-    if events:  # the logo is its own pair of events spanning the file, so it never flickers when the text changes
+    ly, ty = layout(events[0][2]) if events else (0, 0)
+    body = "".join(f"Dialogue: 0,{stamp(a)},{stamp(b)},Default,,0,0,0,,{t.replace('@@Y@@', str(ty))}\n" for a, b, t in events)
+    if events:  # the logo is its own events spanning the file, so it never flickers when the text changes
         span = f"{stamp(min(e[0] for e in events))},{stamp(max(e[1] for e in events))}"
-        body += "".join(f"Dialogue: 0,{span},Default,,0,0,0,,{piece}\n" for piece in LOGO)
+        body += "".join(f"Dialogue: 0,{span},Default,,0,0,0,,{piece}\n" for piece in logo_pieces(ly))
     return head + body
 
 

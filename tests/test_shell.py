@@ -1,3 +1,4 @@
+import re
 import sys
 import time
 import unittest
@@ -93,7 +94,7 @@ class Idle(unittest.TestCase):
         s._clock = lambda: datetime(2026, 11, 4, 21, 5, 58, 250000)
         s.start()
         f = [c for c in sent if c[0] == "ass-file"][-1][1]
-        self.assertEqual(f.count("Dialogue:"), shell.IDLE_SPAN + len(shell.LOGO))  # a second each, plus the logo pieces
+        self.assertEqual(f.count("Dialogue:"), shell.IDLE_SPAN + 4)  # a second each, plus the logo pieces
         self.assertIn("9:05 PM", f)
         self.assertIn("9:06 PM", f)  # the minute rolls over inside the file
         self.assertIn("alpha&HFF&", f)  # the hidden-colon seconds
@@ -168,9 +169,35 @@ class Refresh(unittest.TestCase):
 class Logo(unittest.TestCase):
     def test_the_logo_is_drawn_once_for_the_whole_file_and_the_text_sits_below_it(self):
         f = shell.ass_file([(0, 1, shell.screen("idle")), (1, 2, shell.screen("idle"))])
-        self.assertEqual(f.count(r"\p1"), len(shell.LOGO))  # each piece of the mark, once
-        self.assertEqual(len([l for l in f.split("\n") if r"\p1" in l and "0:00:00.00,0:00:02.00" in l]), len(shell.LOGO))
-        self.assertIn(r"\an8\pos(960,%d)" % shell.TEXT_TOP, shell.screen("loading", "c"))
+        self.assertEqual(f.count(r"\p1"), 4)  # each piece of the mark, once
+        self.assertEqual(len([l for l in f.split("\n") if r"\p1" in l and "0:00:00.00,0:00:02.00" in l]), 4)
+        self.assertIn(r"\an8\pos(960,@@Y@@)", shell.screen("loading", "c"))  # filled in when the file is written
+
+
+class Centering(unittest.TestCase):
+    def test_the_logo_and_text_are_centred_as_one_group_on_every_screen(self):
+        for kind, detail, hint in (("idle", "", "Open http://pi.example:8765 on your phone"), ("loading", "chan", ""), ("loading", "", ""),
+                                   ("error", "HTTP error 404", "Pick something else on your phone"), ("ended", "chan", "Pick something else")):
+            text = shell.screen(kind, detail, hint)
+            ly, ty = shell.layout(text)
+            top = ly + shell.GLYPH_OFF
+            h = sum(max(int(n) for n in re.findall(r"\\fs(\d+)", ln)) for ln in re.sub(r"^\{[^}]*\}", "", text).split(r"\N")) * shell.LINE
+            bottom = ty + h
+            self.assertAlmostEqual(top - 0, shell.H - bottom, delta=3, msg=kind)  # equal space above the mark and below the text
+            self.assertGreater(ty, top + shell.GLYPH_H)  # the text sits under the mark
+
+    def test_the_text_y_is_written_into_each_event_and_the_mark_follows_the_same_layout(self):
+        text = shell.screen("idle", "", "hi")
+        f = shell.ass_file([(0, 1, text)])
+        ly, ty = shell.layout(text)
+        self.assertIn(r"\an8\pos(960,%d)" % ty, f)
+        self.assertNotIn("@@Y@@", f)
+        self.assertIn(r"\pos(830,%d)" % ly, f)
+
+    def test_everything_is_centred_on_the_screen_horizontally(self):
+        self.assertIn(r"\pos(960,", shell.screen("idle"))  # text centred on x = 960
+        # the mark is 100 units wide at 260% with its artwork centred on unit 50: drawn from x = 960 - 130
+        self.assertIn(r"\pos(830,", shell.logo_pieces(100)[0])
 
 
 class Process(unittest.TestCase):
