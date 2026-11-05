@@ -159,7 +159,7 @@ def cec(*args):
 
 
 SETTINGS_FILE = os.path.join(DATA, "settings.json")
-settings = {"shell": os.environ.get("TVREMOTE_SHELL", "1") != "0"}  # the TV's home screen; TVREMOTE_SHELL=0 starts with it off
+settings = {"stats": False, "shell": os.environ.get("TVREMOTE_SHELL", "1") != "0"}  # the TV's home screen; TVREMOTE_SHELL=0 starts with it off
 HOME = None  # the home screen (shell.Shell), created at startup
 
 
@@ -279,16 +279,58 @@ def buffering_screen():
     """Drawn only while the picture is stalled, so redrawing costs the stream nothing."""
     return "\n".join([
         r"{\an7\pos(0,0)\p1\bord0\shad0\1c&H000000&\1a&HB0&}m 0 0 l 1920 0 1920 1080 0 1080{\p0}",
-        r"{\an5\pos(960,500)\fs72\b1\bord0\shad0\1c&HF6F1EE&}Buffering\u2026",
+        r"{\an5\pos(960,500)\fs72\b1\bord0\shad0\1c&HF6F1EE&}Buffering…",
         r"{\an5\pos(960,590)\fs36\b0\bord0\shad0\1c&HA9978C&}Waiting for the stream. If this keeps happening, lower the quality on your phone."])
 
 
+def lag_pill():
+    """A small corner note, drawn only while the stream stutters (overlay 4), so a lag has an explanation on screen."""
+    return "\n".join([
+        r"{\an9\pos(1860,50)\p1\bord0\shad0\1c&H000000&\1a&H60&}m -330 -22 l 0 -22 0 34 -330 34{\p0}",
+        r"{\an9\pos(1840,56)\fs34\b1\bord0\shad0\1c&HF6F1EE&}Stream lagging…"])
+
+
+def stats_overlay(drop_delta, drops, cache_s, fps, stalls):
+    """Debug numbers in the top-left corner (overlay 6), for the stats switch in the Debug drawer."""
+    c = "-" if cache_s is None else f"{cache_s:.1f}s"
+    text = f"dropped {drop_delta}/s ({drops} total)   buffer {c}   {fps or '-'} fps   stalls {stalls}"
+    return r"{\an7\pos(40,30)\fs30\b1\bord2\shad0\1c&HF6F1EE&\3c&H000000&}" + chat._esc(text)
+
+
+def is_lagging(drop_delta, cache_s):
+    """A stutter: a burst of dropped frames, or the buffer running nearly dry."""
+    return drop_delta >= 8 or (cache_s is not None and cache_s < 0.6)
+
+
 def _stall_monitor(proc):
-    """Count stalls and show Buffering on the TV while the picture waits for data."""
+    """Count stalls and show Buffering on the TV while the picture waits for data; a smaller note while it only stutters."""
     stalled_at = None
+    drops, lagging, calm, tick, stats_up = None, False, 0, 0, False
     while proc.poll() is None:
         time.sleep(1)
         stalled = prop("paused-for-cache") is True
+        d, cache = prop("frame-drop-count"), prop("demuxer-cache-duration")
+        if isinstance(d, (int, float)) and prop("pause") is not True and not stalled:
+            bad = drops is not None and is_lagging(d - drops, cache if isinstance(cache, (int, float)) else None)
+            calm = 0 if bad else calm + 1
+            if bad and not lagging:
+                lagging = True
+                mpv(["osd-overlay", 4, "ass-events", lag_pill(), 1920, 1080])
+            elif lagging and calm >= 4:  # stays up a few seconds so it can be read
+                lagging = False
+                mpv(["osd-overlay", 4, "none"])
+        tick += 1
+        if settings.get("stats") and tick % 2 == 0 and isinstance(d, (int, float)):  # a redraw costs a little, so only every 2 s
+            fps = prop("estimated-vf-fps")
+            mpv(["osd-overlay", 6, "ass-events", stats_overlay(int(d - drops) if drops is not None else 0, int(d),
+                 cache if isinstance(cache, (int, float)) else None, round(fps) if isinstance(fps, (int, float)) else None,
+                 state.get("stalls", 0)), 1920, 1080])
+            stats_up = True
+        elif stats_up and not settings.get("stats"):
+            mpv(["osd-overlay", 6, "none"])
+            stats_up = False
+        if isinstance(d, (int, float)):
+            drops = d
         if stalled and stalled_at is None:
             stalled_at = time.time()
             state["stalls"] = state.get("stalls", 0) + 1
@@ -554,11 +596,37 @@ def osd_paused(paused):
         mpv(["osd-overlay", 2, "none"])
 
 
+def volume_overlay(vol, muted):
+    """ASS for the volume pill (overlay 5): speaker, a bar and the number. Drawn once per change, so it costs nothing between."""
+    v = max(0, min(100, round(vol)))
+    x0, w = 760, 500
+    fill = int(w * v / 100)
+    parts = [r"{\an7\pos(0,0)\p1\bord0\shad0\1c&H000000&\1a&H50&}m 660 900 l 1420 900 1420 1000 660 1000{\p0}",
+             # speaker
+             r"{\an7\pos(0,0)\p1\bord0\shad0\1c&HF6F1EE&}m 690 940 l 710 940 735 920 735 980 710 960 690 960{\p0}",
+             # bar track
+             r"{\an7\pos(0,0)\p1\bord0\shad0\1c&H5A4A40&}m %d 944 l %d 944 %d 956 %d 956{\p0}" % (x0, x0 + w, x0 + w, x0)]
+    if not muted and fill:
+        parts.append(r"{\an7\pos(0,0)\p1\bord0\shad0\1c&HFFB26B&}m %d 944 l %d 944 %d 956 %d 956{\p0}" % (x0, x0 + fill, x0 + fill, x0))
+    parts.append(r"{\an4\pos(1290,952)\fs44\b1\bord0\shad0\1c&HF6F1EE&}" + ("Muted" if muted else str(v)))
+    return "\n".join(parts)
+
+
+_vol_timer = {"t": None}
+
+
 def osd_volume():
-    """Draw a TV-style volume message on the stream (mpv OSD)."""
+    """Draw a TV-style volume bar on the stream, gone after two seconds."""
     vol, muted = prop("volume"), prop("mute")
-    if vol is not None:
-        mpv(["show-text", "Muted" if muted else f"Volume {round(vol)}%", 1500])
+    if vol is None:
+        return
+    mpv(["osd-overlay", 5, "ass-events", volume_overlay(vol, muted), 1920, 1080])
+    if _vol_timer["t"]:
+        _vol_timer["t"].cancel()
+    t = threading.Timer(2.0, lambda: mpv(["osd-overlay", 5, "none"]))
+    t.daemon = True
+    _vol_timer["t"] = t
+    t.start()
 
 
 PROPS = {
@@ -753,6 +821,18 @@ def api_screen():
     except (OSError, subprocess.SubprocessError):
         return jsonify(ok=False, error="Couldn't capture the screen (is grim installed, and is the desktop running?)."), 502
     return send_file(SCREEN_SHOT, mimetype="image/png", max_age=0)
+
+
+@app.get("/api/stats")
+def api_stats():
+    return jsonify(enabled=bool(settings.get("stats")))
+
+
+@app.post("/api/stats")
+def api_stats_set():
+    settings["stats"] = bool((request.get_json(silent=True) or {}).get("enabled"))
+    save_settings()
+    return jsonify(enabled=settings["stats"])
 
 
 @app.get("/api/shell/screenshot")
@@ -964,6 +1044,19 @@ def favs_add():
     favs = [f for f in load_favs() if f.get("url") != url]
     name = data.get("name") or fav_name(url)
     favs.append({"name": name[:40], "url": url, "source": route(url)[0]})
+    save_favs(favs)
+    return jsonify(favs)
+
+
+@app.post("/api/favourites/order")
+def favs_order():
+    """Save the favourites in the order the phone shows them. Anything not listed keeps its place at the end."""
+    urls = (request.get_json(silent=True) or {}).get("urls")
+    if not isinstance(urls, list):
+        return jsonify(ok=False), 400
+    favs = load_favs()
+    rank = {u: i for i, u in enumerate(urls)}
+    favs.sort(key=lambda f: rank.get(f.get("url"), len(rank)))  # stable: unlisted ones stay in their old order
     save_favs(favs)
     return jsonify(favs)
 

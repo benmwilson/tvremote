@@ -117,6 +117,19 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .fav{position:relative;background:var(--card);border-radius:16px;padding:12px;min-height:72px;text-align:left;display:block;width:100%;min-width:0}
 .fav b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:30px;margin-bottom:6px}
 .fav{overflow:hidden}
+.av{width:36px;height:36px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:#fff;overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
+.iconlink{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
+.nowhead{display:flex;align-items:center;gap:8px}.nowhead .av{width:40px;height:40px}
+.fav .fhead{display:flex;align-items:center;gap:10px;padding-right:30px;margin-bottom:6px}
+.fav .fhead b{margin:0;padding:0;min-width:0;flex:1}
+.fav>.iconlink{position:absolute;right:0;bottom:0}
+.sortbtn{margin-left:auto;margin-right:8px;min-height:44px;padding:0 14px;background:none;color:var(--dim);font-size:14px;border-radius:12px}
+.sortbtn[aria-pressed=true]{background:var(--card2,#222a38);color:var(--text,#fff)}
+.fav .mv{position:absolute;right:0;top:0;display:flex}
+.fav .mv button{width:44px;height:44px;background:none;color:var(--dim);font-size:20px}
+.fav .mv button:disabled{opacity:.25}
 .fav .livenote{display:block;margin-top:4px;font-size:13px}
 .fav .note{display:block;color:var(--warn);font-size:13px;margin-top:4px}
 .fav .note:empty{display:none}
@@ -173,6 +186,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
 <symbol id="i-list" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></symbol>
 <symbol id="i-grid" viewBox="0 0 24 24"><rect x="5" y="5" width="5.5" height="5.5" rx="1.2"/><rect x="13.5" y="5" width="5.5" height="5.5" rx="1.2"/><rect x="5" y="13.5" width="5.5" height="5.5" rx="1.2"/><rect x="13.5" y="13.5" width="5.5" height="5.5" rx="1.2"/></symbol>
+<symbol id="i-external" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M10 6H6.5A1.5 1.5 0 005 7.5v10A1.5 1.5 0 006.5 19h10a1.5 1.5 0 001.5-1.5V14"/></symbol>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
 </defs></svg>
 
@@ -203,7 +217,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <section id="view-tv" class="hide">
 <div id="tvid" class="tvid"></div>
 <div class="card now" id="now">
-  <div><span class="badge" id="src">Idle</span> <span class="badge live hide" id="live">LIVE</span></div>
+  <div class="nowhead"><span id="nowav" class="hide"></span><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span><span class="grow"></span><a id="nowlink" class="iconlink hide" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a></div>
   <div id="title" class="ttl">Nothing playing</div>
   <div id="game" class="sub hide"></div>
   <div id="meta"></div>
@@ -252,7 +266,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 </div>
 <div id="results" style="margin-top:10px"></div>
 
-<div class="bar" style="margin-top:26px"><h2>Favourites</h2><div class="viewtog">
+<div class="bar" style="margin-top:26px"><h2>Favourites</h2><button id="favSort" class="sortbtn" aria-pressed="false">Reorder</button><div class="viewtog">
   <button id="favList" aria-label="Show favourites as a list" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg></button>
   <button id="favTiles" aria-label="Show favourites as tiles" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg></button></div></div>
 <div class="grid list" id="favs"></div>
@@ -266,6 +280,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <div class="db">
     <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:0 0 6px">
   <div class="grow"><b>Home screen on the TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
+    <button id="statsrow" class="tvrow" role="switch" aria-checked="false" style="margin:0 0 6px">
+  <div class="grow"><b>Stats on the TV</b><span class="sub">Dropped frames, buffer and fps in the corner. Redraws every 2 s, so it can cost a frame or two: leave it off for normal watching.</span></div><span class="sw"></span></button>
     <h3>Player</h3><table id="d-player"></table>
     <h3>mpv</h3><table id="d-mpv"></table>
     <h3>Versions</h3><table id="d-ver"></table>
@@ -320,6 +336,44 @@ const liveLine = f => f.live === true ? ['live for ' + dur(f.live_for || 0), f.g
   : f.live === false ? ['Offline', f.last_live ? 'last live ' + ago(f.last_live) : 'not seen live yet', f.game ? 'was playing ' + f.game : null].filter(Boolean).join(' \u00b7 ')
   : '';
 
+// ---- avatars and platform links ----
+const chanName = url => { try { return new URL(url).pathname.split('/').filter(Boolean)[0] || new URL(url).hostname; } catch (e) { return ''; } };
+const initials = n => (n || '?').replace(/^[^A-Za-z0-9]+/, '').slice(0, 2).toUpperCase() || '?';
+const hueOf = n => { let h = 0; for (const c of n || '') h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const kickSlug = url => { try { const u = new URL(url), p = u.pathname.split('/').filter(Boolean);
+  return /(^|\.)kick\.com$/.test(u.hostname) && p.length === 1 ? p[0] : null; } catch (e) { return null; } };
+const avCache = {};
+// Kick's channel details come from the visitor's own browser (as gtaservers.org does), so no account and nothing from the Pi.
+async function kickAvatar(slug) {
+  if (avCache[slug] !== undefined) return avCache[slug];
+  try { const c = JSON.parse(localStorage.getItem('av:' + slug) || 'null'); if (c && Date.now() - c.t < 7 * 864e5) return (avCache[slug] = c.src); } catch (e) {}
+  try {
+    const j = await (await fetch('https://kick.com/api/v2/channels/' + encodeURIComponent(slug))).json();
+    const src = (j.user && j.user.profile_pic) || null;
+    avCache[slug] = src;
+    try { localStorage.setItem('av:' + slug, JSON.stringify({t: Date.now(), src})); } catch (e) {}
+    return src;
+  } catch (e) { return (avCache[slug] = null); }  // blocked or offline: the initials stay
+}
+function avatarEl(name, url, cls) {
+  const a = el('span', 'av' + (cls ? ' ' + cls : ''), initials(name));
+  a.style.background = 'hsl(' + hueOf(name) + ' 45% 32%)';
+  const slug = kickSlug(url);
+  if (slug) kickAvatar(slug).then(src => {
+    if (!src) return;
+    const i = document.createElement('img'); i.src = src; i.alt = '';
+    a.textContent = ''; a.appendChild(i);
+  });
+  return a;
+}
+function linkEl(url, source) {
+  const a = document.createElement('a'); a.className = 'iconlink'; a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  a.setAttribute('aria-label', 'Open on ' + (source || 'the site')); a.innerHTML = ic('external');
+  a.onclick = e => e.stopPropagation();
+  return a;
+}
+let nowAvFor = '';
+
 const err = m => { $('err').textContent = m || ''; if (m) setTimeout(() => $('err').textContent = '', 6000); };
 async function api(path, method = 'GET', body) {
   try {
@@ -341,6 +395,14 @@ function render() {
   $('src').className = 'badge ' + (st.source || '');
   $('live').classList.toggle('hide', !(run && st.live));
   $('title').textContent = run ? (st.title || st.url) : st.starting ? 'Starting…' : st.error ? 'Playback stopped' : 'Nothing playing';
+  const nowUrl = run ? st.url : '';
+  if (nowUrl !== nowAvFor) {  // the streamer's picture and a link to their page
+    nowAvFor = nowUrl;
+    $('nowav').replaceChildren(...(nowUrl ? [avatarEl(chanName(nowUrl), nowUrl)] : []));
+    $('nowav').classList.toggle('hide', !nowUrl);
+    $('nowlink').classList.toggle('hide', !nowUrl);
+    if (nowUrl) { $('nowlink').href = nowUrl; $('nowlink').setAttribute('aria-label', 'Open on ' + (st.source || 'the site')); }
+  }
   const gameLine = run ? [st.game, st.live_for != null ? 'live for ' + dur(st.live_for) : null].filter(Boolean).join(' \u00b7 ') : '';
   $('game').textContent = gameLine;
   $('game').classList.toggle('hide', !gameLine);
@@ -392,21 +454,44 @@ async function poll() {
   if (s) { st = s; render(); }
 }
 
+let reordering = false;
 async function loadFavs() {
   favList = await api('/api/favourites') || [];
+  drawFavs();
+}
+async function moveFav(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= favList.length) return;
+  [favList[i], favList[j]] = [favList[j], favList[i]];
+  drawFavs();
+  await api('/api/favourites/order', 'POST', {urls: favList.map(f => f.url)});
+}
+function drawFavs() {
   const g = $('favs');
   g.innerHTML = '';
   if (!favList.length) g.append(Object.assign(el('div', 'sub', 'No favourites yet. Tap the star while something is playing to save it.'), {style: 'grid-column:1/-1;padding:4px'}));
-  [...favList].sort((a, b) => (b.live === true) - (a.live === true)).forEach(f => {
+  // live ones first (keeping your order among them); while reordering, exactly your order
+  const shown = reordering ? favList : [...favList].sort((a, b) => (b.live === true) - (a.live === true));
+  shown.forEach(f => {
     const b = el('div', 'fav'); b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = f.url;
     const x = el('button', 'x'); x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Remove ' + f.name);
     x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'DELETE', {url: f.url}); loadFavs(); };
-    b.onclick = () => playFav(f.url);
-    b.onkeydown = e => { if (e.key === 'Enter') playFav(f.url); };
+    b.onclick = () => { if (!reordering) playFav(f.url); };
+    b.onkeydown = e => { if (e.key === 'Enter' && !reordering) playFav(f.url); };
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
     const live = f.live === true ? el('span', 'badge live', 'LIVE') : null;
     const lnote = el('span', 'sub livenote', liveLine(f));
-    b.append(el('b', null, f.name), el('span', 'badge ' + (f.source || ''), f.source || 'Other'), ...(live ? [live] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, x);
+    const head = el('div', 'fhead'); head.append(avatarEl(f.name, f.url), el('b', null, f.name));
+    b.append(head, el('span', 'badge ' + (f.source || ''), f.source || 'Other'), ...(live ? [live] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
+    if (reordering) {
+      const i = favList.indexOf(f), mv = el('span', 'mv');
+      const up = el('button', null, '▲'), dn = el('button', null, '▼');
+      up.setAttribute('aria-label', 'Move ' + f.name + ' up'); dn.setAttribute('aria-label', 'Move ' + f.name + ' down');
+      up.disabled = i === 0; dn.disabled = i === favList.length - 1;
+      up.onclick = e => { e.stopPropagation(); moveFav(i, -1); }; dn.onclick = e => { e.stopPropagation(); moveFav(i, 1); };
+      mv.append(up, dn); b.append(mv);
+      b.querySelectorAll('.iconlink,.x').forEach(n => n.classList.add('hide'));
+    }
     g.appendChild(b);
   });
   markFavs();
@@ -510,6 +595,7 @@ function applyFavView() {
   $('favTiles').setAttribute('aria-pressed', String(favView === 'tiles'));
   try { localStorage.setItem('favView', favView); } catch (e) {}
 }
+$('favSort').onclick = () => { reordering = !reordering; $('favSort').setAttribute('aria-pressed', String(reordering)); $('favSort').textContent = reordering ? 'Done' : 'Reorder'; drawFavs(); };
 $('favList').onclick = () => { favView = 'list'; applyFavView(); };
 $('favTiles').onclick = () => { favView = 'tiles'; applyFavView(); };
 applyFavView();
@@ -527,6 +613,7 @@ function renderShell() {
 async function loadShell() {
   const cur = targets.find(t => t.id === target) || {};
   $('shellrow').classList.toggle('hide', cur.kind !== 'pi');
+  loadStats();
   if (cur.kind !== 'pi') return;
   try { shellInfo = await (await fetch('/api/shell')).json(); renderShell(); } catch (e) {}
 }
@@ -534,6 +621,20 @@ $('shellrow').onclick = async () => {
   const want = $('shellrow').getAttribute('aria-checked') !== 'true';
   const r = await busy($('shellrow'), () => api('/api/shell', 'POST', {enabled: want}));
   if (r) { shellInfo = r; renderShell(); }
+};
+
+// ---- stats on the TV (Pi TV only) ----
+async function loadStats() {
+  const cur = targets.find(t => t.id === target) || {};
+  $('statsrow').classList.toggle('hide', cur.kind !== 'pi');
+  if (cur.kind !== 'pi') return;
+  const r = await api('/api/stats');
+  if (r) $('statsrow').setAttribute('aria-checked', String(r.enabled));
+}
+$('statsrow').onclick = async () => {
+  const want = $('statsrow').getAttribute('aria-checked') !== 'true';
+  const r = await busy($('statsrow'), () => api('/api/stats', 'POST', {enabled: want}));
+  if (r) $('statsrow').setAttribute('aria-checked', String(r.enabled));
 };
 
 // ---- debug drawer ----

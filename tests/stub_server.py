@@ -83,12 +83,13 @@ class H(BaseHTTPRequestHandler):
         routes = {
             "/api/targets": lambda: [card("living"), card("bedroom")],
             "/api/status": lambda: status(tv),
-            "/api/favourites": lambda: [{"name": "chan: a long favourite stream title that is longer than one line", "url": "https://example.com/living", "source": "Kick"}, {"name": "Big Buck Bunny", "url": "https://example.com/bedroom", "source": "YouTube"}],
+            "/api/favourites": lambda: [{"name": "chan: a long favourite stream title that is longer than one line", "url": "https://example.com/living", "source": "Kick"}, {"name": "Big Buck Bunny", "url": "https://example.com/bedroom", "source": "YouTube"}, {"name": "capped", "url": "https://kick.com/capped", "source": "Kick", "live": False, "last_live": 1793800000, "game": "Grand Theft Auto V"}],
             "/api/qualities": lambda: ["1080p60", "720p60", "480p"] if tv == "living" else ["1080", "720", "480"],
             "/api/roku": lambda: {"name": INFO[tv]["tv_name"], "power": "PowerOn", "app": INFO[tv]["input"]},
             "/api/tv": lambda: {"name": "TV One", "power": "on"},
             "/api/debug": lambda: {"state": {}, "proc": {}, "mpv": {"hwdec-current": "v4l2m2m"}, "versions": {}, "log": "stub"},
             "/manifest.json": lambda: {"name": "TV Remote"},
+            "/api/stats": lambda: {"enabled": False},
             "/api/shell": lambda: {"enabled": SHELL["on"], "running": SHELL["on"], "vo": "wlshm", "error": None},
         }
         if u.path in routes:

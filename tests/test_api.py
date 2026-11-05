@@ -292,13 +292,84 @@ class ShellFlow(unittest.TestCase):
         stalled = iter([False, True, True, False, False])
         sent = []
         server.state.update(stalls=0, stall_s=0)
-        with mock.patch.object(server.time, "sleep"), mock.patch.object(server, "prop", lambda n: next(stalled)),                 mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
+        with mock.patch.object(server.time, "sleep"), mock.patch.object(server, "prop", lambda n: next(stalled) if n == "paused-for-cache" else None),                 mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
             server._stall_monitor(proc)
         drawn = [c for c in sent if c[0] == "osd-overlay"]
         self.assertEqual(drawn[0][1], 3)
         self.assertIn("Buffering", drawn[0][3])
         self.assertEqual(drawn[-1], ["osd-overlay", 3, "none"])
         self.assertEqual(server.state["stalls"], 1)
+
+    def test_a_stutter_shows_a_lagging_note_that_clears_when_calm(self):
+        proc = mock.Mock()
+        proc.poll.side_effect = [None] * 8 + [0]
+        drops = iter([0, 0, 30, 30, 30, 30, 30, 30])  # a burst of 30 dropped frames, then smooth
+        sent = []
+        props = lambda n: {"paused-for-cache": False, "pause": False, "demuxer-cache-duration": 6.0}.get(n) if n != "frame-drop-count" else next(drops)
+        with mock.patch.object(server.time, "sleep"), mock.patch.object(server, "prop", props),                 mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
+            server._stall_monitor(proc)
+        drawn = [c for c in sent if c[0] == "osd-overlay"]
+        self.assertEqual(drawn[0][1], 4)
+        self.assertIn("lagging", drawn[0][3])
+        self.assertEqual(drawn[-1], ["osd-overlay", 4, "none"])
+        self.assertEqual(len(drawn), 2)  # drawn once, cleared once: no redraw while it stays up
+
+    def test_is_lagging_only_on_a_burst_or_a_dry_buffer(self):
+        self.assertFalse(server.is_lagging(1, 6.0))
+        self.assertTrue(server.is_lagging(8, 6.0))
+        self.assertTrue(server.is_lagging(0, 0.3))
+        self.assertFalse(server.is_lagging(0, None))
+
+    def test_volume_bar_is_drawn_on_the_tv_and_cleared_after_a_moment(self):
+        sent = []
+        props = {"volume": 40, "mute": False}
+        timers = []
+        class T:
+            def __init__(self, s, fn): self.fn, self.daemon = fn, False; timers.append(self)
+            def start(self): pass
+            def cancel(self): pass
+        with mock.patch.object(server, "prop", lambda n: props.get(n)), mock.patch.object(server.threading, "Timer", T),                 mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
+            server.osd_volume()
+            self.assertEqual((sent[0][0], sent[0][1]), ("osd-overlay", 5))
+            self.assertIn("40", sent[0][3])
+            timers[-1].fn()
+        self.assertEqual(sent[-1], ["osd-overlay", 5, "none"])
+
+    def test_volume_overlay_shows_muted_and_no_fill_when_muted(self):
+        self.assertIn("Muted", server.volume_overlay(40, True))
+        self.assertNotIn("FFB26B", server.volume_overlay(40, True))
+        self.assertIn("FFB26B", server.volume_overlay(40, False))
+
+    def test_stats_switch_is_saved_and_the_overlay_has_the_numbers(self):
+        with mock.patch.object(server, "save_settings") as sv, mock.patch.dict(server.settings, {"stats": False}):
+            self.assertFalse(self.client.get("/api/stats").get_json()["enabled"])
+            self.assertTrue(self.client.post("/api/stats", json={"enabled": True}).get_json()["enabled"])
+            self.assertTrue(server.settings["stats"])
+            sv.assert_called()
+        text = server.stats_overlay(12, 340, 1.3, 60, 2)
+        for bit in ("12/s", "340", "1.3s", "60 fps", "stalls 2"):
+            self.assertIn(bit, text)
+
+    def test_stats_overlay_is_only_drawn_when_switched_on(self):
+        proc = mock.Mock()
+        proc.poll.side_effect = [None] * 4 + [0]
+        sent = []
+        props = lambda n: {"paused-for-cache": False, "pause": False, "demuxer-cache-duration": 6.0, "frame-drop-count": 5, "estimated-vf-fps": 60}.get(n)
+        for on, expect in ((False, 0), (True, 2)):
+            sent.clear()
+            proc.poll.side_effect = [None] * 4 + [0]
+            with mock.patch.dict(server.settings, {"stats": on}), mock.patch.object(server.time, "sleep"), mock.patch.object(server, "prop", props),                     mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
+                server._stall_monitor(proc)
+            self.assertEqual(len([c for c in sent if c[1] == 6]), expect)
+
+    def test_favourites_can_be_reordered(self):
+        favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]
+        saved = []
+        with mock.patch.object(server, "load_favs", return_value=list(favs)), mock.patch.object(server, "save_favs", side_effect=saved.append):
+            r = self.client.post("/api/favourites/order", json={"urls": ["https://kick.com/c", "https://kick.com/a"]})
+            self.assertEqual([f["name"] for f in saved[-1]], ["c", "a", "b"])  # listed first, the rest keep their place
+            self.assertEqual(self.client.post("/api/favourites/order", json={"urls": "x"}).status_code, 400)
+        self.assertEqual(r.status_code, 200)
 
     def test_status_reports_how_often_the_stream_stalled(self):
         server.state.update(stalls=2, stall_s=7.4, proc=None)
