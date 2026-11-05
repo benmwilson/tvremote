@@ -46,6 +46,8 @@ import store
 import throttle
 import kick
 import mpvipc
+import multi
+from multi import cap
 import roku
 import shell
 import targets
@@ -82,6 +84,8 @@ def target_for(t):
 
 lock = threading.Lock()
 state = {"proc": None, "url": None, "quality": None, "source": None, "player": None}
+# Several streams on the Pi's screen at once. Tile 0 is the main player above; the others are started by multi.py.
+wall = multi.Wall(lambda url, q, sock, extra: player_cmd(url, q, sock, extra)[:2], lambda url: resolve(url), lambda url: fav_name(url))
 _qcache = {}
 _live_cache = {}
 
@@ -492,29 +496,38 @@ def _stall_monitor(proc):
             mpv(["osd-overlay", 3, "none", ""])
 
 
-def start_player(url, quality=None, screen_kind="loading"):
-    # before the old stream stops, so a swap never shows the desktop
-    screen(screen_kind, fav_name(url) + ("  \u00b7  " + quality if screen_kind == "quality" and quality else ""), route(url)[0])
-    stop_player()
+def player_cmd(url, quality, sock, extra=(), default_q=None):
+    """(command, quality, source, player) for one mpv window. `extra` are more mpv arguments (a window name and size);
+    default_q is the quality to use when none was asked for (a small window must not pull a 1080p60 stream)."""
     source, player = resolve(url)
-    try:
-        os.unlink(SOCK)
-    except FileNotFoundError:
-        pass
-    ipc = f"--input-ipc-server={SOCK}"
+    quality = quality or default_q
+    ipc = f"--input-ipc-server={sock}"
     if player == "streamlink":
         # quality reaches argv: allow only stream names like "1080p60,best" (no leading "-")
         ok = quality and re.fullmatch(r"[a-z0-9_]+(,[a-z0-9_]+)*", quality) and not quality.isdigit()
         q = quality if ok else SL_DEFAULT
-        cmd = ["streamlink", "--player-verbose", "--player", "mpv", "--player-args", ipc]
+        cmd = ["streamlink", "--player-verbose", "--player", "mpv", "--player-args", " ".join([ipc, *extra])]
         if source == "Twitch":
             cmd.append("--twitch-disable-ads")
         cmd += [url, q]
     else:
         h = quality if quality in YTDL_HEIGHTS else "1080"
         fmt = f"bv*[vcodec^=avc1][height<={h}]+ba/b[height<={h}]/b"
-        cmd = ["mpv", ipc, f"--ytdl-format={fmt}", url]
+        cmd = ["mpv", ipc, *extra, f"--ytdl-format={fmt}", url]
         q = h
+    return cmd, q, source, player
+
+
+def start_player(url, quality=None, screen_kind="loading"):
+    # before the old stream stops, so a swap never shows the desktop
+    screen(screen_kind, fav_name(url) + ("  \u00b7  " + quality if screen_kind == "quality" and quality else ""), route(url)[0])
+    stop_player()
+    try:
+        os.unlink(SOCK)
+    except FileNotFoundError:
+        pass
+    win, width = wall.main_args()  # while several streams share the screen, this one is a window of its own
+    cmd, q, source, player = player_cmd(url, quality, SOCK, win, cap(resolve(url)[1], width) if width else None)
     log = open(LOG_FILE, "w")
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log,
                             stderr=subprocess.STDOUT, start_new_session=True)
@@ -857,11 +870,12 @@ def api_cmd():
         cmd = fn(data.get("value", 0))
     except (TypeError, ValueError):
         return jsonify(ok=False, error="Bad value"), 400
-    r = mpv(cmd)
+    on_wall = wall.active() and action in ("volume", "volume_delta", "mute", "unmute") and wall.audio  # the sound is on another tile
+    r = mpvipc.send(wall.sock(wall.audio, SOCK), cmd) if on_wall else mpv(cmd)
     ok = bool(r and r.get("error") == "success")
     if ok and action == "pause":
         osd_paused(bool(prop("pause")))
-    if ok and action in ("volume", "volume_delta") and prop("volume") is not None:
+    if ok and not on_wall and action in ("volume", "volume_delta") and prop("volume") is not None:
         settings["volume"] = prop("volume")
         save_settings()
     if ok and action in ("volume", "volume_delta", "mute", "unmute"):
@@ -869,7 +883,64 @@ def api_cmd():
     return jsonify(ok=ok)
 
 
+def wall_relayout(main_url=None):
+    """Restart every window for the current layout, all at the same moment so the streams join in step. With one stream left
+    (or none added) the main player goes back to the full screen at the quality it had."""
+    url = main_url or state["url"]
+    with lock:
+        wall.stop_windows()
+        start_player(url, None if wall.active() else wall.saved_quality, "refresh")
+    if wall.active():
+        wall.start_windows()
+
+
+@app.post("/api/wall")
+def api_wall():
+    """Several streams on the living-room TV: {action: add|remove|layout|audio|swap|clear, url, site, i, layout}."""
+    if tgt():
+        return jsonify(ok=False, error="Only the living-room TV can show several streams at once."), 400
+    d = request.get_json(silent=True) or {}
+    act, i = d.get("action"), d.get("i")
+    i = i if isinstance(i, int) and not isinstance(i, bool) else 0
+    if act == "add":
+        url = normalise(d.get("url"), d.get("site", "kick"))
+        if not url:
+            return jsonify(ok=False, error="No link found"), 400
+        if not (state["url"] and pi_status()["running"]):
+            return jsonify(ok=False, error="Start a stream first, then add the others."), 400
+        with lock:
+            if not wall.active():
+                wall.saved_quality = state["quality"]
+        if not wall.add(url, state["url"]):
+            return jsonify(ok=False, error=f"That one is already on screen, or the screen is full ({multi.MAX_TILES})."), 400
+        wall_relayout()
+    elif act == "remove":
+        wall.remove(i)
+        wall_relayout()
+    elif act == "layout":
+        if d.get("layout") not in multi.LAYOUTS:
+            return jsonify(ok=False, error="Unknown layout"), 400
+        wall.layout = d["layout"]
+        if wall.active():
+            wall_relayout()
+    elif act == "audio":
+        wall.set_audio(i, SOCK)
+    elif act == "swap":
+        new_main = wall.swap(i, state["url"])
+        if not new_main:
+            return jsonify(ok=False, error="Nothing to swap"), 400
+        wall_relayout(new_main)
+    elif act == "clear":
+        wall.clear()
+        if state["url"]:
+            wall_relayout()
+    else:
+        return jsonify(ok=False, error="Unknown action"), 400
+    return jsonify(ok=True, wall=wall.status())
+
+
 def stop_pi():
+    wall.clear()  # every window ends with the stream
     screen("idle")  # first: the home screen still shows its last screen (in the old site's colour) until it is redrawn
     with lock:  # waits for a start that is mid-way, then ends it
         stop_player()
@@ -1014,6 +1085,12 @@ def pi_status():
         data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(state["url"] or "")
         data["chat_ok"] = state["source"] == "Twitch" and bool(chat.channel_of(state["url"] or ""))
         data["chat"] = bool(_chat["obj"])
+        data["wall"] = wall.status()
+        if wall.active() and wall.audio:  # volume and mute shown are those of the tile that has the sound
+            for key in ("volume", "muted"):
+                r = mpvipc.send(wall.sock(wall.audio, SOCK), ["get_property", PROPS[key]])
+                if r and r.get("error") == "success":
+                    data[key] = r.get("data")
         # live = streamlink, or a stream with no duration
         data["live"] = state["player"] == "streamlink" or data["duration"] is None
     else:

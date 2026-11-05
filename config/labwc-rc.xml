@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<labwc_config>
+  <windowRules>
+    <windowRule identifier="tvr-grid2-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="24" y="261"/><action name="ResizeTo" width="928" height="522"/></windowRule>
+    <windowRule identifier="tvr-grid2-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="968" y="261"/><action name="ResizeTo" width="928" height="522"/></windowRule>
+    <windowRule identifier="tvr-grid3-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="112" y="24"/><action name="ResizeTo" width="840" height="472"/></windowRule>
+    <windowRule identifier="tvr-grid3-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="968" y="24"/><action name="ResizeTo" width="840" height="472"/></windowRule>
+    <windowRule identifier="tvr-grid3-3"><serverDecoration>no</serverDecoration><action name="MoveTo" x="540" y="548"/><action name="ResizeTo" width="840" height="472"/></windowRule>
+    <windowRule identifier="tvr-grid4-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="112" y="24"/><action name="ResizeTo" width="840" height="472"/></windowRule>
+    <windowRule identifier="tvr-grid4-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="968" y="24"/><action name="ResizeTo" width="840" height="472"/></windowRule>
+    <windowRule identifier="tvr-grid4-3"><serverDecoration>no</serverDecoration><action name="MoveTo" x="112" y="548"/><action name="ResizeTo" width="840" height="472"/></windowRule>
+    <windowRule identifier="tvr-grid4-4"><serverDecoration>no</serverDecoration><action name="MoveTo" x="968" y="548"/><action name="ResizeTo" width="840" height="472"/></windowRule>
+    <windowRule identifier="tvr-focus2-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="361" y="24"/><action name="ResizeTo" width="1198" height="674"/></windowRule>
+    <windowRule identifier="tvr-focus2-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="720" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
+    <windowRule identifier="tvr-focus3-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="361" y="24"/><action name="ResizeTo" width="1198" height="674"/></windowRule>
+    <windowRule identifier="tvr-focus3-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="472" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
+    <windowRule identifier="tvr-focus3-3"><serverDecoration>no</serverDecoration><action name="MoveTo" x="968" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
+    <windowRule identifier="tvr-focus4-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="361" y="24"/><action name="ResizeTo" width="1198" height="674"/></windowRule>
+    <windowRule identifier="tvr-focus4-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="224" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
+    <windowRule identifier="tvr-focus4-3"><serverDecoration>no</serverDecoration><action name="MoveTo" x="720" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
+    <windowRule identifier="tvr-focus4-4"><serverDecoration>no</serverDecoration><action name="MoveTo" x="1216" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
+  </windowRules>
+</labwc_config>
