@@ -1518,6 +1518,9 @@ function kickEmbed(slug) {  // Kick's own chat page (the one its OBS chat dock u
   $('chatsub').textContent = '#' + slug;
 }
 
+// Our own Kick send box is off for now (to be rethought): Kick's embedded chat, with its own username/password login, does the typing.
+const KICK_OWN_SEND = false;
+
 function chatShow() {  // the card only exists while a Twitch or Kick channel is playing
   const kick = st.source === 'Kick' ? kickSlug(st.url || '') : null;
   const on = (st.source === 'Twitch' || !!kick) && (st.running || st.starting);
@@ -1528,7 +1531,7 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   $('chatpop').classList.toggle('hide', !pop);
   if (pop) $('chatpop').href = pop;
   $('chatbox').classList.toggle('hide', !want);
-  const canSend = want && !!kick && !!(kickInfo || {}).can_chat;  // typing needs a Kick account linked with chat permission
+  const canSend = KICK_OWN_SEND && want && !!kick && !!(kickInfo || {}).can_chat;  // typing needs a Kick account linked with chat permission
   $('kicksend').classList.toggle('hide', !canSend);
   $('chatbox').classList.toggle('crop', canSend);
   if (canSend) $('kicktext').placeholder = 'Chat as ' + kickInfo.name;
