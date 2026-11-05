@@ -159,7 +159,7 @@ class PausedOverlay(unittest.TestCase):
 
     def test_resuming_clears_the_overlay(self):
         self.pause(False)
-        self.assertIn(["osd-overlay", 2, "none"], self.sent)
+        self.assertIn(["osd-overlay", 2, "none", ""], self.sent)
 
     def test_the_overlay_text_cannot_inject_ass_tags(self):
         props = {"pause": True, "media-title": r"bad {\p1}title \Nmore"}
@@ -300,7 +300,7 @@ class ShellFlow(unittest.TestCase):
         drawn = [c for c in sent if c[0] == "osd-overlay"]
         self.assertEqual(drawn[0][1], 3)
         self.assertIn("Buffering", drawn[0][3])
-        self.assertEqual(drawn[-1], ["osd-overlay", 3, "none"])
+        self.assertEqual(drawn[-1], ["osd-overlay", 3, "none", ""])
         self.assertEqual(server.state["stalls"], 1)
 
     def test_a_stutter_shows_a_lagging_note_that_clears_when_calm(self):
@@ -314,7 +314,7 @@ class ShellFlow(unittest.TestCase):
         drawn = [c for c in sent if c[0] == "osd-overlay"]
         self.assertEqual(drawn[0][1], 4)
         self.assertIn("lagging", drawn[0][3])
-        self.assertEqual(drawn[-1], ["osd-overlay", 4, "none"])
+        self.assertEqual(drawn[-1], ["osd-overlay", 4, "none", ""])
         self.assertEqual(len(drawn), 2)  # drawn once, cleared once: no redraw while it stays up
 
     def test_is_lagging_only_on_a_burst_or_a_dry_buffer(self):
@@ -537,6 +537,36 @@ class ShellFlow(unittest.TestCase):
         with mock.patch.dict(server.settings, {"volume": 42.0}), mock.patch.object(server, "prop", lambda n: 1), mock.patch.object(server.time, "sleep"),                 mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}), mock.patch.object(server, "screen"),                 mock.patch.dict(server.state, {"proc": None}):
             server._watch(proc)
         self.assertIn(["set_property", "volume", 42.0], sent)
+
+    def test_the_same_streamer_on_two_sites_is_one_favourite_with_two_chips(self):
+        store = []
+        with mock.patch.object(server, "load_favs", lambda: store), mock.patch.object(server, "save_favs", lambda f: store.__setitem__(slice(None), f)):
+            self.client.post("/api/favourites", json={"url": "https://kick.com/capped"})
+            self.client.post("/api/favourites", json={"url": "https://www.twitch.tv/Capped"})  # same name, other site: merged
+            self.client.post("/api/favourites", json={"url": "https://kick.com/other"})
+            self.client.post("/api/favourites", json={"url": "https://www.twitch.tv/capped"})  # already there: no change
+            self.assertEqual(len(store), 2)
+            self.assertEqual(store[0]["alts"], [{"url": "https://www.twitch.tv/Capped", "source": "Twitch"}])
+            self.assertEqual(server.watched_urls().count("https://www.twitch.tv/Capped"), 1)
+            self.client.delete("/api/favourites", json={"url": "https://www.twitch.tv/Capped"})  # unlink one site
+            self.assertNotIn("alts", store[0])
+            self.client.post("/api/favourites", json={"url": "https://www.twitch.tv/capped"})
+            self.client.delete("/api/favourites", json={"url": "https://kick.com/capped"})  # the main link: the whole favourite
+            self.assertEqual([f["name"] for f in store], ["other"])
+
+    def test_favourites_with_two_sites_play_where_they_are_live(self):
+        store = [{"name": "capped", "url": "https://kick.com/capped", "source": "Kick", "alts": [{"url": "https://www.twitch.tv/capped", "source": "Twitch"}]}]
+
+        class W:
+            def poke(self): return None
+            def snapshot(self):
+                return {"https://kick.com/capped": {"live": False, "last_live": 50}, "https://www.twitch.tv/capped": {"live": True, "last_live": 100, "game": "GTA V"}}
+            def live_for(self, url): return 60 if "twitch" in url else None
+        with mock.patch.object(server, "livewatch", W()), mock.patch.object(server, "load_favs", lambda: store):
+            out = self.client.get("/api/favourites").get_json()[0]
+        self.assertEqual((out["live"], out["play_url"], out["game"], out["last_live"]), (True, "https://www.twitch.tv/capped", "GTA V", 100))
+        self.assertEqual([l["source"] for l in out["links"]], ["Kick", "Twitch"])
+        self.assertEqual(out["url"], "https://kick.com/capped")  # the identity (reorder, remove) stays the main link
 
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]

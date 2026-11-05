@@ -152,6 +152,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .chips button[aria-pressed=true]{background:var(--tv);color:#0b0e14;font-weight:700}
 .sleeprow{display:flex;align-items:center;gap:12px}.sleeprow select{flex:1;min-width:0}
 .fav.off{opacity:.62}
+.badge.chip{border:0;font:inherit;font-size:13px;font-weight:700;cursor:pointer;margin-right:6px}
 .sortbtn{margin-left:auto;margin-right:8px;min-height:44px;padding:0 14px;background:none;color:var(--dim);font-size:14px;border-radius:12px}
 .sortbtn[aria-pressed=true]{background:var(--card2,#222a38);color:var(--text,#fff)}
 .fav .mv{position:absolute;right:0;top:0;display:flex}
@@ -492,7 +493,7 @@ function render() {
   $('mute').setAttribute('aria-label', st.muted ? 'Unmute' : 'Mute');
   if (!dragging && st.volume != null) { $('vol').value = st.volume; $('volv').textContent = Math.round(st.volume); }
   $('vol').style.setProperty('--p', $('vol').value + '%');
-  const saved = favList.some(f => f.url === st.url);
+  const saved = isSaved(st.url);
   setBtn($('fav'), saved ? 'star-fill' : 'star', saved ? 'Saved' : 'Favourite');
   if (run && st.url !== qualFor) loadQualities();
   checkFavLoading();
@@ -517,6 +518,16 @@ async function poll() {
   if (s) { st = s; render(); }
 }
 
+// A streamer on more than one site gets a chip for each; tap a chip to watch there. A dot marks the sites they're live on.
+function siteChips(f) {
+  return (f.links || [{url: f.url, source: f.source}]).map(l => {
+    const c = el('button', 'badge chip ' + (l.source || ''), (l.source || 'Other') + (l.live ? ' \u25CF' : ''));
+    c.type = 'button'; c.setAttribute('aria-label', 'Watch ' + f.name + ' on ' + (l.source || 'the site') + (l.live ? ' (live)' : ''));
+    c.onclick = e => { e.stopPropagation(); if (!reordering) playFav(l.url); };
+    return c;
+  });
+}
+const isSaved = url => favList.some(f => (f.links || [{url: f.url}]).some(l => l.url === url));
 let reordering = false;
 async function loadFavs() {
   favList = await api('/api/favourites') || [];
@@ -559,15 +570,17 @@ function drawFavs() {
   const shown = reordering ? favList : [...favList].sort((a, b) => (b.live === true) - (a.live === true));
   shown.forEach(f => {
     const b = el('div', 'fav' + (f.live === false ? ' off' : '')); b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = f.url;
+    b.dataset.urls = (f.links || [{url: f.url}]).map(l => l.url).join(' ');  // every site of this streamer, for the loading spinner
     const x = el('button', 'x'); x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Remove ' + f.name);
     x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'DELETE', {url: f.url}); loadFavs(); };
-    b.onclick = () => { if (!reordering) playFav(f.url); };
-    b.onkeydown = e => { if (e.key === 'Enter' && !reordering) playFav(f.url); };
+    const go = f.play_url || f.url;  // the site they are live on, else the first
+    b.onclick = () => { if (!reordering) playFav(go); };
+    b.onkeydown = e => { if (e.key === 'Enter' && !reordering) playFav(go); };
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
     const live = f.live === true ? el('span', 'badge live', 'LIVE') : null;
     const lnote = el('span', 'sub livenote', liveLine(f));
     const head = el('div', 'fhead'); head.append(avatarEl(f.name, f.url), el('b', null, f.name));
-    b.append(head, el('span', 'badge ' + (f.source || ''), f.source || 'Other'), ...(live ? [live] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
+    b.append(head, ...siteChips(f), ...(live ? [live] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
     if (reordering) {
       const i = favList.indexOf(f), mv = el('span', 'mv');
       const grip = el('button', 'grip', '☰');  // drag this to move the row; arrow keys also work
@@ -589,8 +602,8 @@ let favNote = null;  // {url, text, until}: why the last tapped favourite didn't
 function markFavs() {
   document.querySelectorAll('#favs .fav').forEach(b => {
     const n = b.querySelector('.note');
-    if (n) n.textContent = favNote && favNote.url === b.dataset.url && Date.now() < favNote.until ? favNote.text : '';
-    const on = !!favLoading && b.dataset.url === favLoading.url;
+    if (n) n.textContent = favNote && (b.dataset.urls || b.dataset.url).split(' ').includes(favNote.url) && Date.now() < favNote.until ? favNote.text : '';
+    const on = !!favLoading && (b.dataset.urls || b.dataset.url).split(' ').includes(favLoading.url);
     b.classList.toggle('loading', on);
     if (on) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
   });
@@ -665,7 +678,7 @@ $('refresh').onclick = () => busy($('refresh'), () => cmd('restart')).then(() =>
 $('stop').onclick = () => busy($('stop'), () => cmd('stop')).then(poll);
 $('fav').onclick = async () => {
   if (!st.url) return;
-  const had = favList.some(f => f.url === st.url);
+  const had = isSaved(st.url);
   await api('/api/favourites', had ? 'DELETE' : 'POST', {url: st.url, name: had ? undefined : st.title});
   loadFavs();
 };
@@ -753,7 +766,7 @@ $('sleepsel').onchange = async () => {
 // ---- recent links ----
 async function loadRecents() {
   const r = await fetch('/api/recents').then(x => x.json()).catch(() => []);
-  const saved = new Set(favList.map(f => f.url));
+  const saved = new Set(favList.flatMap(f => (f.links || [{url: f.url}]).map(l => l.url)));
   const items = (Array.isArray(r) ? r : []).filter(x => !saved.has(x.url)).slice(0, 5);
   const box = $('recents');
   box.replaceChildren();

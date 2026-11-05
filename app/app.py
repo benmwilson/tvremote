@@ -356,7 +356,7 @@ _chat = {"obj": None, "pref": False}  # off by default: redrawing the overlay dr
 
 def chat_send(text):
     """Draw (or clear) the chat overlay in mpv; True when mpv accepted it."""
-    r = mpv(["osd-overlay", 1, "ass-events", text, 1920, 1080] if text else ["osd-overlay", 1, "none"])
+    r = mpv(["osd-overlay", 1, "ass-events", text, 1920, 1080] if text else ["osd-overlay", 1, "none", ""])
     return bool(r and r.get("error") == "success")
 
 
@@ -440,7 +440,7 @@ def _stall_monitor(proc):
                 mpv(["osd-overlay", 4, "ass-events", lag_pill(), 1920, 1080])
             elif lagging and calm >= 4:  # stays up a few seconds so it can be read
                 lagging = False
-                mpv(["osd-overlay", 4, "none"])
+                mpv(["osd-overlay", 4, "none", ""])
         tick += 1
         if settings.get("stats") and tick % 2 == 0 and isinstance(d, (int, float)):  # a redraw costs a little, so only every 2 s
             fps = prop("estimated-vf-fps")
@@ -465,7 +465,7 @@ def _stall_monitor(proc):
         elif not stalled and stalled_at is not None:
             state["stall_s"] = state.get("stall_s", 0) + time.time() - stalled_at
             stalled_at = None
-            mpv(["osd-overlay", 3, "none"])
+            mpv(["osd-overlay", 3, "none", ""])
 
 
 def start_player(url, quality=None, screen_kind="loading"):
@@ -836,7 +836,7 @@ def osd_paused(paused):
     if paused:
         mpv(["osd-overlay", 2, "ass-events", paused_screen(prop("media-title") or ""), 1920, 1080])
     else:
-        mpv(["osd-overlay", 2, "none"])
+        mpv(["osd-overlay", 2, "none", ""])
 
 
 def volume_text(vol, muted):
@@ -1297,8 +1297,18 @@ def check_live(url):
     return None
 
 
+def fav_links(f):
+    """Every link of a favourite: its own, then the same streamer's other sites (alts)."""
+    return [{"url": f.get("url"), "source": f.get("source")}] + list(f.get("alts") or [])
+
+
+def streamer_key(url):
+    """The channel name for a Kick or Twitch channel link (lower case), so the same name on both sites matches."""
+    return chat.channel_of(url or "") if is_channel(url or "") else None
+
+
 def watched_urls():
-    urls = [f.get("url") or "" for f in load_favs()]
+    urls = [l["url"] or "" for f in load_favs() for l in fav_links(f)]
     if state.get("url"):
         urls.append(state["url"])
     return list(dict.fromkeys(u for u in urls if is_channel(u)))
@@ -1318,9 +1328,17 @@ def favs_get():
     snap = livewatch.snapshot()
     out = []
     for f in load_favs():
-        e = snap.get(f.get("url"), {})
-        out.append({**f, "live": e.get("live"), "game": e.get("game"), "last_live": e.get("last_live"),
-                    "checked": e.get("checked"), "live_for": livewatch.live_for(f.get("url"))})
+        links = []
+        for l in fav_links(f):
+            e = snap.get(l["url"], {})
+            links.append({**l, "live": e.get("live"), "game": e.get("game"), "last_live": e.get("last_live"),
+                          "checked": e.get("checked"), "live_for": livewatch.live_for(l["url"])})
+        top = next((l for l in links if l["live"]), links[0])  # the site they are live on, else the first
+        states = [l["live"] for l in links]
+        seen = [l["last_live"] for l in links if l["last_live"]]
+        out.append({**f, "links": links, "play_url": top["url"],
+                    "live": True if any(s is True for s in states) else False if all(s is False for s in states) else None,
+                    "game": top["game"], "last_live": max(seen) if seen else None, "checked": top["checked"], "live_for": top["live_for"]})
     return jsonify(out)
 
 
@@ -1330,9 +1348,20 @@ def favs_add():
     url = normalise(data.get("url") or state["url"])
     if not url:
         return jsonify(ok=False), 400
-    favs = [f for f in load_favs() if f.get("url") != url]
+    favs = load_favs()
+    if any(url == l["url"] for f in favs for l in fav_links(f)):
+        return jsonify(favs)  # already saved (as the main link or as one of a streamer's sites)
+    src, key = route(url)[0], streamer_key(url)
+    if key and any(streamer_key(l["url"]) == key and l["source"] == src for f in favs for l in fav_links(f)):
+        return jsonify(favs)  # the same channel with different capitalisation
+    if key:  # the same name on another site is the same favourite: add it as one more chip, not a second entry
+        for f in favs:
+            if any(streamer_key(l["url"]) == key and l["source"] != src for l in fav_links(f)):
+                f.setdefault("alts", []).append({"url": url, "source": src})
+                save_favs(favs)
+                return jsonify(favs)
     name = data.get("name") or fav_name(url)
-    favs.append({"name": name[:40], "url": url, "source": route(url)[0]})
+    favs.append({"name": name[:40], "url": url, "source": src})
     save_favs(favs)
     return jsonify(favs)
 
@@ -1353,7 +1382,12 @@ def favs_order():
 @app.delete("/api/favourites")
 def favs_del():
     url = (request.get_json(silent=True) or {}).get("url")
-    favs = [f for f in load_favs() if f.get("url") != url]
+    favs = [f for f in load_favs() if f.get("url") != url]  # the main link: the whole favourite goes
+    for f in favs:  # one of a streamer's other sites: only that chip goes
+        if f.get("alts"):
+            f["alts"] = [a for a in f["alts"] if a.get("url") != url]
+            if not f["alts"]:
+                del f["alts"]
     save_favs(favs)
     return jsonify(favs)
 
