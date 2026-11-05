@@ -631,13 +631,10 @@ $('fav').onclick = async () => {
   loadFavs();
 };
 $('qual').onchange = () => cmd('restart', null, {quality: $('qual').value}).then(() => setTimeout(poll, 1500));
-// the slider fires dozens of times a second: send at most one change every 200 ms, and the final value when released
-let volT = 0;
-function sendVol(final) { const n = Date.now(); if (final || n - volT > 200) { volT = n; cmd('volume', $('vol').value, {drag: !final}); } }
 $('vol').oninput = () => { dragging = true;
   if (st.muted && +$('vol').value > (st.volume || 0)) { st.muted = false; cmd('mute'); } // dragging up while muted unmutes (once)
-  $('volv').textContent = $('vol').value; $('vol').style.setProperty('--p', $('vol').value + '%'); sendVol(); };
-$('vol').onchange = () => { dragging = false; sendVol(true); };
+  $('volv').textContent = $('vol').value; $('vol').style.setProperty('--p', $('vol').value + '%'); cmd('volume', $('vol').value); };
+$('vol').onchange = () => { dragging = false; };
 
 // ---- favourites layout: list or tiles ----
 let favView = 'list';

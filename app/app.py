@@ -711,10 +711,7 @@ def api_cmd():
     if ok and action == "pause":
         osd_paused(bool(prop("pause")))
     if ok and action in ("volume", "volume_delta", "mute", "unmute"):
-        # while the slider is being dragged, redraw the on-screen text at most every 0.5 s (each redraw costs the picture a little)
-        if not data.get("drag") or time.time() - _osd_last[0] > 0.5:
-            _osd_last[0] = time.time()
-            osd_volume()
+        osd_volume()
     return jsonify(ok=ok)
 
 
@@ -741,9 +738,6 @@ def volume_text(vol, muted):
     """Plain text for show-text: a block bar and the number, or Muted. (osd-overlay drawing flashed and lagged the stream.)"""
     v = max(0, min(100, round(vol)))
     return "Muted" if muted else "Volume %d%%  %s%s" % (v, "█" * (v // 5), "░" * (20 - v // 5))
-
-
-_osd_last = [0.0]
 
 
 def osd_volume():

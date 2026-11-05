@@ -21,16 +21,16 @@ from chat import _esc as esc
 
 SOCK = "/tmp/tvremote-shell.sock"
 LOG = "/tmp/tvremote-shell.log"
-# The logo as ASS drawings (same shapes as app/logo.svg, solid accent colour), 160% size, centred at x=960. The screen's
+# The logo as ASS drawings (same shapes as app/logo.svg, solid accent colour), 260% size, centred at x=960. The screen's
 # outline is a hollow shape with a thick border; the stand strokes are zero-width shapes whose border gives them width.
-LOGO_TOP = 250  # y of the drawing's top edge; the text block starts at TEXT_TOP, just under the stand
+LOGO_TOP = 150  # y of the drawing's top edge; the text block starts at TEXT_TOP, just under the stand
 TEXT_TOP = 398
-_L = r"{\an7\pos(880,%d)\fscx160\fscy160\shad0\p1" % LOGO_TOP
+_L = r"{\an7\pos(830,%d)\fscx260\fscy260\shad0\p1" % LOGO_TOP
 LOGO = [
-    _L + r"\1a&HFF&\3c&HFFB062&\bord5}m 26 22 l 74 22 b 80 22 86 28 86 34 l 86 58 b 86 64 80 70 74 70 l 26 70 b 20 70 14 64 14 58 l 14 34 b 14 28 20 22 26 22{\p0}",
-    _L + r"\1c&HFFB062&\3c&HFFB062&\bord3}m 44 36 l 44 56 l 61 46{\p0}",
-    _L + r"\1a&HFF&\3c&HFFB062&\bord5}m 38 82 l 62 82{\p0}",
-    _L + r"\1a&HFF&\3c&HFFB062&\bord5}m 50 73 l 50 82{\p0}",
+    _L + r"\1a&HFF&\3c&HFFB062&\bord8}m 26 22 l 74 22 b 80 22 86 28 86 34 l 86 58 b 86 64 80 70 74 70 l 26 70 b 20 70 14 64 14 58 l 14 34 b 14 28 20 22 26 22{\p0}",
+    _L + r"\1c&HFFB062&\3c&HFFB062&\bord5}m 44 36 l 44 56 l 61 46{\p0}",
+    _L + r"\1a&HFF&\3c&HFFB062&\bord8}m 38 82 l 62 82{\p0}",
+    _L + r"\1a&HFF&\3c&HFFB062&\bord8}m 50 73 l 50 82{\p0}",
 ]
 ASS_FILES = ("/tmp/tvremote-shell-a.ass", "/tmp/tvremote-shell-b.ass")  # alternate, so a new one loads before the old goes
 IDLE_SPAN = 300  # seconds of clock written ahead; the file is renewed a little before it runs out
