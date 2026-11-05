@@ -427,6 +427,7 @@ function render() {
   $('volrow').classList.toggle('hide', !up);
   $('ctlrow').classList.toggle('hide', !up && !starting);
   $('refresh').classList.toggle('hide', !up);
+  $('qual').classList.toggle('hide', !up || !$('qual').options.length);  // starting: only Stop
   $('ctlrow').classList.toggle('single', !up && starting);  // starting: just Stop, so you can cancel
   $('fav').classList.toggle('hide', !up);
   $('pp').classList.toggle('paused', !!st.paused);
