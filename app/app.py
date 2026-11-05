@@ -435,9 +435,30 @@ def api_cmd():
         return jsonify(ok=False, error="Bad value"), 400
     r = mpv(cmd)
     ok = bool(r and r.get("error") == "success")
+    if ok and action == "pause":
+        osd_paused(bool(prop("pause")))
     if ok and action in ("volume", "volume_delta", "mute", "unmute"):
         osd_volume()
     return jsonify(ok=ok)
+
+
+def paused_screen(title=""):
+    """ASS for the pause overlay: the picture dimmed, a pause symbol and "Paused". Overlay 2 (chat uses 1).
+    Drawn once and left alone: the picture is frozen while paused, so unlike the chat overlay it costs no frames."""
+    parts = [r"{\an7\pos(0,0)\p1\bord0\shad0\1c&H000000&\1a&H99&}m 0 0 l 1920 0 1920 1080 0 1080{\p0}",
+             r"{\an7\pos(0,0)\p1\bord0\shad0\1c&HF6F1EE&}m 850 380 l 920 380 920 580 850 580 m 1000 380 l 1070 380 1070 580 1000 580{\p0}",
+             r"{\an8\pos(960,620)\fs72\b1\bord0\shad0\1c&HF6F1EE&}Paused"]
+    if title:
+        parts.append(r"{\an8\pos(960,720)\fs38\b0\bord0\shad0\1c&HA9978C&}" + chat._esc(title))
+    return "\n".join(parts)
+
+
+def osd_paused(paused):
+    """Show the pause overlay while paused; clear it on resume."""
+    if paused:
+        mpv(["osd-overlay", 2, "ass-events", paused_screen(prop("media-title") or ""), 1920, 1080])
+    else:
+        mpv(["osd-overlay", 2, "none"])
 
 
 def osd_volume():

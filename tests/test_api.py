@@ -129,5 +129,42 @@ class Routes(unittest.TestCase):
         sp.assert_not_called()
 
 
+class PausedOverlay(unittest.TestCase):
+    """Pausing leaves a 'Paused' overlay on the TV until you resume. It uses overlay id 2; the chat overlay uses id 1."""
+
+    def setUp(self):
+        self.client = server.app.test_client()
+        self.sent = []
+
+    def pause(self, now_paused):
+        def fake_mpv(cmd, timeout=1.0):
+            self.sent.append(cmd)
+            return {"error": "success"}
+        props = {"pause": now_paused, "media-title": "chan: a stream"}
+        with mock.patch.object(server, "mpv", fake_mpv), mock.patch.object(server, "prop", lambda n: props.get(n)):
+            return self.client.post("/api/cmd", json={"action": "pause"})
+
+    def test_pausing_draws_a_persistent_overlay(self):
+        self.assertEqual(self.pause(True).status_code, 200)
+        drawn = [c for c in self.sent if c[0] == "osd-overlay"]
+        self.assertEqual(len(drawn), 1)
+        self.assertEqual(drawn[0][1:3], [2, "ass-events"])
+        self.assertIn("Paused", drawn[0][3])
+        self.assertIn("chan: a stream", drawn[0][3])
+
+    def test_resuming_clears_the_overlay(self):
+        self.pause(False)
+        self.assertIn(["osd-overlay", 2, "none"], self.sent)
+
+    def test_the_overlay_text_cannot_inject_ass_tags(self):
+        props = {"pause": True, "media-title": r"bad {\p1}title \Nmore"}
+        with mock.patch.object(server, "mpv", lambda c, timeout=1.0: self.sent.append(c) or {"error": "success"}), \
+                mock.patch.object(server, "prop", lambda n: props.get(n)):
+            self.client.post("/api/cmd", json={"action": "pause"})
+        text = [c for c in self.sent if c[0] == "osd-overlay"][0][3]
+        self.assertNotIn(r"{\p1}", text.split("title")[0].split("bad")[-1])  # the title's own braces and backslashes are stripped
+        self.assertIn("bad p1title Nmore", text)
+
+
 if __name__ == "__main__":
     unittest.main()
