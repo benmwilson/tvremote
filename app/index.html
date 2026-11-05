@@ -322,6 +322,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
 .wtile .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.wtile .ctl{display:flex;align-items:center;gap:8px;margin-top:10px}
 .wtile .ctl>*{min-height:44px}.wtile .ctl select{flex:1;min-width:0}.wtile .ctl .snd{flex:none;display:flex;align-items:center;gap:6px;padding:0 14px}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
 .wtile .top button{flex:none;width:44px;min-height:44px;padding:0}.wtile .ctl .ib{flex:none;width:44px;padding:0}.wtile .err{color:#ff8a8a;font-size:13px;margin-top:8px}
+.wtile .acts{display:flex;gap:8px;margin-top:8px}.wtile .acts button{flex:1;min-height:40px;font-size:14px;background:var(--card)}
+.wallnote{display:block;width:100%;min-height:44px;margin:12px 0 0;padding:0 14px;border-radius:12px;background:var(--card2,var(--line));font-size:14px;font-weight:600;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wtile .ctl button,.wtile .ctl select,.wtile .top button{background:var(--card)}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff)}
 .wlabel{margin:18px 2px 8px;color:var(--dim);font-size:13px;font-weight:600;letter-spacing:.02em}.wrow{display:flex;align-items:center;gap:10px;margin-top:10px}.wrow .sub{flex:1}
 .wallfavs{display:flex;flex-wrap:wrap;gap:8px}.wallfavs button{min-height:40px;padding:0 14px;font-size:14px;border-radius:99px}
@@ -530,6 +532,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <div class="grow"><b>The TV is off</b><span class="sub" id="tvoffsub"></span></div>
     <button id="tvwake">Turn on</button></div>
   <div class="nowhead"><span id="nowav" class="hide"></span><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span><span class="grow"></span><a id="nowlink" class="iconlink hide" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a></div>
+  <button id="wallnote" class="wallnote hide" aria-haspopup="dialog"></button>
   <div id="title" class="ttl">Nothing playing</div>
   <div id="game" class="sub hide"></div>
   <div id="meta"></div>
@@ -635,8 +638,9 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <h3>TV power</h3>
     <p class="sub" id="d-powerhint" style="margin:0 0 4px"></p>
     <div class="dbmute"><button id="pwon" type="button">TV is on</button><button id="pwoff" type="button">TV is off</button></div>
-    <h3>Player</h3><table id="d-player"></table>
-    <h3>mpv</h3><table id="d-mpv"></table>
+    <div id="d-wall" class="hide"><h3>Multi-view</h3><table id="d-wallsum"></table><div id="d-walltiles"></div></div>
+    <h3 id="d-h-player">Player</h3><table id="d-player"></table>
+    <h3 id="d-h-mpv">mpv</h3><table id="d-mpv"></table>
     <h3>Versions</h3><table id="d-ver"></table>
     <h3>Command</h3><pre id="d-cmd"></pre>
     <h3>player.log</h3><pre id="d-log"></pre>
@@ -755,9 +759,10 @@ function render() {
   $('src').textContent = run || st.starting ? (st.source || 'Other') : ext ? 'On the TV' : 'Idle';
   $('src').className = 'badge ' + (run || st.starting ? (st.source || '') : '');
   $('live').classList.toggle('hide', !(run && st.live));
-  $('title').textContent = run ? (st.title || st.url) : st.starting ? 'Starting…' : st.error ? 'Playback stopped' : ext ? ext.app : 'Nothing playing';
+  const swapping = !run && !!st.starting && !!st.wall;  // a window of the multi-view is restarting (a swap, a new layout): the others keep playing
+  $('title').textContent = run ? (st.title || st.url) : swapping ? (chanName(st.url || '') || 'Main stream') : st.starting ? 'Starting…' : st.error ? 'Playback stopped' : ext ? ext.app : 'Nothing playing';
   const extCtl = !!ext && !!ext.controllable;  // a pause button only while that app's player is really open
-  const nowUrl = run ? st.url : '';
+  const nowUrl = run || swapping ? st.url : '';
   if (nowUrl !== nowAvFor) {  // the streamer's picture and a link to their page
     nowAvFor = nowUrl;
     $('nowav').replaceChildren(...(nowUrl ? [avatarEl(chanName(nowUrl), nowUrl)] : []));
@@ -778,6 +783,7 @@ function render() {
     if (st.buffering) meta.push('buffering');
     if (st.stalls) meta.push(st.stalls + (st.stalls === 1 ? ' stall' : ' stalls') + ' (' + st.stall_s + ' s)');
   }
+  if (swapping) meta.push('Updating the multi-view. The others keep playing.');
   if (!run && st.error) meta.push(st.error);
   $('meta').textContent = meta.join(' · ');
   const up = !!run, starting = !!st.starting && !run;   // nothing to control until a stream is playing
@@ -785,7 +791,12 @@ function render() {
   $('volrow').classList.toggle('hide', !up);
   $('ctlrow').classList.toggle('hide', !up && !starting);
   $('refresh').classList.toggle('hide', !up);
-  $('qual').classList.toggle('hide', !up || !$('qual').options.length);  // starting: only Stop
+  $('qual').classList.toggle('hide', !up || !$('qual').options.length || !!st.wall);  // starting: only Stop. With several streams each has its own picker, in Multi-view
+  $('wallnote').classList.toggle('hide', !(st.wall && (up || starting)));
+  if (st.wall && (up || starting)) {
+    const snd = st.wall.audio ? ((st.wall.tiles.find(t => t.i === st.wall.audio) || {}).name || 'another stream') : 'this stream';
+    $('wallnote').textContent = 'Multi-view \u00b7 ' + (st.wall.tiles.length + 1) + ' streams \u00b7 ' + (up ? 'sound from ' + snd : 'updating') + ' \u203a';
+  }
   $('ctlrow').classList.toggle('single', !up && starting);  // starting: just Stop, so you can cancel
   $('fav').classList.toggle('hide', !up);
   const to = otherTv();  // shortcut: with two TVs there is one "other"; more TVs would need a picker here
@@ -1628,7 +1639,7 @@ let wallSig = '';
 const WALL_Q = [['', 'Auto quality'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']];
 function renderWall() {
   const cur = targets.find(t => t.id === target) || {};
-  const show = cur.kind === 'pi' && !!st.running;
+  const show = cur.kind === 'pi' && (!!st.running || !!st.starting || !!st.wall);  // not while a window restarts: the sheet must stay open
   $('wallopencard').classList.toggle('hide', !show);
   if (!show) { if ($('wallcard').open) $('wallcard').close(); return; }
   const w = st.wall;
@@ -1656,8 +1667,13 @@ function renderWall() {
     q.value = r.quality || '';
     q.onchange = () => wallApi({action: 'quality', i: r.i, quality: q.value});
     ctl.append(sound, q);
-    if (r.i && w.layout === 'focus') { const sw = el('button', 'ib'); setBtn(sw, 'swap', ''); sw.setAttribute('aria-label', 'Make this the big one'); sw.title = 'Make this the big one'; sw.onclick = () => wallApi({action: 'swap', i: r.i}); ctl.append(sw); }
     tile.append(top, ctl);
+    if (r.i) {  // the main stream is the one the big pause button, seek and the top card control
+      const acts = el('div', 'acts'), main = el('button', null, 'Make main'), only = el('button', null, 'Keep only this');
+      main.title = 'Swap it with the main stream'; main.onclick = () => wallApi({action: 'swap', i: r.i});
+      only.title = 'Back to one stream, with this one'; only.onclick = () => wallApi({action: 'only', i: r.i});
+      acts.append(main, only); tile.append(acts);
+    }
     if (r.error) tile.append(el('div', 'err', r.error));
     return tile;
   }));
@@ -1698,6 +1714,7 @@ document.addEventListener('click', e => {
   if (x) x.closest('dialog').close();
   else if (e.target.matches('dialog.sheet')) e.target.close();  // the dim area behind it counts as a click on the dialog itself
 });
+$('wallnote').onclick = () => $('wallopen').click();
 $('wallopen').onclick = () => { wallSig = ''; renderWall(); $('wallcard').showModal(); Promise.all([loadFavs(), loadRecents()]).then(renderWall); };
 $('walllayout').onclick = e => { const b = e.target.closest('button[data-l]'); if (b) wallApi({action: 'layout', layout: b.dataset.l}); };
 $('wallclear').onclick = () => busy($('wallclear'), () => wallApi({action: 'clear'}));
@@ -1726,6 +1743,27 @@ function fillTable(id, obj) {
   });
   if (!t.rows.length) t.insertRow().insertCell().textContent = 'not running';
 }
+const dbgOpen = new Set();  // which tiles' logs are expanded, kept across the 2 s redraw
+function renderDbgWall(w) {
+  $('d-wall').classList.toggle('hide', !w);
+  if (!w) return;
+  fillTable('d-wallsum', {layout: w.layout, streams: w.tiles.length, 'sound from': 'tile ' + (w.audio + 1)});
+  $('d-walltiles').replaceChildren(...w.tiles.map(t => {
+    const d = document.createElement('details'), m = t.mpv || {};
+    d.open = dbgOpen.has(t.i);
+    d.ontoggle = () => { d.open ? dbgOpen.add(t.i) : dbgOpen.delete(t.i); };
+    const state = t.alive ? (m.height ? m.height + 'p' : 'starting') : (t.error ? 'stopped' : 'not running');
+    d.append(el('summary', null, 'Tile ' + (t.i + 1) + ' \u00b7 ' + (chanName(t.url || '') || t.url || '') + ' \u00b7 ' + (t.source || '') + ' \u00b7 ' + state + (t.i === w.audio ? ' \u00b7 sound' : '')));
+    const tb = document.createElement('table');
+    Object.entries({window: t.window, url: t.url, quality: t.quality, pid: t.pid, hwdec: m['hwdec-current'], size: m.width ? m.width + '\u00d7' + m.height : null,
+      fps: m['container-fps'], dropped: m['frame-drop-count'], buffer_s: m['demuxer-cache-duration'] != null ? Math.round(m['demuxer-cache-duration'] * 10) / 10 : null,
+      muted: m.mute, volume: m.volume, error: t.error}).forEach(([k, v]) => {
+      const r = tb.insertRow(); r.insertCell().textContent = k; r.insertCell().textContent = v == null ? '\u2013' : v;
+    });
+    d.append(tb, Object.assign(document.createElement('pre'), {textContent: t.log || '(no log)'}));
+    return d;
+  }));
+}
 async function dbgTick() {
   const d = await api('/api/debug');
   if (!d || !d.proc) { $('dage').textContent = 'unreachable'; return; }
@@ -1733,6 +1771,9 @@ async function dbgTick() {
   fillTable('d-player', {url: s.url, source: s.source, player: s.player, quality: s.quality, pid: d.proc.pid,
     returncode: d.proc.returncode, uptime_s: d.uptime, last_error: d.last_error});
   fillTable('d-mpv', d.mpv); fillTable('d-ver', d.versions);
+  $('d-h-player').textContent = d.wall ? 'Main stream (tile 1) player' : 'Player';
+  $('d-h-mpv').textContent = d.wall ? 'Main stream (tile 1) mpv' : 'mpv';
+  renderDbgWall(d.wall);
   $('d-cmd').textContent = (s.cmd || []).join(' ');
   const log = $('d-log'), stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
   log.textContent = d.log;

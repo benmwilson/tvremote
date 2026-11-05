@@ -111,7 +111,10 @@ class Wall:
 
     def main_args(self):
         """(mpv args, width) for the main player's window while the wall is up, else ([], None)."""
-        return window_args(self.layout, self.count(), 0) if self.active() else ([], None)
+        if not self.active():
+            return [], None
+        args, width = window_args(self.layout, self.count(), 0)
+        return args + (["--mute=yes"] if self.audio else []), width  # a new window starts with sound: not when another tile has it
 
     def main_wid(self):
         """The window name the main player should have right now (None when it is full screen)."""
@@ -229,6 +232,7 @@ class Wall:
             t = self.extras[i - 1]
             t["url"], new_main = main_url, t["url"]
             t["quality"], self.main_quality = self.main_quality, t.get("quality")  # a picked quality goes with its stream
+            self.audio = i if self.audio == 0 else 0 if self.audio == i else self.audio  # and so does the sound
             t["source"] = self.resolve(main_url)[0]
             return new_main
 

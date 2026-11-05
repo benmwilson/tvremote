@@ -98,6 +98,20 @@ class WallTest(unittest.TestCase):
         self.assertEqual((w.extras[0]["quality"], w.main_quality), ("360", "720"))
         self.assertEqual(w.status()["tiles"][0]["quality"], "360")
 
+    def test_the_sound_follows_its_stream_through_a_swap_and_never_plays_from_two_windows(self):
+        w = wall()
+        w.add("https://kick.com/b", "https://kick.com/a")
+        w.audio = 1  # the sound was on the small tile (stream b)
+        self.assertIn("--mute=yes", w.main_args()[0])  # a restarted main window must not add its own sound
+        w.swap(1, "https://kick.com/a")  # b becomes the main stream
+        self.assertEqual(w.audio, 0)  # the sound stays with b
+        self.assertNotIn("--mute=yes", w.main_args()[0])
+        w.swap(1, "https://kick.com/b")  # and back: the sound goes with b to the small tile
+        self.assertEqual(w.audio, 1)
+        w.audio = 2
+        w.add("https://kick.com/c", "https://kick.com/b")
+        self.assertEqual(w.swap(1, "https://kick.com/b") and w.audio, 2)  # a third tile keeps it
+
     def test_all_windows_start_together_by_default(self):
         self.assertEqual(multi.STAGGER, 0)
 
@@ -114,6 +128,23 @@ class WallScreenTest(unittest.TestCase):
         self.assertTrue(all(f"{n}" in "".join(ev) for n in ("alpha", "beta", "gamma")))
         self.assertNotIn("fscx260", shell.ass_file([(0, 1, "x")], logo=False))  # no big logo behind the windows
         self.assertIn("fscx260", shell.ass_file([(0, 1, "x")]))
+
+
+class OnlyThisTest(unittest.TestCase):
+    def test_keeping_only_an_added_stream_ends_the_wall_and_starts_that_stream_alone(self):
+        import app as server
+        server.wall.extras = [{"url": "https://kick.com/b", "proc": None}]
+        server.wall.layout = "grid"
+        calls = []
+        try:
+            with mock.patch.object(server, "wall_later", lambda fn, *a: calls.append((fn, a))),                     mock.patch.dict(server.state, {"url": "https://kick.com/a"}), mock.patch.object(server, "tgt", return_value=None):
+                with server.app.test_request_context("/api/wall", method="POST", json={"action": "only", "i": 1}):
+                    r = server.api_wall()  # called directly: the login guard is not what is being tested
+        finally:
+            server.wall.clear()
+        self.assertTrue(r.get_json()["ok"])
+        self.assertEqual(calls, [(server.wall_relayout, ("https://kick.com/b",))])
+        self.assertFalse(server.wall.active())
 
 
 class StaleWallTest(unittest.TestCase):

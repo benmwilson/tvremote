@@ -38,6 +38,17 @@ def wall():
                       for i, (nm, src, q) in enumerate(others[:n - 1], start=1)]}
 
 
+def wall_debug():
+    w = wall()
+    if not w:
+        return None
+    rows = [("https://kick.com/chan", "Kick", "auto", 480)] + [(t["url"], t["source"], t["quality"] or "auto", 480) for t in w["tiles"]]
+    return {"layout": w["layout"], "audio": 0, "tiles": [
+        {"i": i, "window": f"tvr-{w['layout']}{len(rows)}-{i + 1}", "url": u, "source": src, "quality": q, "pid": 4000 + i, "alive": True,
+         "mpv": {"hwdec-current": "v4l2m2m", "width": 854, "height": h, "container-fps": 30, "frame-drop-count": i, "mute": i != 0, "volume": 100,
+                 "demuxer-cache-duration": 7.3}, "error": None, "log": "line one line two"} for i, (u, src, q, h) in enumerate(rows)]}
+
+
 def status(tv):
     s = STATE[tv]
     if s in ("idle", "down"):
@@ -100,7 +111,7 @@ class H(BaseHTTPRequestHandler):
             "/api/qualities": lambda: ["1080p60", "720p60", "480p"] if tv == "living" else ["1080", "720", "480"],
             "/api/roku": lambda: {"name": INFO[tv]["tv_name"], "power": "PowerOn", "app": INFO[tv]["input"]},
             "/api/tv": lambda: {"name": "TV One", "power": "on"},
-            "/api/debug": lambda: {"state": {}, "proc": {}, "mpv": {"hwdec-current": "v4l2m2m"}, "versions": {}, "log": "stub"},
+            "/api/debug": lambda: {"state": {}, "proc": {}, "mpv": {"hwdec-current": "v4l2m2m"}, "versions": {}, "log": "stub", "wall": wall_debug()},
             "/manifest.json": lambda: {"name": "TV Remote"},
             "/api/stats": lambda: {"enabled": False},
             "/api/shell": lambda: {"enabled": SHELL["on"], "running": SHELL["on"], "vo": "wlshm", "error": None},
