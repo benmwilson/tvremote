@@ -106,7 +106,14 @@ def redeem_invite(token, now=None):
         if v is None or v["redeem_by"] <= (now or time.time()):
             return None
         _write("invites.json", d)
+        used = (_read("invites_used.json", []) + [{"label": v["label"], "hours": v["hours"], "opened": now or time.time()}])[-10:]
+        _write("invites_used.json", used)  # kept short: just enough to see that a link was used, and when
         return v
+
+
+def invites_used():
+    """The last few links that were opened, newest first: {label, hours, opened}."""
+    return list(reversed(_read("invites_used.json", [])))
 
 
 def invites_pending(now=None):

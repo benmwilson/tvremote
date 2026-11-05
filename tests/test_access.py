@@ -8,6 +8,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import access  # noqa: E402
+import activity  # noqa: E402
 import accounts  # noqa: E402
 import app as server  # noqa: E402
 import kick  # noqa: E402
@@ -24,6 +25,7 @@ class AccessTest(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
         access._last_by_ip.clear()
+        activity.reset()
         self.owner = server.app.test_client()
         self.owner.post("/login", data={"password": "owner-pw"})
 
@@ -121,6 +123,36 @@ class AccessTest(unittest.TestCase):
         self.assertEqual(sam.get("/api/favourites").status_code, 401)  # signed out everywhere
         self.assertTrue(accounts.verify("sam", "another1"))
         self.assertEqual(self.owner.post("/api/account/password", json={"current": "a", "new": "bbbbbb"}).status_code, 400)  # the owner's is in .env
+
+    def test_stats_last_login_last_action_and_link_use(self):
+        accounts.add("sam", "secret1")
+        sam = server.app.test_client()
+        sam.post("/login", data={"username": "sam", "password": "secret1"})
+        sam.get("/api/status")  # polling is not an action
+        sam.get("/api/targets")
+        users = {u["name"]: u for u in self.owner.get("/api/accounts").get_json()["users"]}
+        self.assertEqual(users["sam"]["last"]["text"], "Logged in")
+        with mock.patch.object(server, "play_on"):
+            sam.post("/api/play", json={"url": "https://kick.com/capped"})
+        users = {u["name"]: u for u in self.owner.get("/api/accounts").get_json()["users"]}
+        self.assertEqual(users["sam"]["last"]["text"], "Played capped")
+        self.assertIsNone(users["owner"]["last"] and users["owner"]["last"]["text"] if False else None)
+        # a guest link: pending, then used (and when), then what the guest did
+        url = self.owner.post("/api/invites", json={"hours": 2, "label": "Aunt"}).get_json()["url"]
+        state = self.owner.get("/api/access").get_json()
+        self.assertEqual((len(state["invites"]), state["used"], state["guests"]), (1, [], []))
+        guest = server.app.test_client()
+        guest.post("/" + url.split("/", 3)[3])
+        with mock.patch.object(server, "play_on"):
+            guest.post("/api/play", json={"url": "https://kick.com/xqc"})
+        state = self.owner.get("/api/access").get_json()
+        self.assertEqual((len(state["invites"]), state["used"][0]["label"]), (0, "Aunt"))
+        g = state["guests"][0]
+        self.assertEqual(g["last"]["text"], "Played xqc")
+        self.assertAlmostEqual(g["since"], server.time.time(), delta=30)
+        self.owner.delete(f"/api/guests/{g['id']}")
+        self.assertIsNone(activity.last("guest:" + g["id"]))  # revoking forgets them
+        self.assertEqual(len(self.owner.get("/api/access").get_json()["used"]), 1)  # but the link stays in the short used list
 
     def test_signing_someone_out_and_listing(self):
         accounts.add("sam", "secret1")

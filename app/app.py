@@ -39,6 +39,7 @@ import hlsproxy
 import live
 import access
 import accounts
+import activity
 import chat
 import kick
 import mpvipc
@@ -189,11 +190,13 @@ def session_user(tok):
 
 
 def guest_sessions():
-    return [{"id": k[:8], "label": v.get("label", ""), "exp": v["exp"]} for k, v in _sess_load().items()
+    return [{"id": k[:8], "label": v.get("label", ""), "exp": v["exp"], "since": v.get("since"), "last": activity.last("guest:" + k[:8])}
+            for k, v in _sess_load().items()
             if isinstance(v, dict) and v.get("user") == accounts.GUEST and v["exp"] > time.time() and k not in _revoked]
 
 
 def drop_guest(gid):
+    activity.forget("guest:" + gid)
     with _sessions_lock:
         d = _sess_load()
         gone = [k for k, v in d.items() if len(gid) >= 8 and k.startswith(gid) and isinstance(v, dict) and v.get("user") == accounts.GUEST]
@@ -266,6 +269,7 @@ def login():
             user = None
         if user:
             accounts.touch(user)
+            activity.note(user, "Logged in")
             r = redirect(nxt, 303)
             r.set_cookie("tv_auth", new_session(user), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
             return r
@@ -1549,7 +1553,7 @@ def refuse():
 def accounts_list():
     admin_only()
     people = [{"name": accounts.OWNER, "role": "admin", "owner": True, "created": None, "last_login": None}] + accounts.listing()
-    return jsonify(users=[{**u, "favs": len(load_favs(u["name"]))} for u in people])
+    return jsonify(users=[{**u, "favs": len(load_favs(u["name"])), "last": activity.last(u["name"])} for u in people])
 
 
 @app.post("/api/accounts")
@@ -1589,6 +1593,7 @@ def accounts_del():
     if not may_change(name):
         return refuse()
     if accounts.remove(name):
+        activity.forget(name)
         drop_user_sessions(name)  # re-creating the name later must not revive old logins
         for p in (fav_file(name), kick._path(name)):  # its favourites and Kick link go with it
             try:
@@ -1627,7 +1632,7 @@ def account_password():
 @app.get("/api/access")
 def access_state():
     admin_only()
-    return jsonify(requests=access.requests_pending(), invites=access.invites_pending(), guests=guest_sessions())
+    return jsonify(requests=access.requests_pending(), invites=access.invites_pending(), guests=guest_sessions(), used=access.invites_used())
 
 
 def slug_name(text):
@@ -1736,8 +1741,47 @@ def join(token):
         return page("Link expired", "<h1>Link expired</h1><p>This link was already used or has expired. Ask for a new one.</p>", 410)
     seconds = inv["hours"] * 3600
     r = redirect("/", 303)
-    r.set_cookie("tv_auth", new_session(accounts.GUEST, seconds, {"label": inv["label"]}), max_age=seconds, httponly=True, samesite="Lax")
+    r.set_cookie("tv_auth", new_session(accounts.GUEST, seconds, {"label": inv["label"], "since": time.time()}), max_age=seconds, httponly=True, samesite="Lax")
     return r
+
+
+def actor():
+    """The key activity is kept under: an account name, "owner", or one guest session."""
+    if g.user == accounts.GUEST:
+        return "guest:" + _h(request.cookies.get("tv_auth", ""))[:8]
+    return g.user
+
+
+def action_label():
+    """One short line for what a request did, or None for requests that aren't worth remembering (polling, page loads)."""
+    p, m = request.path, request.method
+    where = f" ({request.args['target']})" if request.args.get("target") else ""
+    data = (request.get_json(silent=True) or {}) if m in ("POST", "DELETE") else {}
+    if p == "/play" or (m == "POST" and p == "/api/play"):
+        url = request.args.get("u") or data.get("url") or data.get("text") or ""
+        return "Played " + (fav_name(normalise(url) or url) if url else "something") + where
+    if m == "POST" and p == "/api/cmd":
+        return {"stop": "Stopped playback", "pause": "Paused or resumed", "mute": "Muted or unmuted",
+                "restart": "Restarted the stream"}.get(data.get("action"), "Used the player controls") + where
+    if p == "/api/favourites" and m in ("POST", "DELETE"):
+        return "Saved a favourite" if m == "POST" else "Removed a favourite"
+    if m == "POST" and p == "/api/roku/key":
+        return "Used the TV remote" + where
+    if m == "POST" and p == "/api/kick/chat":
+        return "Sent a Kick chat message"
+    return None
+
+
+@app.after_request
+def note_action(resp):
+    try:
+        if resp.status_code < 400 and hasattr(g, "user"):
+            label = action_label()
+            if label:
+                activity.note(actor(), label)
+    except Exception:  # remembering what someone did must never break what they did
+        pass
+    return resp
 
 
 @app.delete("/api/favourites")
