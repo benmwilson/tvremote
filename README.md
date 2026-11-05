@@ -34,6 +34,10 @@ The Kick app doesn't list Shortcuts in its share sheet: copy the link, then run 
 
 Remote on the Home Screen: open `http://192.168.1.138:8765` in Safari → Share → Add to Home Screen.
 
+## Password
+
+Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose up -d`. The remote asks for it (any username; Safari can save it). In the Shortcut, end the URL with `&t=<password>` after the encoded link: `http://192.168.1.138:8765/play?u=<encoded>&t=<password>`. Plain HTTP on your LAN, so it keeps casual users out, not a determined sniffer.
+
 ## Sources
 
 | Source | Player |

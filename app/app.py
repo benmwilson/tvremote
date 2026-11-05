@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """TV Remote: web controller for mpv / streamlink on the Pi."""
+import hmac
 import json
 import os
 import re
@@ -10,10 +11,11 @@ import threading
 import time
 from urllib.parse import urlparse
 
-from flask import Flask, jsonify, redirect, request, send_from_directory
+from flask import Flask, Response, jsonify, redirect, request, send_from_directory
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("TVREMOTE_DATA", "/data")
+PASSWORD = os.environ.get("TVREMOTE_PASSWORD", "")
 PORT = int(os.environ.get("TVREMOTE_PORT", "8765"))
 CEC_PHYS = os.environ.get("TVREMOTE_CEC_PHYS", "1.0.0.0")
 SOCK = "/tmp/tvremote-mpv.sock"
@@ -35,6 +37,19 @@ lock = threading.Lock()
 state = {"proc": None, "url": None, "quality": None, "source": None, "player": None}
 _qcache = {}
 _live_cache = {}
+
+
+@app.before_request
+def require_password():
+    """Basic auth (any username) when TVREMOTE_PASSWORD is set; /play also takes ?t=<password> for the Shortcut."""
+    if not PASSWORD or request.remote_addr == "127.0.0.1":  # localhost: container healthcheck
+        return None
+    a = request.authorization
+    if a and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
+        return None
+    if request.path == "/play" and hmac.compare_digest(request.args.get("t", "").encode(), PASSWORD.encode()):
+        return None
+    return Response("Password required", 401, {"WWW-Authenticate": 'Basic realm="TV Remote"'})
 
 
 # ---------- routing ----------
@@ -166,7 +181,9 @@ def start_player(url, quality=None):
     log = open(LOG_FILE, "w")
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log,
                             stderr=subprocess.STDOUT, start_new_session=True)
-    state.update(proc=proc, url=url, quality=q, source=source, player=player)
+    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time())
+    if player == "streamlink":  # warm the metadata cache for the title
+        threading.Thread(target=sl_info, args=(url,), daemon=True).start()
     threading.Thread(target=switch_tv_to_pi, daemon=True).start()
 
 
@@ -189,19 +206,32 @@ def qualities(url):
     player = state["player"] if url == state["url"] else resolve(url)[1]
     if player == "ytdlp":
         return list(YTDL_HEIGHTS)
+    return sl_info(url)[0]
+
+
+def sl_info(url):
+    """(quality list, metadata dict) from `streamlink --json`, cached 2 min."""
     cached = _qcache.get(url)
     if cached and time.time() - cached[0] < 120:
-        return cached[1]
+        return cached[1], cached[2]
     try:
         out = subprocess.run(["streamlink", "--json", url],
                              capture_output=True, text=True, timeout=20).stdout
-        streams = list(json.loads(out).get("streams", {}))
+        j = json.loads(out)
+        streams, meta = list(j.get("streams", {})), j.get("metadata") or {}
     except (OSError, subprocess.TimeoutExpired, ValueError):
-        streams = []
+        streams, meta = [], {}
     order = [s for s in streams if s not in ("worst", "best")][::-1]
     if order:  # don't cache failures
-        _qcache[url] = (time.time(), order)
-    return order
+        _qcache[url] = (time.time(), order, meta)
+    return order, meta
+
+
+def display_title(url):
+    """Streamlink sources: 'author: title' from metadata, else the channel name (never the raw URL)."""
+    meta = (_qcache.get(url) or (0, 0, {}))[2]
+    parts = [meta.get("author"), meta.get("title")]
+    return ": ".join(p for p in parts if p) or fav_name(url)
 
 
 # ---------- favourites ----------
@@ -310,6 +340,8 @@ def api_status():
     if running:
         for key, name in PROPS.items():
             data[key] = prop(name)
+        if state["player"] == "streamlink":
+            data["title"] = display_title(state["url"])
         # live = streamlink, or a stream with no duration
         data["live"] = state["player"] == "streamlink" or data["duration"] is None
     else:
@@ -342,6 +374,45 @@ def api_search():
         "url": e.get("url") or f"https://www.youtube.com/watch?v={e.get('id')}",
         "thumb": f"https://i.ytimg.com/vi/{e.get('id')}/mqdefault.jpg",
     } for e in entries if e.get("id")])
+
+
+DEBUG_PROPS = ["hwdec-current", "video-codec", "width", "height", "container-fps", "estimated-vf-fps",
+               "frame-drop-count", "decoder-frame-drop-count", "vo-delayed-frame-count", "avsync",
+               "audio-codec-name", "demuxer-cache-duration", "cache-speed", "current-vo", "current-ao", "pid"]
+_versions = {}
+
+
+def versions():
+    if not _versions:
+        for name, cmd in {"mpv": ["mpv", "--version"], "streamlink": ["streamlink", "--version"],
+                          "yt-dlp": ["yt-dlp", "--version"], "deno": ["deno", "--version"]}.items():
+            try:
+                out = subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout
+                _versions[name] = out.strip().splitlines()[0] if out.strip() else "?"
+            except (OSError, subprocess.TimeoutExpired):
+                _versions[name] = "missing"
+    return _versions
+
+
+@app.get("/api/debug")
+def api_debug():
+    p = state["proc"]
+    try:
+        with open(LOG_FILE, errors="replace") as f:
+            log = f.read()[-8000:]
+    except OSError:
+        log = ""
+    return jsonify(
+        state={k: v for k, v in state.items() if k != "proc"},
+        proc={"pid": p.pid if p else None, "returncode": p.poll() if p else None},
+        uptime=round(time.time() - state["started"]) if state.get("started") else None,
+        mpv={k: prop(k) for k in DEBUG_PROPS} if prop("pid") is not None else None,
+        versions=versions(), last_error=last_error(), log=log)
+
+
+@app.get("/debug.html")
+def debug_page():
+    return send_from_directory(BASE, "debug.html", max_age=0)
 
 
 @app.get("/api/favourites")

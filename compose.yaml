@@ -29,6 +29,7 @@ services:
       - TVREMOTE_PORT=${PORT:-8765}
       - TVREMOTE_CEC_PHYS=${CEC_PHYS:-1.0.0.0}
       - TVREMOTE_CEC_NAME=HunnidPi
+      - TVREMOTE_PASSWORD=${PASSWORD:-}
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://127.0.0.1:${PORT:-8765}/api/status"]
       interval: 30s
