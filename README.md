@@ -27,21 +27,27 @@ Update: `cd ~/tvremote && git pull && docker compose up -d --build` (rebuilding 
 
 Check: `curl http://<pi-ip>:8765/api/status`
 
-## iPhone Shortcut ("Play on Pi")
+## iPhone Shortcut ("Play on TV")
+
+One action opens a picker, so the Shortcut needs no list of TVs and nothing to edit when you add one:
 
 1. Receive **Any** input from **Share Sheet**; if there's no input: **Get Clipboard**.
 2. **URL Encode** the Shortcut Input.
-3. **Text**: `http://<pi-ip>:8765/play?u=` followed by the URL Encoded Text.
+3. **Text**: `http://<pi-ip>:8765/share?u=` followed by the URL Encoded Text.
 4. **Open URLs** with that Text.
-5. Details: Show in Share Sheet on, Add to Home Screen. Optional: Settings → Accessibility → Touch → Back Tap → Double Tap → Play on Pi.
+5. Details: Show in Share Sheet on, Add to Home Screen. Optional: Settings → Accessibility → Touch → Back Tap → Double Tap → Play on TV.
+
+The picker shows one card per TV, with the TV you used last first and outlined. Tap a card and it plays there, then opens that TV's remote. Each card shows the TV's name, brand, size and model, what it's playing, and a small dot that turns amber with "Buffering" if the stream stalls.
+
+For a one-tap Shortcut that skips the picker, point it at `/play?u=<encoded>&target=bedroom` instead (use `living` for the living room).
 
 The Kick app doesn't list Shortcuts in its share sheet: copy the link, then run the Shortcut.
 
-Remote on the Home Screen: open `http://<pi-ip>:8765` in Safari → Share → Add to Home Screen.
+Remote on the Home Screen: open `http://<pi-ip>:8765` in Safari → Share → Add to Home Screen. It opens on the All TVs view; tap a TV to control it.
 
 ## Password
 
-Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose up -d`. The remote asks for it (any username; Safari can save it). In the Shortcut, end the URL with `&t=<password>` after the encoded link: `http://<pi-ip>:8765/play?u=<encoded>&t=<password>`. Plain HTTP on your LAN, so it keeps casual users out, not a determined sniffer.
+Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose up -d`. The remote asks for it (any username; Safari can save it). Safari asks for the password once when the Shortcut opens `/share` (any username; let it save the password). A `/play` Shortcut that skips the picker can't show that prompt, so end its URL with `&t=<password>`: `http://<pi-ip>:8765/play?u=<encoded>&target=bedroom&t=<password>`. Plain HTTP on your LAN, so it keeps casual users out, not a determined sniffer.
 
 ## Roku TVs, Chromecast and input switching
 
