@@ -343,11 +343,11 @@ LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta
 <style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0e14;color:#f6f1ee;font:17px -apple-system,system-ui,sans-serif}
 form{width:min(340px,86vw);display:grid;gap:14px}h1{margin:0 0 6px;font-size:28px}
 input,button{font:inherit;min-height:52px;border-radius:14px;border:0;padding:0 16px;box-sizing:border-box;width:100%}
-input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em;margin:0}</style></head>
+input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em;margin:0}.pw{position:relative;display:block}.pw>input{padding-right:72px}.pw-t{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:auto;min-height:40px;padding:0 12px;background:none;color:#8c97a8;font-size:14px}</style></head>
 <body><form method="post" action="/login"><img src="/logo.svg" width="84" height="84" alt="" style="justify-self:center;border-radius:20px"><h1 style="text-align:center">TV Remote</h1>
 <input name="username" placeholder="Username" autocomplete="username" autocapitalize="none" aria-label="Username">
 <input type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password" autofocus required>
-<input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button><a href="/request" style="text-align:center;color:#8c97a8;padding:10px">Request access</a></form></body></html>"""
+<input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button><a href="/request" style="text-align:center;color:#8c97a8;padding:10px">Request access</a></form><script>document.querySelectorAll('input[type=password]').forEach(function(i){var w=document.createElement('span'),b=document.createElement('button');w.className='pw';i.replaceWith(w);w.append(i);b.type='button';b.className='pw-t';b.textContent='Show';b.setAttribute('aria-label','Show password');b.onclick=function(){var s=i.type==='password';i.type=s?'text':'password';b.textContent=s?'Hide':'Show';b.setAttribute('aria-label',s?'Hide password':'Show password')};w.append(b)})</script></body></html>"""
 
 
 @app.route("/login", methods=["GET", "POST"])

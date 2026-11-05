@@ -290,6 +290,11 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 #view-settings .card:has(>.plat){padding:8px}
 #view-settings .s-note{margin:10px 6px 0}
 .s-actions{padding-bottom:6px}
+
+.pw{position:relative;display:block;min-width:0;flex:1}
+.pw>input{padding-right:70px!important}
+.pw-t{position:absolute!important;right:4px;top:50%;transform:translateY(-50%);width:auto!important;min-height:40px!important;padding:0 12px!important;background:none!important;color:var(--dim);font-size:14px;font-weight:600;border-radius:10px}
+.pw-t:focus-visible{outline:2px solid var(--tv,#62b0ff)}
 </style>
 </head>
 <body>
@@ -1163,6 +1168,25 @@ $('invmake').onclick = async e => {
   const r = await busy($('invmake'), () => api('/api/invites', 'POST', {hours: Number($('invhours').value), label: $('invlabel').value}));
   if (r && r.ok) { $('invurl').value = r.url; $('invout').classList.remove('hide'); $('invlabel').value = ''; loadAccess(); }
 };
+
+// ---- Show/Hide on every password field, so you can check two entries match ----
+function addReveal(inp) {
+  if (inp.dataset.rv) return;
+  inp.dataset.rv = '1';
+  const w = document.createElement('span'), b = document.createElement('button');
+  w.className = 'pw'; inp.replaceWith(w); w.append(inp);
+  b.type = 'button'; b.className = 'pw-t'; b.textContent = 'Show'; b.setAttribute('aria-label', 'Show password'); b.setAttribute('aria-pressed', 'false');
+  b.onclick = () => {
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    b.textContent = show ? 'Hide' : 'Show'; b.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); b.setAttribute('aria-pressed', String(show));
+  };
+  w.append(b);
+}
+const revealAll = () => document.querySelectorAll('input[type=password]:not([data-rv])').forEach(addReveal);
+revealAll();
+new MutationObserver(revealAll).observe(document.body, {childList: true, subtree: true});  // fields the page adds later (reset password, approve a request)
+
 $('invcopy').onclick = () => { copyText($('invurl')); $('invcopy').textContent = 'Copied'; setTimeout(() => { $('invcopy').textContent = 'Copy'; }, 1500); };
 loadAccounts();
 
