@@ -60,6 +60,10 @@ select{min-height:52px;padding:0 10px}
 .tvcard.down{opacity:.65}
 .tvid{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin:2px 4px 12px}.tvid b{font-size:20px}
 .tvid .sub{color:var(--dim);font-size:14px}
+.link{color:var(--dim);font-size:14px;margin:0 4px 12px;overflow-wrap:anywhere}
+.tvcard .msg{margin-top:8px;font-size:14px}.tvcard .msg.bad{color:var(--bad)}
+.tvcard.last{box-shadow:inset 0 0 0 2px var(--acc)}
+.tvcard:disabled{cursor:default}
 .hd{width:8px;height:8px;border-radius:50%;flex:none;background:transparent;border:1px solid var(--dim)}
 .hd.smooth{background:var(--ok);border-color:var(--ok);opacity:.55}
 .hd.buffering{background:var(--warn);border-color:var(--warn)}.hd.error{background:var(--bad);border-color:var(--bad)}
@@ -72,7 +76,17 @@ select{min-height:52px;padding:0 10px}
 <header><button id="back" class="hide" aria-label="Back to all TVs">‹ All TVs</button><h1>TV Remote</h1><span id="tv" style="flex:1;margin-left:10px;color:var(--dim);font-size:13px"></span><span id="dot" title="Connection"></span></header>
 
 <section id="view-all" class="hide"><div id="cards"></div></section>
-<section id="view-share" class="hide"></section>
+<section id="view-share" class="hide">
+  <h2 id="pickhead">Play on</h2>
+  <p id="sharedlink" class="link"></p>
+  <div id="pastebox" class="card hide">
+    <b>No link found</b>
+    <p class="sub">The shared text didn't contain a link. Paste one here.</p>
+    <input type="text" id="pastein" placeholder="https://..." inputmode="url" autocapitalize="off" autocorrect="off" aria-label="Link to play">
+    <div class="row"><button id="pastego">Use this link</button></div>
+  </div>
+  <div id="pickcards"></div>
+</section>
 <section id="view-tv" class="hide">
 <div id="tvid" class="tvid"></div>
 <div class="card" id="now">
@@ -396,6 +410,54 @@ document.addEventListener('click', async e => {
   const r = await api('/api/roku/key', 'POST', {key: b.dataset.k});
   if (r && r.ok) setTimeout(loadTargets, 1500);
 });
+
+// ---- share picker: /share?u=<link> ----
+const picker = {url: '', started: false, busy: '', msg: {}};
+const extractUrl = t => { const m = (t || '').match(/https?:\/\/[^\s<>"']+/); return m ? m[0].replace(/[).,]+$/, '') : ''; };
+const shorten = u => u.length > 70 ? u.slice(0, 67) + '\u2026' : u;
+const lastTv = () => { try { return localStorage.getItem('lastTv') || ''; } catch (e) { return ''; } };
+
+window.renderPicker = function () {
+  if (!picker.started) { picker.url = extractUrl(new URLSearchParams(location.search).get('u')); picker.started = true; }
+  $('sharedlink').textContent = picker.url ? shorten(picker.url) : '';
+  $('sharedlink').classList.toggle('hide', !picker.url);
+  $('pastebox').classList.toggle('hide', !!picker.url);
+  const last = lastTv();
+  const ordered = [...targets].sort((a, b) => (b.id === last) - (a.id === last));
+  if (!ordered.length) { $('pickcards').replaceChildren(el('p', 'sub', 'Looking for your TVs\u2026')); return; }
+  $('pickcards').replaceChildren(...ordered.map(c => {
+    const note = picker.busy === c.id ? el('div', 'msg', 'Starting on ' + c.name + '\u2026')
+      : picker.msg[c.id] ? el('div', 'msg bad', picker.msg[c.id]) : null;
+    const b = cardEl(c, playOn, note);
+    b.disabled = !c.reachable || !picker.url || !!picker.busy;
+    if (c.id === last) b.classList.add('last');
+    return b;
+  }));
+};
+
+async function playOn(c) {
+  picker.busy = c.id; delete picker.msg[c.id]; renderPicker();
+  let ok = false, msg = '';
+  try {
+    const r = await fetch('/api/play?target=' + encodeURIComponent(c.id), {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: picker.url})});
+    const j = await r.json().catch(() => ({}));
+    ok = r.ok && j.ok !== false;
+    msg = j.error || (r.ok ? '' : "Couldn't start playback.");
+  } catch (e) { msg = "Couldn't reach the Pi. Check that you're on the home Wi-Fi."; }
+  picker.busy = '';
+  if (ok) {
+    try { localStorage.setItem('lastTv', c.id); } catch (e) {}
+    history.replaceState(null, '', '/#/tv/' + encodeURIComponent(c.id));
+    show();
+  } else { picker.msg[c.id] = msg || "Couldn't start playback."; renderPicker(); }
+}
+
+$('pastego').onclick = () => {
+  const u = extractUrl($('pastein').value);
+  if (u) { picker.url = u; renderPicker(); } else $('pastein').focus();
+};
+$('pastein').onkeydown = e => { if (e.key === 'Enter') $('pastego').click(); };
 
 // /?target=<id> is where /play redirects; send it to that TV's remote
 const redirectTarget = new URLSearchParams(location.search).get('target');
