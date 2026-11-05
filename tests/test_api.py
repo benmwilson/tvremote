@@ -437,6 +437,10 @@ class ShellFlow(unittest.TestCase):
             with mock.patch.object(server, "_sess_save"):  # the disk write fails: logout must still work
                 server.drop_session(tok)
             self.assertFalse(server.valid_session(tok))
+            before = len(server._revoked)
+            for junk in ("a", "b", "c"):
+                server.drop_session(junk)
+            self.assertEqual(len(server._revoked), before)  # unknown tokens are not remembered
             tok2 = server.new_session()
             self.assertTrue(server.valid_session(tok2))
             with mock.patch.object(server, "PASSWORD", "changed"):  # a new password voids every session

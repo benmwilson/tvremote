@@ -149,9 +149,9 @@ def valid_session(tok):
 
 def drop_session(tok):
     with _sessions_lock:
-        _revoked.add(_h(tok))
         d = _sess_load()
-        if d.pop(_h(tok), None) is not None:
+        if d.pop(_h(tok), None) is not None:  # only real sessions are remembered: /logout needs no login, so junk must not pile up
+            _revoked.add(_h(tok))
             _sess_save(d)
 
 
