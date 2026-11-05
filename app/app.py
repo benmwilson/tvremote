@@ -368,6 +368,25 @@ def api_status():
     return jsonify(data)
 
 
+_tv = {"t": 0, "v": None}
+
+
+@app.get("/api/tv")
+def api_tv():
+    """TV name and power state over CEC (cached 30s; CEC is slow and shared)."""
+    if time.time() - _tv["t"] > 30:
+        try:
+            out = subprocess.run(["cec-ctl", "-d", "/dev/cec0", "--to", "0", "--give-osd-name",
+                                  "--give-device-power-status"], capture_output=True, text=True, timeout=8).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            out = ""
+        name = re.search(r"name: (.+)", out)
+        pwr = re.search(r"pwr-state: (\w+)", out)
+        _tv.update(t=time.time(), v={"name": name.group(1).strip() if name else None,
+                                     "power": pwr.group(1) if pwr else None})
+    return jsonify(_tv["v"])
+
+
 @app.get("/api/qualities")
 def api_qualities():
     return jsonify(qualities(request.args.get("url") or state["url"]))

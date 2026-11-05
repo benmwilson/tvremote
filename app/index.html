@@ -56,7 +56,7 @@ select{min-height:52px;padding:0 10px}
 </head>
 <body>
 
-<header><h1>TV Remote</h1><span id="dot" title="Connection"></span></header>
+<header><h1>TV Remote</h1><span id="tv" style="flex:1;margin-left:10px;color:var(--dim);font-size:13px"></span><span id="dot" title="Connection"></span></header>
 <div class="card" id="now">
   <div><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span></div>
   <div id="title">Nothing playing</div>
@@ -261,6 +261,11 @@ function dbg(open) {
 $('dbgOpen').onclick = () => dbg(true);
 $('dbgClose').onclick = $('scrim').onclick = () => dbg(false);
 
+async function tvInfo() {
+  const t = await api('/api/tv');
+  $('tv').textContent = t && t.name ? t.name + (t.power ? ' · ' + t.power : '') : '';
+}
+tvInfo(); setInterval(tvInfo, 30000);
 loadFavs(); poll(); setInterval(poll, 2000);
 </script>
 </body>
