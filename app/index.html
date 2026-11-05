@@ -140,7 +140,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .chatrow{display:flex;align-items:center;gap:4px}.chatrow .chathead{flex:1;min-width:0}
 .chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
 .chathead .chev{color:var(--dim);transition:transform .15s}.chathead[aria-expanded=true] .chev{transform:rotate(180deg)}
-#chatbox{margin-top:10px;max-height:320px;overflow-y:auto;overscroll-behavior:contain;font-size:15px;line-height:1.35;-webkit-overflow-scrolling:touch}
+#chatbox iframe{display:block;width:100%;height:340px;border:0;border-radius:12px;background:#0b0e14}
+#chatbox{margin-top:10px;max-height:340px;overflow-y:auto;overscroll-behavior:contain;font-size:15px;line-height:1.35;-webkit-overflow-scrolling:touch}
 #chatbox .m{padding:3px 0;word-break:break-word}#chatbox .m b{margin-right:6px}#chatbox img{height:1.5em;vertical-align:middle;margin:0 1px}
 .sortbtn{margin-left:auto;margin-right:8px;min-height:44px;padding:0 14px;background:none;color:var(--dim);font-size:14px;border-radius:12px}
 .sortbtn[aria-pressed=true]{background:var(--card2,#222a38);color:var(--text,#fff)}
@@ -688,11 +689,9 @@ $('shellrow').onclick = async () => {
 fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
 
 // ---- chat on the phone (read-only) ----
-// Twitch: the Pi reads the chat and the phone asks it for new messages. Kick: the phone connects itself, as it does for
-// the avatars (kick.com refuses non-browser clients, so the Pi can't). Kick's chat is an unofficial Pusher connection;
-// the app key and event names come from open-source clients (e.g. the kick-api crate) and Kick may change them without notice.
-const KICK_WS = 'wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false';
-let chatOpen = false, chatLast = 0, chatTimer = null, chatKey = '', kickWs = null;
+// Twitch: the Pi reads the chat and the phone asks it for new messages. Kick: its own popout chat page is embedded (the Pi
+// can't read Kick: kick.com refuses non-browser clients).
+let chatOpen = false, chatLast = 0, chatTimer = null, chatKey = '';
 try { chatOpen = localStorage.getItem('chatOpen') === '1'; } catch (e) {}
 
 // parts: [{t: 'text'} | {img: url, alt: 'name'}]
@@ -745,49 +744,12 @@ async function chatPoll() {  // Twitch
   $('chatsub').textContent = r.ok ? '#' + r.channel : '';
 }
 
-async function kickRoomId(slug) {  // the channel's chat room number, from the phone's own request to kick.com (kept for good)
-  try { const c = localStorage.getItem('kc:' + slug); if (c) return c; } catch (e) {}
-  const j = await (await fetch('https://kick.com/api/v2/channels/' + encodeURIComponent(slug))).json();
-  const id = j && j.chatroom && String(j.chatroom.id);
-  if (!/^\d+$/.test(id || '')) throw new Error('no chat room');
-  try { localStorage.setItem('kc:' + slug, id); } catch (e) {}
-  return id;
-}
-function kickStop() { if (kickWs) { const w = kickWs; kickWs = null; w.onclose = null; try { w.close(); } catch (e) {} } }
-async function kickStart(slug, key) {
-  $('chatsub').textContent = 'connecting\u2026';
-  let id;
-  try { id = await kickRoomId(slug); } catch (e) { if (chatKey === key) $('chatsub').textContent = "couldn't reach kick.com"; return; }
-  let fails = 0, why = '', opened = false;
-  const open = () => {
-    if (chatKey !== key) return;
-    opened = false;
-    const ws = kickWs = new WebSocket(KICK_WS);
-    ws.onmessage = ev => {
-      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
-      if (m.event === 'pusher:connection_established') ws.send(JSON.stringify({event: 'pusher:subscribe', data: {auth: '', channel: 'chatrooms.' + id + '.v2'}}));
-      else if (m.event === 'pusher_internal:subscription_succeeded') { fails = 0; $('chatsub').textContent = '#' + slug; }
-      else if (m.event === 'pusher:ping') ws.send(JSON.stringify({event: 'pusher:pong', data: {}}));
-      else if (m.event === 'pusher:error') {  // say why, so a changed key or channel name is easy to spot
-        let d = m.data; try { if (typeof d === 'string') d = JSON.parse(d); } catch (e) {}
-        why = 'Kick said: ' + ((d && (d.message || d.code)) || 'error');
-        $('chatsub').textContent = why;
-      }
-      else if (m.event === 'App\\Events\\ChatMessageEvent') {
-        try {
-          const d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data;
-          chatAdd(chatRow(d.sender.username, (d.sender.identity || {}).color, kickParts(String(d.content || ''))));
-        } catch (e) {}
-      }
-    };
-    ws.onopen = () => { opened = true; };
-    ws.onclose = ev => {
-      if (kickWs !== ws || chatKey !== key) return;
-      $('chatsub').textContent = (why || (opened ? 'closed (code ' + ev.code + ')' : "couldn't open the connection")) + ' \u00b7 retry ' + (++fails);
-      setTimeout(open, Math.min(30000, 2000 * fails));
-    };
-  };
-  open();
+function kickEmbed(slug) {  // Kick's own chat page (the one its OBS chat dock uses), shown inside the card
+  const f = document.createElement('iframe');
+  f.src = 'https://kick.com/popout/' + encodeURIComponent(slug) + '/chat';
+  f.title = 'Kick chat'; f.loading = 'lazy'; f.referrerPolicy = 'no-referrer';
+  $('chatbox').replaceChildren(f);
+  $('chatsub').textContent = '#' + slug;
 }
 
 function chatShow() {  // the card only exists while a Twitch or Kick channel is playing
@@ -805,10 +767,9 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   if (key === chatKey) return;
   chatKey = key;  // what is showing changed: stop the old feed, clear the box, start the new one
   if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
-  kickStop();
   $('chatbox').replaceChildren(); chatLast = 0; $('chatsub').textContent = '';
   if (!key) return;
-  if (kick) kickStart(kick, key);
+  if (kick) kickEmbed(kick);
   else { chatPoll(); chatTimer = setInterval(chatPoll, 2000); }
 }
 $('chatTog').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem('chatOpen', chatOpen ? '1' : '0'); } catch (e) {} chatShow(); };
