@@ -99,7 +99,7 @@ class AccessTest(unittest.TestCase):
         guest = server.app.test_client()
         guest.post("/" + url.split("/", 3)[3])
         self.owner.post("/api/favourites", json={"url": "https://kick.com/capped", "name": "capped", "source": "Kick"})
-        self.assertEqual([f["name"] for f in guest.get("/api/favourites").get_json()], ["capped"])  # they can use the owner's favourites
+        self.assertEqual(guest.get("/api/favourites").get_json(), [])  # never the owner's personal list
         self.assertEqual(guest.post("/api/favourites", json={"url": "https://kick.com/x", "name": "x", "source": "Kick"}).status_code, 403)
         self.assertEqual(guest.delete("/api/favourites", json={"url": "https://kick.com/capped"}).status_code, 403)
         for path in ("/api/accounts", "/api/access", "/api/debug", "/auth/kick/start"):

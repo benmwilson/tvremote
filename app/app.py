@@ -751,7 +751,7 @@ def display_title(url):
 def fav_file(user=None):
     """Each account has its own favourites file. Outside a request (background threads, the TV's home screen) it is the owner's."""
     user = user or (g.user if has_request_context() else (accounts.founder_name() or accounts.OWNER))
-    user = (accounts.founder_name() or accounts.OWNER) if user == accounts.GUEST else user  # guests see the owner's favourites
+    # a guest maps to favourites.guest.json, which never exists (guests can't save): they see an empty list, never anyone's favourites
     return FAV_FILE if user == accounts.OWNER else os.path.join(DATA, f"favourites.{user}.json")
 
 
