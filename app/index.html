@@ -89,6 +89,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;heigh
 input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:var(--line)}
 input[type=range]::-moz-range-progress{height:8px;border-radius:4px;background:var(--tv)}
 input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--fg);border:4px solid var(--card)}
+.row3.single{grid-template-columns:minmax(0,1fr)}
 .row3{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,.8fr);gap:8px;margin-top:14px}
 select{min-height:52px;padding:0 8px;width:100%;font-size:15px}
 .danger{color:var(--bad)}
@@ -116,6 +117,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .fav{position:relative;background:var(--card);border-radius:16px;padding:12px;min-height:72px;text-align:left;display:block;width:100%;min-width:0}
 .fav b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:30px;margin-bottom:6px}
 .fav{overflow:hidden}
+.fav .livenote{display:block;margin-top:4px;font-size:13px}
 .fav .note{display:block;color:var(--warn);font-size:13px;margin-top:4px}
 .fav .note:empty{display:none}
 .fav .starting{display:none;font-size:13px;color:var(--dim)}
@@ -203,18 +205,19 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <div class="card now" id="now">
   <div><span class="badge" id="src">Idle</span> <span class="badge live hide" id="live">LIVE</span></div>
   <div id="title" class="ttl">Nothing playing</div>
+  <div id="game" class="sub hide"></div>
   <div id="meta"></div>
   <button id="pp" class="pp" data-a="pause" aria-label="Pause or resume"></button>
   <div class="row" id="seek">
     <button data-a="seek" data-v="-60" aria-label="Back 60 seconds">&minus;60</button><button data-a="seek" data-v="-10" aria-label="Back 10 seconds">&minus;10</button>
     <button data-a="seek" data-v="10" aria-label="Forward 10 seconds">+10</button><button data-a="seek" data-v="60" aria-label="Forward 60 seconds">+60</button>
   </div>
-  <div class="vol">
+  <div class="vol" id="volrow">
     <button id="mute" class="sq" data-a="mute" aria-label="Mute"></button>
     <input type="range" id="vol" min="0" max="100" step="1" aria-label="Volume">
     <b id="volv">100</b>
   </div>
-  <div class="row3"><select id="qual" aria-label="Quality"></select>
+  <div class="row3" id="ctlrow"><select id="qual" aria-label="Quality"></select>
     <button id="fav"></button>
     <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div>
 </div>
@@ -239,9 +242,6 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   </details>
 </div>
 
-<button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin-top:12px">
-  <div class="grow"><b>Home screen on this TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
-
 <h2>Play something</h2>
 <div class="card">
   <input type="text" id="link" placeholder="Paste a link, a channel name or a search" autocapitalize="off" autocorrect="off" enterkeyhint="go" aria-label="Link, channel or search">
@@ -264,6 +264,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <aside id="drawer" class="hide" aria-label="Debug">
   <div class="dh"><b>Debug</b><span id="dage"></span><button id="dbgClose" aria-label="Close debug"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="db">
+    <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:0 0 6px">
+  <div class="grow"><b>Home screen on the TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
     <h3>Player</h3><table id="d-player"></table>
     <h3>mpv</h3><table id="d-mpv"></table>
     <h3>Versions</h3><table id="d-ver"></table>
@@ -309,6 +311,15 @@ async function busy(btn, work, hold = 0, min = 450, until = null) {
 }
 document.addEventListener('touchstart', () => {}, {passive: true});  // iOS only shows :active pressed states once a touch listener exists
 
+// "2 h 14 min", "45 min", "just started"
+const dur = sec => { const m = Math.round(sec / 60); if (m < 2) return 'just started'; if (m < 90) return m + ' min';
+  const h = Math.floor(m / 60); if (h < 48) return h + ' h ' + (m % 60) + ' min'; return Math.floor(h / 24) + ' d ' + (h % 24) + ' h'; };
+const ago = ts => { const m = Math.round((Date.now() / 1000 - ts) / 60); if (m < 2) return 'just now'; if (m < 90) return m + ' min ago';
+  const h = Math.round(m / 60); if (h < 48) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; };
+const liveLine = f => f.live === true ? ['live for ' + dur(f.live_for || 0), f.game].filter(Boolean).join(' \u00b7 ')
+  : f.live === false ? ['Offline', f.last_live ? 'last live ' + ago(f.last_live) : 'not seen live yet', f.game ? 'was playing ' + f.game : null].filter(Boolean).join(' \u00b7 ')
+  : '';
+
 const err = m => { $('err').textContent = m || ''; if (m) setTimeout(() => $('err').textContent = '', 6000); };
 async function api(path, method = 'GET', body) {
   try {
@@ -330,6 +341,9 @@ function render() {
   $('src').className = 'badge ' + (st.source || '');
   $('live').classList.toggle('hide', !(run && st.live));
   $('title').textContent = run ? (st.title || st.url) : st.starting ? 'Starting…' : st.error ? 'Playback stopped' : 'Nothing playing';
+  const gameLine = run ? [st.game, st.live_for != null ? 'live for ' + dur(st.live_for) : null].filter(Boolean).join(' \u00b7 ') : '';
+  $('game').textContent = gameLine;
+  $('game').classList.toggle('hide', !gameLine);
   let meta = [];
   if (run) {
     if (!st.live && st.position != null) meta.push(fmt(st.position) + (st.duration ? ' / ' + fmt(st.duration) : ''));
@@ -342,9 +356,16 @@ function render() {
   }
   if (!run && st.error) meta.push(st.error);
   $('meta').textContent = meta.join(' · ');
+  const up = !!run, starting = !!st.starting && !run;   // nothing to control until a stream is playing
+  $('pp').classList.toggle('hide', !up);
+  $('volrow').classList.toggle('hide', !up);
+  $('ctlrow').classList.toggle('hide', !up && !starting);
+  $('ctlrow').classList.toggle('single', !up && starting);  // starting: just Stop, so you can cancel
+  $('fav').classList.toggle('hide', !up);
   $('pp').classList.toggle('paused', !!st.paused);
   setBtn($('pp'), st.paused ? 'play' : 'pause', st.paused ? 'Paused' : '');
   $('seek').classList.toggle('hide', !run || st.live);
+  if (!up && !starting && !st.error) $('meta').textContent = 'Pick something below, or open a favourite.';
   setBtn($('mute'), st.muted ? 'mute' : 'volume', '');
   $('mute').setAttribute('aria-label', st.muted ? 'Unmute' : 'Mute');
   if (!dragging && st.volume != null) { $('vol').value = st.volume; $('volv').textContent = Math.round(st.volume); }
@@ -362,7 +383,7 @@ async function loadQualities() {
   sel.innerHTML = '';
   (q || []).forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; sel.appendChild(o); });
   sel.value = [...sel.options].map(o => o.value).find(v => String(st.quality).split(',').includes(v)) || '';
-  sel.classList.toggle('hide', !sel.options.length);
+  sel.classList.toggle('hide', !sel.options.length || !st.running);
 }
 
 async function poll() {
@@ -376,14 +397,16 @@ async function loadFavs() {
   const g = $('favs');
   g.innerHTML = '';
   if (!favList.length) g.append(Object.assign(el('div', 'sub', 'No favourites yet. Tap the star while something is playing to save it.'), {style: 'grid-column:1/-1;padding:4px'}));
-  favList.forEach(f => {
+  [...favList].sort((a, b) => (b.live === true) - (a.live === true)).forEach(f => {
     const b = el('div', 'fav'); b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = f.url;
     const x = el('button', 'x'); x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Remove ' + f.name);
     x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'DELETE', {url: f.url}); loadFavs(); };
     b.onclick = () => playFav(f.url);
     b.onkeydown = e => { if (e.key === 'Enter') playFav(f.url); };
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
-    b.append(el('b', null, f.name), el('span', 'badge ' + (f.source || ''), f.source || 'Other'), el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, x);
+    const live = f.live === true ? el('span', 'badge live', 'LIVE') : null;
+    const lnote = el('span', 'sub livenote', liveLine(f));
+    b.append(el('b', null, f.name), el('span', 'badge ' + (f.source || ''), f.source || 'Other'), ...(live ? [live] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, x);
     g.appendChild(b);
   });
   markFavs();
@@ -570,6 +593,7 @@ function cardEl(c, onTap, extra) {
   if (c.reachable && n && !n.starting) {
     tags.append(el('span', 'badge ' + (n.source || ''), n.source || 'Other'));
     if (n.live) tags.append(el('span', 'badge live', 'LIVE'));
+    if (n.game) tags.append(el('span', 'sub', n.game));
     if (n.stream) tags.append(el('span', 'badge', n.stream));
   }
   const pw = c.reachable ? [POWER[c.power] || c.power, c.input && c.input !== 'Roku' ? c.input : null].filter(Boolean).join(' · ') : '';
@@ -724,6 +748,7 @@ if (location.pathname === '/' && !location.hash && redirectTarget) history.repla
 show();
 loadTargets(); setInterval(loadTargets, 3000);
 setInterval(poll, 2000);
+setInterval(() => { if (view() === 'tv' && !document.hidden) loadFavs(); }, 60000);
 </script>
 </body>
 </html>

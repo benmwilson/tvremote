@@ -168,6 +168,60 @@ class PausedOverlay(unittest.TestCase):
         self.assertIn("bad p1title Nmore", text)
 
 
+class LiveFacts(unittest.TestCase):
+    """Is a channel live, since when, and playing what: for the favourites and the player."""
+
+    def test_only_channels_are_checked(self):
+        self.assertTrue(server.is_channel("https://kick.com/chan"))
+        self.assertTrue(server.is_channel("https://www.twitch.tv/xqc"))
+        self.assertFalse(server.is_channel("https://www.twitch.tv/videos/123"))
+        self.assertFalse(server.is_channel("https://www.youtube.com/watch?v=abc"))
+        self.assertFalse(server.is_channel("https://kick.com/"))
+
+    def test_a_live_channel_reports_game_title_and_uptime(self):
+        j = {"streams": {"best": {"url": "https://cdn.example/p.m3u8"}}, "metadata": {"category": "GTA V", "title": "RP"}}
+        with mock.patch.object(server, "run_streamlink_json", return_value=j), mock.patch.object(server, "live_seconds", return_value=4000.0):
+            self.assertEqual(server.check_live("https://kick.com/chan"), {"live": True, "game": "GTA V", "title": "RP", "uptime_s": 4000.0})
+
+    def test_an_offline_channel_is_reported_offline(self):
+        with mock.patch.object(server, "run_streamlink_json", return_value={"error": "No playable streams found on this URL: x"}):
+            self.assertEqual(server.check_live("https://kick.com/chan"), {"live": False})
+
+    def test_a_check_that_could_not_run_is_unknown(self):
+        with mock.patch.object(server, "run_streamlink_json", return_value=None):
+            self.assertIsNone(server.check_live("https://kick.com/chan"))
+        self.assertIsNone(server.check_live("https://www.youtube.com/watch?v=abc"))
+
+    def test_the_uptime_comes_from_the_playlists_own_elapsed_time(self):
+        j = {"streams": {"best": {"url": "https://cdn.example/p.m3u8"}}}
+        kick = b"#EXTM3U\n#EXT-X-NET-LIVE-VIDEO-ELAPSED-SECS:48157.900\n#EXTINF:4,\nseg.ts\n"
+        with mock.patch.object(server.hlsproxy, "_get", return_value=kick):
+            self.assertAlmostEqual(server.live_seconds(j), 48157.9)
+        with mock.patch.object(server.hlsproxy, "_get", return_value=b"#EXTM3U\n#EXT-X-TWITCH-ELAPSED-SECS:90.0\n"):
+            self.assertEqual(server.live_seconds(j), 90.0)
+        with mock.patch.object(server.hlsproxy, "_get", return_value=b"#EXTM3U\n"):
+            self.assertIsNone(server.live_seconds(j))
+
+    def test_favourites_carry_their_live_status(self):
+        class W:
+            def poke(self): return None
+            def snapshot(self): return {"https://kick.com/chan": {"live": True, "checked": 100, "last_live": 100, "game": "GTA V"}}
+            def live_for(self, url): return 3700
+        favs = [{"name": "chan", "url": "https://kick.com/chan", "source": "Kick"}, {"name": "x", "url": "https://kick.com/x", "source": "Kick"}]
+        with mock.patch.object(server, "livewatch", W()), mock.patch.object(server, "load_favs", return_value=favs):
+            out = server.app.test_client().get("/api/favourites").get_json()
+        self.assertEqual((out[0]["live"], out[0]["game"], out[0]["live_for"], out[0]["last_live"]), (True, "GTA V", 3700, 100))
+        self.assertIsNone(out[1]["live"])
+
+    def test_the_playing_stream_reports_its_game_and_uptime(self):
+        class W:
+            def snapshot(self): return {"https://kick.com/chan": {"game": "GTA V"}}
+            def live_for(self, url): return 3700
+        with mock.patch.object(server, "livewatch", W()), mock.patch.dict(server.state, {"url": "https://kick.com/chan", "proc": None}),                 mock.patch.object(server, "prop", lambda n: 1 if n == "pid" else None):
+            data = server.pi_status()
+        self.assertEqual((data["game"], data["live_for"]), ("GTA V", 3700))
+
+
 class FakeHome:
     def __init__(self):
         self.shown, self.started, self.stopped, self.vo, self.error, self._running = [], 0, 0, "wlshm", None, True
@@ -321,6 +375,20 @@ class ShellFlow(unittest.TestCase):
         with mock.patch.object(server, "SHELL_SHOT", shot), mock.patch.object(server.mpvipc, "send", return_value={"error": "success"}):
             r = self.client.get("/api/shell/screenshot")
         self.assertEqual((r.status_code, r.mimetype), (200, "image/png"))
+
+    def test_the_real_screen_can_be_captured_for_debugging(self):
+        shot = os.path.join(tempfile.mkdtemp(), "screen.png")
+        open(shot, "wb").write(b"PNG fake")
+        with mock.patch.object(server, "SCREEN_SHOT", shot), mock.patch.object(server.subprocess, "run") as run:
+            r = self.client.get("/api/screen.png")
+        self.assertEqual((r.status_code, r.mimetype), (200, "image/png"))
+        self.assertEqual(run.call_args[0][0][0], "grim")
+
+    def test_a_failed_screen_capture_is_a_clear_error(self):
+        with mock.patch.object(server.subprocess, "run", side_effect=FileNotFoundError("grim")):
+            r = self.client.get("/api/screen.png")
+        self.assertEqual(r.status_code, 502)
+        self.assertFalse(r.get_json()["ok"])
 
     def test_with_the_screen_off_nothing_is_drawn(self):
         server.settings["shell"] = False

@@ -33,6 +33,7 @@ SL_DEFAULT = "1080p60,best"
 YTDL_HEIGHTS = ("1080", "720", "480")
 
 import hlsproxy
+import live
 import chat
 import mpvipc
 import roku
@@ -327,6 +328,8 @@ def start_player(url, quality=None, screen_kind="loading"):
     state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time(), stalls=0, stall_s=0)
     chat_sync()
     threading.Thread(target=_watch, args=(proc,), daemon=True).start()
+    if is_channel(url):
+        threading.Thread(target=livewatch.refresh_one, args=(url,), daemon=True).start()
     threading.Thread(target=_stall_monitor, args=(proc,), daemon=True).start()
     if player == "streamlink":  # warm the metadata cache for the title
         threading.Thread(target=sl_info, args=(url,), daemon=True).start()
@@ -587,6 +590,8 @@ def pi_status():
         if state["player"] == "streamlink":
             data["title"] = display_title(state["url"])
         data["stalls"], data["stall_s"] = state.get("stalls", 0), round(state.get("stall_s", 0))
+        facts = livewatch.snapshot().get(state["url"] or "", {})
+        data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(state["url"] or "")
         data["chat_ok"] = state["source"] == "Twitch" and bool(chat.channel_of(state["url"] or ""))
         data["chat"] = bool(_chat["obj"])
         # live = streamlink, or a stream with no duration
@@ -702,6 +707,8 @@ def make_card(tv_id, status):
     now = {"title": status.get("title") or fav_name(status.get("url") or ""), "source": status.get("source"),
            "live": bool(status.get("live")), "paused": bool(status.get("paused")),
            "starting": bool(status.get("starting")), "position": status.get("position"),
+           "game": livewatch.snapshot().get(status.get("url") or "", {}).get("game"),
+           "live_for": livewatch.live_for(status.get("url") or ""),
            "stream": stream_label(status.get("quality"))} if busy else None
     return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection,
             "brand": r.get("brand"), "model": r.get("model"), "size": r.get("size"), "tv_name": r.get("name"),
@@ -732,6 +739,20 @@ def shell_state():
     return {"enabled": bool(settings.get("shell")), "running": running,
             "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None,
             "props": HOME.props() if running and hasattr(HOME, "props") else None}  # what the window is doing, for debugging
+
+
+SCREEN_SHOT = "/tmp/tvremote-screen.png"
+
+
+@app.get("/api/screen.png")
+def api_screen():
+    """The Pi's real screen, as the desktop is showing it right now (for debugging what the TV displays)."""
+    try:
+        subprocess.run(["grim", "-o", os.environ.get("TVREMOTE_OUTPUT", "HDMI-A-1"), SCREEN_SHOT],
+                       check=True, capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return jsonify(ok=False, error="Couldn't capture the screen (is grim installed, and is the desktop running?)."), 502
+    return send_file(SCREEN_SHOT, mimetype="image/png", max_age=0)
 
 
 @app.get("/api/shell/screenshot")
@@ -863,9 +884,75 @@ def api_debug():
         versions=versions(), last_error=last_error(), log=log)
 
 
+def is_channel(url):
+    """A Kick or Twitch channel page (not a video, clip or directory)."""
+    if route(url)[0] not in ("Kick", "Twitch"):
+        return False
+    parts = [p for p in urlparse(url).path.split("/") if p]
+    return len(parts) == 1 and parts[0] not in ("videos", "directory", "clips")
+
+
+def run_streamlink_json(url, timeout=30):
+    """`streamlink --json` for a channel: streams and metadata when it is live, an error when not, None if it could not run.
+    Runs at a low priority so it never competes with a stream that is playing."""
+    try:
+        out = subprocess.run(["nice", "-n", "10", "streamlink", "--json", url],
+                             capture_output=True, text=True, timeout=timeout).stdout
+        return json.loads(out)
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+
+
+def live_seconds(j):
+    """How long a channel has been live, from the elapsed-time tag in the stream's own playlist (Kick and Twitch carry one)."""
+    try:
+        text = hlsproxy._get(j["streams"]["best"]["url"]).decode(errors="replace")
+    except Exception:
+        return None
+    m = re.search(r"ELAPSED-SECS:(\d+(?:\.\d+)?)", text)
+    return float(m.group(1)) if m else None
+
+
+def check_live(url):
+    """{"live", "game", "title", "uptime_s"} for a channel, {"live": False} when offline, None when it could not be checked."""
+    if not is_channel(url):
+        return None
+    j = run_streamlink_json(url)
+    if j is None:
+        return None
+    if j.get("streams"):
+        meta = j.get("metadata") or {}
+        return {"live": True, "game": meta.get("category"), "title": meta.get("title"), "uptime_s": live_seconds(j)}
+    if "No playable streams" in (j.get("error") or ""):
+        return {"live": False}
+    return None
+
+
+def watched_urls():
+    urls = [f.get("url") or "" for f in load_favs()]
+    if state.get("url"):
+        urls.append(state["url"])
+    return list(dict.fromkeys(u for u in urls if is_channel(u)))
+
+
+def pi_playing():
+    p = state.get("proc")
+    return bool(p and p.poll() is None)
+
+
+livewatch = live.LiveWatch(os.path.join(DATA, "live.json"), urls=watched_urls, check=check_live, busy=pi_playing)
+
+
 @app.get("/api/favourites")
 def favs_get():
-    return jsonify(load_favs())
+    livewatch.poke()
+    snap = livewatch.snapshot()
+    out = []
+    for f in load_favs():
+        e = snap.get(f.get("url"), {})
+        out.append({**f, "live": e.get("live"), "game": e.get("game"), "last_live": e.get("last_live"),
+                    "checked": e.get("checked"), "live_for": livewatch.live_for(f.get("url"))})
+    return jsonify(out)
 
 
 @app.post("/api/favourites")
@@ -894,6 +981,7 @@ if __name__ == "__main__":
     if CastTarget:
         CAST = CastTarget(DATA, resolve, display_title, YTDL_HEIGHTS, SL_DEFAULT)
     cards.start()
+    livewatch.start()
     settings.update(load_settings())
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
                        favs=lambda: [(f.get("name") or "")[:28] for f in load_favs()][:5])

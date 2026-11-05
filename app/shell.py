@@ -21,7 +21,7 @@ SOCK = "/tmp/tvremote-shell.sock"
 LOG = "/tmp/tvremote-shell.log"
 W, H = 1920, 1080
 BG = "0b0e14"
-VO_ORDER = ("wlshm", "gpu")  # wlshm: plain software drawing, no GPU libraries needed; gpu if it won't open
+VO_ORDER = tuple(v for v in os.environ.get("TVREMOTE_SHELL_VO", "wlshm,gpu").split(",") if v)  # wlshm: plain software drawing; gpu if it won't open
 # ASS colours are BGR
 TEXT, DIM, ACCENT, BAD, WARN = "F6F1EE", "A9978C", "FFB062", "6B6BFF", "47B5FF"
 HEADS = {"idle": ("Ready", ACCENT), "loading": ("Loading", ACCENT), "quality": ("Switching quality", ACCENT), "error": ("Couldn't play", BAD),
