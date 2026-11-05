@@ -1994,6 +1994,12 @@ def request_access():
 
 @app.route("/join/<token>", methods=["GET", "POST"])
 def join(token):
+    who = session_user(request.cookies.get("tv_auth", ""))
+    if who == accounts.GUEST:  # already in from this link (or another): clicking it again just goes to the remote, without using anything up
+        return redirect("/", 303)
+    if who:  # signed in to a real account: this link is for someone else, and using it would swap their login for a guest one
+        return page("Already signed in", f"<h1>You're signed in</h1><p>You are signed in as {html.escape(who)}, so you don't need this link. "
+                    'It is for someone else, and it has not been used up.</p><a href="/">Open the remote</a>')
     inv = access.peek_invite(token)
     if not inv:
         return page("Link expired", "<h1>Link expired</h1><p>This link was already used or has expired. Ask for a new one.</p>", 410)

@@ -87,6 +87,25 @@ class AccessTest(unittest.TestCase):
         self.owner.delete(f"/api/guests/{gid}")
         self.assertEqual(guest.get("/api/favourites").status_code, 401)  # revoked
 
+    def test_clicking_the_link_again_on_the_same_phone_goes_in_but_never_swaps_your_own_login(self):
+        url = self.owner.post("/api/invites", json={"hours": 1, "label": "Aunt"}).get_json()["url"]
+        path = "/" + url.split("/", 3)[3]
+        guest = server.app.test_client()
+        guest.post(path)
+        again = guest.get(path)
+        self.assertEqual((again.status_code, again.headers["Location"]), (303, "/"))  # already a guest: in, not "expired"
+        self.assertEqual(guest.post(path).status_code, 303)
+        self.assertEqual(server.app.test_client().post(path).status_code, 410)  # anyone else with the used link is still turned away
+        # you, logged in as yourself, opening a guest link to look at it: you stay you, and the link is not used up
+        url2 = self.owner.post("/api/invites", json={"hours": 1}).get_json()["url"]
+        path2 = "/" + url2.split("/", 3)[3]
+        r = self.owner.post(path2)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"already", r.data.lower())
+        self.assertNotIn("Set-Cookie", r.headers)
+        self.assertEqual(self.owner.get("/api/auth").get_json()["user"], "boss")
+        self.assertEqual(server.app.test_client().get(path2).status_code, 200)  # still usable by the person it is for
+
     def test_expired_and_revoked_links_are_dead(self):
         t = access.create_invite(1, "x", now=1000.0)
         self.assertIsNone(access.peek_invite(t, now=1000.0 + access.REDEEM_WINDOW + 1))
