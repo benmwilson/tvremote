@@ -304,6 +304,14 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   </details>
 </div>
 
+<div class="card hide" id="pibox">
+  <b>Pi screen</b>
+  <button id="shellrow" class="tvrow" role="switch" aria-checked="true" style="margin:10px 0 8px">
+    <div class="grow"><b>Home screen on the TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
+  <button id="desktop" class="danger" style="width:100%">Show the Pi desktop</button>
+  <p class="sub" style="margin:8px 0 0">Stops what is playing and closes the full-screen home screen, so the Pi's own desktop is usable. Streams still open on top when you play something.</p>
+</div>
+
 <h2>Play something</h2>
 <div class="card">
   <input type="text" id="link" placeholder="Paste a link, a channel name or a search" autocapitalize="off" autocorrect="off" enterkeyhint="go" aria-label="Link, channel or search">
@@ -328,8 +336,6 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <aside id="drawer" class="hide" aria-label="Debug">
   <div class="dh"><b>Debug</b><span id="dage"></span><button id="dbgClose" aria-label="Close debug"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="db">
-    <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:0 0 6px">
-  <div class="grow"><b>Home screen on the TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
     <button id="statsrow" class="tvrow" role="switch" aria-checked="false" style="margin:0 0 6px">
   <div class="grow"><b>Stats on the TV</b><span class="sub warn">Warning: this drops frames while it is on. Dropped frames, buffer and fps in the corner, redrawn every 2 s. Use it to diagnose, then switch it off.</span></div><span class="sw"></span></button>
     <h3>Player</h3><table id="d-player"></table>
@@ -711,11 +717,18 @@ function renderShell() {
 }
 async function loadShell() {
   const cur = targets.find(t => t.id === target) || {};
-  $('shellrow').classList.toggle('hide', cur.kind !== 'pi');
+  $('pibox').classList.toggle('hide', cur.kind !== 'pi');
   loadStats();
   if (cur.kind !== 'pi') return;
   try { shellInfo = await (await fetch('/api/shell')).json(); renderShell(); } catch (e) {}
 }
+$('desktop').onclick = () => busy($('desktop'), async () => {
+  await cmd('stop');
+  const r = await api('/api/shell', 'POST', {enabled: false});
+  if (r) { shellInfo = r; renderShell(); }
+  poll();
+  return r;
+}, 1200);
 $('shellrow').onclick = async () => {
   const want = $('shellrow').getAttribute('aria-checked') !== 'true';
   const r = await busy($('shellrow'), () => api('/api/shell', 'POST', {enabled: want}));
