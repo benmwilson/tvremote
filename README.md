@@ -6,7 +6,7 @@ One Docker container with a small web remote (port 8765). Two kinds of TV:
 - **Pi on HDMI** (living room): mpv draws on the Pi's Wayland desktop, plays through the host's PipeWire and uses the Pi's hardware H.264 decoder.
 - **Chromecast** (bedroom): found on the network and cast to. YouTube uses the Chromecast's own YouTube app; Kick, Twitch and other links are resolved on the Pi and cast.
 
-The remote has a TV picker at the top (Living room / Bedroom). Pause, volume, mute, seek, quality, stop and favourites act on the selected TV.
+The remote opens on **All TVs**: a card per TV showing its name, brand and size, what it's playing and a small health dot (amber "Buffering" if the stream stalls). Tap a TV to control it: pause, volume, mute, seek, quality, stop and favourites act on that TV. Sharing a link from your iPhone opens a picker so you choose the TV.
 
 ## Setup (on the Pi)
 
