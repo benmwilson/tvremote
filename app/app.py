@@ -194,9 +194,11 @@ def last_error():
             lines = f.read()[-4000:].splitlines()
     except OSError:
         return None
-    for line in reversed(lines):
-        if re.search(r"error|failed|logged-in|login|not found|no playable", line, re.I):
-            return re.sub(r"^\[[^\]]*\]\s*(ERROR:\s*)?", "", line.strip())[:200]
+    # specific causes first; generic "Exiting..."/"Failed to open" lines are only a fallback
+    for pat in (r"HTTP.?error|ERROR:|logged-in|login|not found|no playable|unsupported", r"error|failed"):
+        for line in reversed(lines):
+            if re.search(pat, line, re.I) and not line.startswith(("Exiting", "Failed to open")):
+                return re.sub(r"^\[[^\]]*\]\s*(ERROR:\s*)?", "", line.strip())[:200]
     return None
 
 
