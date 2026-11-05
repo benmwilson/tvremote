@@ -43,6 +43,15 @@ def info(ip):
             "app_id": app_id.group(1) if app_id else None}
 
 
+def media(ip):
+    """What the TV's own player says it is doing (read-only): {state, duration}. state is play, pause, buffer, startup, close...
+    Apps report little: there is no title, so the app's name is all the page can show."""
+    xml = _call(ip, "/query/media-player")
+    state = re.search(r'<player\b[^>]*\bstate="([^"]*)"', xml)
+    dur = re.match(r"(\d+)\s*ms", _tag(xml, "duration") or "")
+    return {"state": state.group(1) if state else None, "duration": int(dur.group(1)) / 1000 if dur else None}
+
+
 def key(ip, name):
     if name not in KEYS:
         raise RokuError("Unknown key")

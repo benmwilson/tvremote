@@ -35,10 +35,6 @@ services:
       - TVREMOTE_KICK_CLIENT_ID=${KICK_CLIENT_ID:-}
       - TVREMOTE_KICK_CLIENT_SECRET=${KICK_CLIENT_SECRET:-}
       - TVREMOTE_KICK_REDIRECT=${KICK_REDIRECT:-}
-      - TVREMOTE_ROKU_LIVING=${ROKU_LIVING:-}
-      - TVREMOTE_ROKU_BEDROOM=${ROKU_BEDROOM:-}
-      - TVREMOTE_INPUT_LIVING=${INPUT_LIVING:-}
-      - TVREMOTE_INPUT_BEDROOM=${INPUT_BEDROOM:-}
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://127.0.0.1:${PORT:-8765}/api/status"]
       interval: 30s

@@ -59,8 +59,8 @@ There is no password in `.env`: logging in is by account.
 
 ## Roku TVs, Chromecast and input switching
 
-- Set `ROKU_LIVING` / `ROKU_BEDROOM` (TV addresses) in `.env` to get a TV card with power, volume, input and navigation buttons. On each TV: Settings → System → Advanced system settings → Control by mobile apps → Network access → Permissive.
-- Set `INPUT_LIVING` / `INPUT_BEDROOM` (e.g. `HDMI1`) and the TV wakes and switches to that input whenever you play on it.
+- **Your TVs are found, not typed in.** The setup wizard's TV step (and "Run the setup wizard again" in Settings) searches the network for Roku TVs and Chromecasts, checks whether a screen is on the Pi, guesses which Roku goes with which (the Pi's TV by the name it reports over HDMI, the leftover Roku with the Chromecast), shows why, and lets you change anything and test each TV. Names, the paired Roku and the HDMI input to switch to are saved in `/data/targets.json`; nothing about TVs lives in `.env`. On each Roku TV: Settings → System → Advanced system settings → Control by mobile apps → Network access → Permissive.
+- When a TV is playing something on its own (someone started YouTube on it), the card and the TV page say so ("On the TV: YouTube", paused or playing). That comes from read-only questions to the Roku, and nothing is sent to the TV unless you press a button.
 - The bedroom target is a Chromecast found by mDNS (name configurable in `/data/targets.json`). Pick the TV at the top of the remote, or add `&target=bedroom` to the Shortcut URL (a second Shortcut, "Play in Bedroom").
 - `.env` (not committed) holds your TV addresses and inputs. Keep real addresses out of the repo.
 - The Roku remote's own buttons (pause etc.) don't reach the Pi or the Chromecast: the TV doesn't forward them over CEC. The phone is the remote.
@@ -75,7 +75,7 @@ Between streams the living-room TV shows the app's own screens instead of the Pi
 - **Hide or show it** from the remote's home page (All TVs): the **Remote on the Pi's screen** card shows what is happening and has one button, **Hide the remote from the TV** / **Show the remote on the TV**. Hiding stops what is playing and closes the full-screen window, so the Pi's own desktop is usable. The same on/off switch is in the **Debug** drawer. The app and the remote keep running either way. Showing it again puts the home screen back; a stream you play opens on top.
 - **Keep it off from the start:** `HOME_SCREEN=0` in `~/tvremote/.env`, then `docker compose up -d`. Otherwise the switch's setting is saved in `/data/settings.json` and survives restarts.
 - **Stop the whole app** (nothing at all on the Pi's screen): `docker stop tvremote`. It stays stopped, even after a reboot, until you run `docker start tvremote`. While a stream is playing the stream window is always on top, with the home screen on or off.
-- Playing no longer re-selects an input the TV is already on (that relaunched the input and flashed the screen): the app asks the Roku what it is showing first. This needs `ROKU_LIVING` and `INPUT_LIVING` set.
+- Playing no longer re-selects an input the TV is already on (that relaunched the input and flashed the screen): the app asks the Roku what it is showing first. This needs the TV's Roku and input saved in the wizard.
 - The screens are written as a subtitle file timed ahead (one event per second for the clock, whose colon blinks), so nothing redraws; redrawing flashed the whole screen, and osd-overlay text never stayed on that window. The logo and text are centred as one group. If the home screen won't open: `docker exec tvremote cat /tmp/tvremote-shell.log`. It tries a plain software window first (`wlshm`), then `gpu`; on this Pi `SHELL_VO=gpu,wlshm` in `.env` is what is used. The Debug drawer shows nothing about it yet.
 
 ## On the remote

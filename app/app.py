@@ -41,12 +41,14 @@ import access
 import accounts
 import activity
 import chat
+import discover
 import kick
 import mpvipc
 import roku
 import shell
 import targets
 import tlscallback
+import tvconfig
 
 try:
     from cast import CastTarget
@@ -818,7 +820,7 @@ def play_get():
 
 
 def switch_input(tid):
-    """Wake the Roku TV and select this target's HDMI input (e.g. TVREMOTE_INPUT_BEDROOM=HDMI2)."""
+    """Wake the Roku TV and select this target's HDMI input (set in the setup wizard, e.g. HDMI2)."""
     ip, hdmi = ROKU_IPS.get(tid), INPUTS.get(tid)
     if not (ip and hdmi):
         return
@@ -1062,8 +1064,12 @@ def api_status():
             d = c.status()
         except Exception as e:
             d = dict(running=False, target=c.id, error=str(e))
-        return jsonify({**d, "sleep_at": _sleep.get(c.id)})
-    return jsonify({**pi_status(), "sleep_at": _sleep.get("living")})
+        tid = c.id
+    else:
+        d, tid = pi_status(), "living"
+    if not d.get("running") and not d.get("starting") and not d.get("error"):
+        d["external"] = external_now(tid)
+    return jsonify({**d, "sleep_at": _sleep.get(tid)})
 
 
 def pi_status():
@@ -1094,8 +1100,7 @@ def pi_status():
 _tv = {"t": 0, "v": None}
 
 
-@app.get("/api/tv")
-def api_tv():
+def tv_cec():
     """TV name and power state over CEC (cached 30s; CEC is slow and shared)."""
     if time.time() - _tv["t"] > 30:
         try:
@@ -1107,7 +1112,12 @@ def api_tv():
         pwr = re.search(r"pwr-state: (\w+)", out)
         _tv.update(t=time.time(), v={"name": name.group(1).strip() if name else None,
                                      "power": pwr.group(1) if pwr else None})
-    return jsonify(_tv["v"])
+    return _tv["v"]
+
+
+@app.get("/api/tv")
+def api_tv():
+    return jsonify(tv_cec())
 
 
 @app.get("/api/qualities")
@@ -1118,8 +1128,7 @@ def api_qualities():
     return jsonify(qualities(request.args.get("url") or state["url"]))
 
 
-ROKU_IPS = {"living": os.environ.get("TVREMOTE_ROKU_LIVING", ""),
-            "bedroom": os.environ.get("TVREMOTE_ROKU_BEDROOM", "")}
+ROKU_IPS = {"living": "", "bedroom": ""}  # the Rokus' addresses: filled from /data/targets.json (the setup wizard) at startup
 
 
 def from_chromecast():
@@ -1194,12 +1203,35 @@ def fetch_roku(tv_id):
     was_on = (_roku.get(tv_id, (0, {}))[1] or {}).get("power") == "PowerOn"
     try:
         info = roku.info(ROKU_IPS[tv_id])
+        if external_app(info):  # an app on the TV itself (YouTube, Netflix...): ask what its player is doing. Read-only.
+            try:
+                info["media"] = roku.media(ROKU_IPS[tv_id])
+            except (roku.RokuError, OSError):
+                pass
         if was_on and info.get("power") != "PowerOn":  # went to standby (the TV's own remote, or the app)
             threading.Thread(target=on_tv_off, args=(tv_id,), daemon=True).start()
     except (roku.RokuError, OSError):
         info = _roku.get(tv_id, (0, {}))[1]  # a TV that won't talk ECP keeps its last details
     _roku[tv_id] = (time.time(), info)
     _roku_busy.discard(tv_id)
+
+
+def external_app(r):
+    """The app the TV itself is running (YouTube, Netflix...), or None when it is on an HDMI input, the home screen, or off."""
+    app, app_id = (r or {}).get("app"), (r or {}).get("app_id") or ""
+    if (r or {}).get("power") != "PowerOn" or not app or app_id.startswith("tvinput.") or app.strip().lower() in ("roku", "home"):
+        return None
+    return app
+
+
+def external_now(tv_id):
+    """What the TV is playing on its own, from the cached Roku details (never waits on the TV), or None."""
+    r = roku_details(tv_id)
+    app = external_app(r)
+    if not app:
+        return None
+    state = (r.get("media") or {}).get("state")
+    return {"app": app, "state": state, "paused": state == "pause", "duration": (r.get("media") or {}).get("duration")}
 
 
 def roku_details(tv_id):
@@ -1224,6 +1256,7 @@ def make_card(tv_id, status):
            "live_for": livewatch.live_for(status.get("url") or ""),
            "stream": stream_label(status.get("quality"))} if busy else None
     return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection,
+            "external": None if busy or status.get("error") else external_now(tv_id),  # playing on the TV itself, not through this remote
             "brand": r.get("brand"), "model": r.get("model"), "size": r.get("size"), "tv_name": r.get("name"),
             "power": r.get("power"), "input": r.get("app"), "input_id": r.get("app_id"), "now": now, "error": status.get("error"),
             "health": targets.health(kind, status)}
@@ -1339,14 +1372,75 @@ def api_targets():
     """One card per TV from the background cache; never waits on a TV. type/online/roku are kept for the old UI."""
     out = []
     for c in cards.snapshot():
+        if not TV_ENABLED.get(c["id"], True):
+            continue  # switched off in setup (for instance no screen on the Pi)
         kind, connection = KINDS[c["id"]]
         out.append({"name": LABELS[c["id"]], "kind": kind, "connection": connection, **c,
                     "type": kind, "online": c["reachable"], "roku": bool(ROKU_IPS.get(c["id"]))})
     return jsonify(out)
 
 
-INPUTS = {"living": os.environ.get("TVREMOTE_INPUT_LIVING", ""),
-          "bedroom": os.environ.get("TVREMOTE_INPUT_BEDROOM", "")}
+INPUTS = {"living": "", "bedroom": ""}  # the HDMI input each TV switches to when you play on it
+TV_ENABLED = {"living": True, "bedroom": True}
+
+
+def apply_tv_config(cfg):
+    """Put the saved TV settings to use: Roku addresses, inputs, names, which TVs show. Takes effect at once, no restart."""
+    for tid in tvconfig.IDS:
+        c = cfg.get(tid) or {}
+        ROKU_IPS[tid] = c.get("roku") or ""
+        INPUTS[tid] = c.get("input") or ""
+        TV_ENABLED[tid] = c.get("enabled", True) is not False
+        if c.get("name"):
+            LABELS[tid] = c["name"]
+    b = cfg.get("bedroom") or {}
+    if CAST and b:
+        CAST.cfg.update(name=LABELS["bedroom"], device=b.get("device") or None)
+        CAST.name = LABELS["bedroom"]
+    _roku.clear()  # details cached for the old addresses
+
+
+@app.get("/api/discover")
+def api_discover():
+    """Look for TVs: Rokus (network search), Chromecasts (already found), the Pi's own screen. Takes a few seconds. Includes a first guess
+    of how they pair up and why; whatever was saved before comes with it so the wizard can show the current choice."""
+    admin_only()
+    saved = tvconfig.load(DATA)
+    ips = discover.roku_scan()
+    ips += [ip for ip in (((saved.get(t) or {}).get("roku")) for t in tvconfig.IDS) if ip and ip not in ips]
+    rokus = discover.describe(ips, roku.info)
+    casts = [{"name": d.friendly_name, "model": d.model_name, "host": str(d.host)}
+             for d in (list(CAST.devices.values()) if CAST else []) if d.cast_type == "cast"]
+    display = discover.display_connected()
+    cec = tv_cec() if display else None
+    return jsonify(rokus=rokus, chromecasts=casts, display=display, cec_name=(cec or {}).get("name"),
+                   guess=discover.guess(rokus, casts, display, (cec or {}).get("name"), CEC_PHYS),
+                   saved={t: saved.get(t) or {} for t in tvconfig.IDS})
+
+
+@app.post("/api/targets/config")
+def api_targets_config():
+    admin_only()
+    try:
+        cfg = tvconfig.clean(request.get_json(silent=True) or {})
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    apply_tv_config(tvconfig.save(DATA, cfg))
+    return jsonify(ok=True)
+
+
+@app.post("/api/targets/test")
+def api_targets_test():
+    """Prove a Roku can be controlled: press Info (it shows its information banner and changes nothing)."""
+    admin_only()
+    ip = tvconfig.lan_address((request.get_json(silent=True) or {}).get("roku"))
+    if not ip:
+        return jsonify(ok=False, error="That isn't a TV address on your home network."), 400
+    try:
+        roku.key(ip, "Info")
+    except roku.RokuError as e:
+        return jsonify(ok=False, error=str(e)), 502
+    return jsonify(ok=True)
 
 
 def roku_ip():
@@ -2022,6 +2116,7 @@ def favs_del():
 
 if __name__ == "__main__":
     os.makedirs(DATA, exist_ok=True)
+    apply_tv_config(tvconfig.load(DATA))
     if CastTarget:
         CAST = CastTarget(DATA, resolve, display_title, YTDL_HEIGHTS, SL_DEFAULT)
     cards.start()
