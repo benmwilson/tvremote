@@ -291,10 +291,10 @@ def lag_pill():
 
 
 def stats_overlay(drop_delta, drops, cache_s, fps, stalls):
-    """Debug numbers in the top-left corner (overlay 6), for the stats switch in the Debug drawer."""
+    """Debug numbers as plain text for show-text (top-left). Plain show-text stays up; osd-overlay text kept vanishing."""
     c = "-" if cache_s is None else f"{cache_s:.1f}s"
     text = f"dropped {drop_delta}/s ({drops} total)   buffer {c}   {fps or '-'} fps   stalls {stalls}"
-    return r"{\an7\pos(40,30)\fs30\b1\bord2\shad0\1c&HF6F1EE&\3c&H000000&}" + chat._esc(text)
+    return text
 
 
 def is_lagging(drop_delta, cache_s):
@@ -322,12 +322,12 @@ def _stall_monitor(proc):
         tick += 1
         if settings.get("stats") and tick % 2 == 0 and isinstance(d, (int, float)):  # a redraw costs a little, so only every 2 s
             fps = prop("estimated-vf-fps")
-            mpv(["osd-overlay", 6, "ass-events", stats_overlay(int(d - drops) if drops is not None else 0, int(d),
+            mpv(["show-text", stats_overlay(int(d - drops) if drops is not None else 0, int(d),
                  cache if isinstance(cache, (int, float)) else None, round(fps) if isinstance(fps, (int, float)) else None,
-                 state.get("stalls", 0)), 1920, 1080])
+                 state.get("stalls", 0)), 2600])  # a bit longer than the 2 s redraw, so it never blinks off
             stats_up = True
         elif stats_up and not settings.get("stats"):
-            mpv(["osd-overlay", 6, "none"])
+            mpv(["show-text", "", 1])
             stats_up = False
         if isinstance(d, (int, float)):
             drops = d

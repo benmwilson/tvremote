@@ -360,7 +360,7 @@ class ShellFlow(unittest.TestCase):
             proc.poll.side_effect = [None] * 4 + [0]
             with mock.patch.dict(server.settings, {"stats": on}), mock.patch.object(server.time, "sleep"), mock.patch.object(server, "prop", props),                     mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
                 server._stall_monitor(proc)
-            self.assertEqual(len([c for c in sent if c[1] == 6]), expect)
+            self.assertEqual(len([c for c in sent if c[0] == "show-text"]), expect)
 
     def test_waking_the_tv_selects_its_input_without_waiting(self):
         with mock.patch.object(server, "switch_input") as sw, mock.patch.dict(server.INPUTS, {"living": "HDMI1"}), mock.patch.dict(server.ROKU_IPS, {"living": "203.0.113.1"}):
