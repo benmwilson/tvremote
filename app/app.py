@@ -724,37 +724,17 @@ def osd_paused(paused):
         mpv(["osd-overlay", 2, "none"])
 
 
-def volume_overlay(vol, muted):
-    """ASS for the volume pill (overlay 5): speaker, a bar and the number. Drawn once per change, so it costs nothing between."""
+def volume_text(vol, muted):
+    """Plain text for show-text: a block bar and the number, or Muted. (osd-overlay drawing flashed and lagged the stream.)"""
     v = max(0, min(100, round(vol)))
-    x0, w = 760, 500
-    fill = int(w * v / 100)
-    parts = [r"{\an7\pos(0,0)\p1\bord0\shad0\1c&H000000&\1a&H50&}m 660 900 l 1420 900 1420 1000 660 1000{\p0}",
-             # speaker
-             r"{\an7\pos(0,0)\p1\bord0\shad0\1c&HF6F1EE&}m 690 940 l 710 940 735 920 735 980 710 960 690 960{\p0}",
-             # bar track
-             r"{\an7\pos(0,0)\p1\bord0\shad0\1c&H5A4A40&}m %d 944 l %d 944 %d 956 %d 956{\p0}" % (x0, x0 + w, x0 + w, x0)]
-    if not muted and fill:
-        parts.append(r"{\an7\pos(0,0)\p1\bord0\shad0\1c&HFFB26B&}m %d 944 l %d 944 %d 956 %d 956{\p0}" % (x0, x0 + fill, x0 + fill, x0))
-    parts.append(r"{\an4\pos(1290,952)\fs44\b1\bord0\shad0\1c&HF6F1EE&}" + ("Muted" if muted else str(v)))
-    return "\n".join(parts)
-
-
-_vol_timer = {"t": None}
+    return "Muted" if muted else "Volume %d%%  %s%s" % (v, "█" * (v // 5), "░" * (20 - v // 5))
 
 
 def osd_volume():
-    """Draw a TV-style volume bar on the stream, gone after two seconds."""
+    """Show the volume on the TV for 1.5 s."""
     vol, muted = prop("volume"), prop("mute")
-    if vol is None:
-        return
-    mpv(["osd-overlay", 5, "ass-events", volume_overlay(vol, muted), 1920, 1080])
-    if _vol_timer["t"]:
-        _vol_timer["t"].cancel()
-    t = threading.Timer(2.0, lambda: mpv(["osd-overlay", 5, "none"]))
-    t.daemon = True
-    _vol_timer["t"] = t
-    t.start()
+    if vol is not None:
+        mpv(["show-text", volume_text(vol, muted), 1500])
 
 
 PROPS = {

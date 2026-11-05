@@ -323,25 +323,16 @@ class ShellFlow(unittest.TestCase):
         self.assertTrue(server.is_lagging(0, 0.3))
         self.assertFalse(server.is_lagging(0, None))
 
-    def test_volume_bar_is_drawn_on_the_tv_and_cleared_after_a_moment(self):
+    def test_volume_is_shown_as_plain_text_on_the_tv(self):
         sent = []
         props = {"volume": 40, "mute": False}
-        timers = []
-        class T:
-            def __init__(self, s, fn): self.fn, self.daemon = fn, False; timers.append(self)
-            def start(self): pass
-            def cancel(self): pass
-        with mock.patch.object(server, "prop", lambda n: props.get(n)), mock.patch.object(server.threading, "Timer", T),                 mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
+        with mock.patch.object(server, "prop", lambda n: props.get(n)), mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
             server.osd_volume()
-            self.assertEqual((sent[0][0], sent[0][1]), ("osd-overlay", 5))
-            self.assertIn("40", sent[0][3])
-            timers[-1].fn()
-        self.assertEqual(sent[-1], ["osd-overlay", 5, "none"])
-
-    def test_volume_overlay_shows_muted_and_no_fill_when_muted(self):
-        self.assertIn("Muted", server.volume_overlay(40, True))
-        self.assertNotIn("FFB26B", server.volume_overlay(40, True))
-        self.assertIn("FFB26B", server.volume_overlay(40, False))
+            props["mute"] = True
+            server.osd_volume()
+        self.assertEqual(sent[0][0], "show-text")
+        self.assertIn("Volume 40%", sent[0][1])
+        self.assertEqual(sent[1][1], "Muted")  # and nothing else is drawn: no overlay, no timer
 
     def test_stats_switch_is_saved_and_the_overlay_has_the_numbers(self):
         with mock.patch.object(server, "save_settings") as sv, mock.patch.dict(server.settings, {"stats": False}):
