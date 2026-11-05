@@ -302,6 +302,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .apps .app img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:var(--line)}
 .apps .app span{font-size:12px;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .apps .note{grid-column:1/-1;margin:6px 2px;color:var(--dim);font-size:14px}
+#tvmute.muted{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}
+#tvmute.muted .ic{color:#ff8a8a}
 </style>
 </head>
 <body>
@@ -539,7 +541,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <div class="row"><button data-k="PowerOn"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg>On</button>
     <button data-k="PowerOff"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg>Off</button></div>
   <div class="row"><button data-k="VolumeDown" aria-label="TV volume down"><svg class="ic" aria-hidden="true"><use href="#i-volume-low"/></svg>&minus;</button>
-    <button data-k="VolumeMute" aria-label="TV mute"><svg class="ic" aria-hidden="true"><use href="#i-mute"/></svg></button>
+    <button id="tvmute" data-k="VolumeMute" aria-label="Mute the TV" aria-pressed="false" title="Mute or unmute. The TV doesn't report its mute state, so this shows what was last pressed here."><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg></button>
     <button data-k="VolumeUp" aria-label="TV volume up"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg>+</button></div>
   <div class="row"><button data-k="InputHDMI1"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>1</button>
     <button data-k="InputHDMI2"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>2</button>
@@ -1703,7 +1705,7 @@ function show() {
   if (v === 'tv') {
     const id = decodeURIComponent(location.hash.slice(5));
     if (id !== target) {
-      target = id; st = {}; lastRun = null; qualFor = null; appsFor = null; $('appsbox').open = false; $('qual').innerHTML = '';
+      target = id; st = {}; lastRun = null; qualFor = null; appsFor = null; $('appsbox').open = false; renderTvMute(); $('qual').innerHTML = '';
       try { localStorage.setItem('target', id); } catch (e) {}
       loadFavs(); poll(); loadShell();
     }
@@ -1727,8 +1729,21 @@ document.addEventListener('click', async e => {
   const k = b.dataset.k;
   const hold = k === 'PowerOn' ? 4000 : /^Input/.test(k) ? 2500 : 0;  // the TV takes a moment to wake or change input
   const r = await busy(b, () => api('/api/roku/key', 'POST', {key: k}), hold);
-  if (r && r.ok) followTv();
+  if (r && r.ok) {
+    if (k === 'VolumeMute') tvMuted[target] = !tvMuted[target];  // the TV doesn't say whether it is muted: this is what we last did to it
+    if (k === 'VolumeUp' || k === 'VolumeDown') tvMuted[target] = false;  // changing the volume unmutes a Roku TV
+    renderTvMute();
+    followTv();
+  }
 });
+const tvMuted = {};
+function renderTvMute() {
+  const m = !!tvMuted[target], b = $('tvmute');
+  b.classList.toggle('muted', m);
+  b.setAttribute('aria-pressed', String(m));
+  b.setAttribute('aria-label', m ? 'Unmute the TV (it was muted from here)' : 'Mute the TV');
+  setBtn(b, m ? 'mute' : 'volume', m ? 'Muted' : '');
+}
 // after a power or input change, look again a few times as the TV settles (the Pi re-asks the TV on the same beat)
 const followTv = () => [500, 1500, 3500, 7000, 11000].forEach(ms => setTimeout(loadTargets, ms));
 
