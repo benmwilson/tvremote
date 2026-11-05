@@ -307,7 +307,6 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
       <p class="sub s-err" id="suerr" role="alert"></p>
       <button class="go">Create admin account</button>
     </form>
-    <button id="suskip" class="s-wide hide">Keep using the .env password for now</button>
   </div>
   <div id="setup2" class="card hide">
     <h2 style="margin:0 0 6px">Your TVs</h2>
@@ -946,15 +945,15 @@ function copyText(input) {
 let me = {}, people = [], access = {requests: [], invites: [], guests: []}, openPerson = null;
 
 function renderProfile() {
-  const name = me.guest ? 'Guest' + (me.label ? ' (' + me.label + ')' : '') : me.owner ? 'Owner' : me.user || '';
+  const name = me.guest ? 'Guest' + (me.label ? ' (' + me.label + ')' : '') : me.user === 'owner' ? 'Owner' : me.user || '';
   $('sname').textContent = name || 'Signed out';
   $('sav').textContent = (me.guest ? 'G' : name).slice(0, 1);
   $('srole').textContent = me.guest ? 'guest' : me.owner ? 'owner' : me.role || '';
   $('srole').className = 'pill ' + (me.guest ? 'guest' : me.owner ? 'owner' : me.role || '');
   $('acctsub').textContent = me.guest ? 'Access ends in ' + inFuture(me.guest_until || 0) + '. You can control the TVs.'
-    : !me.required ? 'No password is set, so everyone is the owner.' : me.owner ? 'Your password is set in .env on the Pi.' : '';
+    : !me.required ? 'Setup isn\u2019t finished: nobody is logged in yet.' : '';
   $('signout').classList.toggle('hide', !me.required);
-  $('pwcard').classList.toggle('hide', !me.required || me.owner || me.guest);
+  $('pwcard').classList.toggle('hide', !me.required || me.user === 'owner' || me.guest);
   $('platforms').classList.toggle('hide', !!me.guest);
   $('adminarea').classList.toggle('hide', !me.admin);
   $('dbgrow').classList.toggle('hide', !me.admin);
@@ -963,7 +962,7 @@ function renderProfile() {
 function personRow(u) {
   const mine = u.name === me.user || (u.owner && me.owner);
   const canAct = !u.owner && !u.founder && !mine && (me.owner || u.role !== 'admin');
-  const facts = [u.favs + (u.favs === 1 ? ' favourite' : ' favourites'), u.owner ? 'password in .env' : 'logged in ' + seen(u.last_login)].join(' · ');
+  const facts = [u.favs + (u.favs === 1 ? ' favourite' : ' favourites'), u.last_login ? 'logged in ' + seen(u.last_login) : 'never logged in'].join(' · ');
   const lastDid = u.last ? u.last.text + ' · ' + ago(u.last.ts) : null;
   const row = mk('div', {class: 's-row'},
     mk('div', {class: 'avatar', 'aria-hidden': 'true'}, u.name.slice(0, 1)),
@@ -1077,16 +1076,13 @@ $('invcopy').onclick = () => { copyText($('invurl')); $('invcopy').textContent =
 loadAccounts();
 
 // ---- setup wizard: the admin account first ----
-let setupStep = 1, setupInfo = {};
+let setupStep = 1, setupInfo = {}, setupNeeded = false;  // while the wizard is unfinished it is the only page (no Settings, no TVs)
 function renderSetup() {
   [1, 2, 3].forEach(n => $('setup' + n).classList.toggle('hide', n !== setupStep));
   [...$('setupdots').children].forEach((d, i) => d.classList.toggle('on', i < setupStep));
   $('setupcount').textContent = 'Step ' + setupStep + ' of 3';
   if (setupStep === 1) {
-    $('setup1text').textContent = setupInfo.password_set
-      ? 'You are signed in with the password from .env (the owner). Create a named admin account to use day to day. The .env password keeps working for scripts, shortcuts and recovery.'
-      : 'This is a new install, so nobody can log in yet. Create the first admin account. It becomes the owner and can add everyone else.';
-    $('suskip').classList.toggle('hide', !setupInfo.password_set);
+    $('setup1text').textContent = 'Nobody can log in yet. Create the first admin account. It becomes the owner and can add everyone else.';
     $('sucode').classList.toggle('hide', !setupInfo.needs_code);  // only a brand-new install asks for the code printed in the log
   }
   if (setupStep === 2) {
@@ -1113,14 +1109,13 @@ $('setupform').onsubmit = async e => {
   setupInfo = {...setupInfo, has_admin: true, created: r.name}; $('supw').value = ''; $('supw2').value = '';
   setupStep = 2; renderSetup(); loadAccounts();
 };
-$('suskip').onclick = () => { setupStep = 2; renderSetup(); };
 $('sunext2').onclick = () => { setupStep = 3; renderSetup(); };
 $('sufinish').onclick = async () => {
   const r = await busy($('sufinish'), () => api('/api/setup/finish', 'POST', {}));
-  if (r && r.ok) location.hash = '#/';
+  if (r && r.ok) { setupNeeded = false; location.hash = '#/'; }
 };
 $('rerun').onclick = () => { location.hash = '#/setup'; };
-fetch('/api/setup').then(r => r.json()).then(j => { if (j.needed && view() !== 'setup') location.hash = '#/setup'; }).catch(() => {});
+fetch('/api/setup').then(r => r.json()).then(j => { setupNeeded = !!j.needed; if (setupNeeded && view() !== 'setup') location.hash = '#/setup'; }).catch(() => {});
 
 fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
 
@@ -1414,7 +1409,9 @@ async function loadTargets() {
 
 let beforeSettings = '#/';  // where the gear takes you back to
 function show() {
+  if (setupNeeded && view() !== 'setup') { location.hash = '#/setup'; return; }
   const v = view();
+  $('gear').style.display = v === 'setup' ? 'none' : '';  // no way out of the wizard through the header
   if (v !== 'settings') beforeSettings = location.hash || '#/';
   $('gear').setAttribute('aria-pressed', String(v === 'settings'));
   $('gear').title = v === 'settings' ? 'Close settings' : 'Settings';

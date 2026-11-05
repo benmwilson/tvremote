@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import accounts  # noqa: E402
 import app as server  # noqa: E402
 import kick  # noqa: E402
+from helpers import founder_client  # noqa: E402
 
 
 class AccountsTest(unittest.TestCase):
@@ -20,7 +21,7 @@ class AccountsTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir, True)
         for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir),
                   mock.patch.object(server, "FAV_FILE", os.path.join(self.dir, "favourites.json")),
-                  mock.patch.object(kick, "DATA", self.dir), mock.patch.object(server, "PASSWORD", "owner-pw"),
+                  mock.patch.object(kick, "DATA", self.dir),
                   mock.patch.object(server.time, "sleep")):
             p.start()
             self.addCleanup(p.stop)
@@ -42,31 +43,33 @@ class AccountsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             accounts.add("tim", "short")
 
-    def test_each_account_has_its_own_favourites_and_the_owner_keeps_the_old_file(self):
+    def test_each_account_has_its_own_favourites_and_the_founder_took_over_the_old_ones(self):
         accounts.add("sam", "secret1")
-        owner, code = self.login("", "owner-pw")
-        self.assertEqual(code, 303)
+        owner = founder_client(server)
         sam, code = self.login("sam", "secret1")
         self.assertEqual(code, 303)
         self.assertEqual(sam.get("/api/auth").get_json()["user"], "sam")
         owner.post("/api/favourites", json={"url": "https://kick.com/capped", "name": "capped", "source": "Kick"})
         self.assertEqual([f["name"] for f in owner.get("/api/favourites").get_json()], ["capped"])
         self.assertEqual(sam.get("/api/favourites").get_json(), [])
-        self.assertTrue(os.path.exists(os.path.join(self.dir, "favourites.json")))  # the owner's file, as before
+        self.assertTrue(os.path.exists(os.path.join(self.dir, "favourites.boss.json")))
         sam.post("/api/favourites", json={"url": "https://kick.com/xqc", "name": "xqc", "source": "Kick"})
         self.assertTrue(os.path.exists(os.path.join(self.dir, "favourites.sam.json")))
         self.assertEqual(sorted(server.watched_urls()), ["https://kick.com/capped", "https://kick.com/xqc"])  # live checks cover everyone
 
     def test_login_rules(self):
         accounts.add("sam", "secret1")
-        self.assertEqual(self.login("sam", "owner-pw")[1], 401)  # an account needs its own password, not the owner's
+        founder_client(server)
+        self.assertEqual(self.login("sam", "boss-pass1")[1], 401)  # an account needs its own password, not someone else's
         self.assertEqual(self.login("sam", "wrong")[1], 401)
-        self.assertEqual(self.login("whoever", "owner-pw")[1], 303)  # an unknown name with the owner password: the owner, as before
+        self.assertEqual(self.login("whoever", "boss-pass1")[1], 401)  # no catch-all name any more
+        self.assertEqual(self.login("", "boss-pass1")[1], 401)
+        self.assertEqual(self.login("sam", "secret1")[1], 303)
 
     def test_only_the_owner_manages_accounts(self):
-        owner, _ = self.login("", "owner-pw")
+        owner = founder_client(server)
         r = owner.post("/api/accounts", json={"name": "sam", "password": "secret1"})
-        self.assertEqual([u["name"] for u in r.get_json()["users"]], ["owner", "sam"])
+        self.assertEqual([u["name"] for u in r.get_json()["users"]], ["boss", "sam"])
         self.assertEqual(owner.post("/api/accounts", json={"name": "x", "password": "secret1"}).status_code, 400)
         sam, _ = self.login("sam", "secret1")
         self.assertEqual(sam.get("/api/accounts").status_code, 403)
@@ -78,11 +81,11 @@ class AccountsTest(unittest.TestCase):
 
 
     def test_roles(self):
-        owner, _ = self.login("", "owner-pw")
-        self.assertEqual(owner.get("/api/auth").get_json()["role"], "admin")  # the owner can never be locked out
+        owner = founder_client(server)
+        self.assertEqual(owner.get("/api/auth").get_json()["role"], "admin")  # the founder is an admin
         owner.post("/api/accounts", json={"name": "sam", "password": "secret1"})
         owner.post("/api/accounts", json={"name": "amy", "password": "secret1", "role": "admin"})
-        self.assertEqual([(u["name"], u["role"]) for u in owner.get("/api/accounts").get_json()["users"]], [("owner", "admin"), ("amy", "admin"), ("sam", "user")])
+        self.assertEqual([(u["name"], u["role"]) for u in owner.get("/api/accounts").get_json()["users"]], [("amy", "admin"), ("boss", "admin"), ("sam", "user")])
         sam, _ = self.login("sam", "secret1")
         for path in ("/api/accounts", "/api/debug", "/api/screen.png"):
             self.assertEqual(sam.get(path).status_code, 403, path)
@@ -107,7 +110,7 @@ class AccountsTest(unittest.TestCase):
         self.assertEqual(amy.post("/api/accounts", json={"name": "amy", "password": "mynewpw1"}).status_code, 200)  # your own password is yours (and signs you out)
 
     def test_a_new_password_or_a_removed_and_recreated_name_ends_old_logins(self):
-        owner, _ = self.login("", "owner-pw")
+        owner = founder_client(server)
         owner.post("/api/accounts", json={"name": "sam", "password": "secret1"})
         sam, _ = self.login("sam", "secret1")
         self.assertEqual(sam.get("/api/favourites").status_code, 200)
@@ -121,6 +124,7 @@ class AccountsTest(unittest.TestCase):
     def test_an_unknown_session_is_nobody_not_the_owner(self):
         self.assertIsNone(server.session_user("not-a-token"))
         self.assertIsNone(server.session_user(""))
+        founder_client(server)  # once an account exists, login is required
         c = server.app.test_client()
         c.set_cookie("tv_auth", "not-a-token")
         self.assertEqual(c.get("/api/favourites").status_code, 401)

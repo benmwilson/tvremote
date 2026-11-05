@@ -1,8 +1,7 @@
-"""Named accounts beside the owner (whose password is TVREMOTE_PASSWORD). Each account has its own favourites and its own
-Kick link; everything else (what is playing, recents, settings) is shared, since there is one TV.
-Passwords are stored as salted scrypt hashes in /data/users.json.
-Two roles: "admin" (manages accounts and settings) and "user". The owner (the .env password) is always an admin, so
-nobody can be locked out by demoting accounts."""
+"""Named accounts. Each has its own favourites and its own Kick link; everything else (what is playing, recents, settings) is shared,
+since there is one TV. Passwords are stored as salted scrypt hashes in /data/users.json.
+Two roles: "admin" (manages accounts and settings) and "user". The first admin made by setup is the founder (the owner): only they can
+change other admins. "owner" itself is just the stand-in used on a fresh install, before anyone can log in."""
 import hashlib
 import hmac
 import json
@@ -58,8 +57,30 @@ def role(name):
 
 
 def is_owner(name):
-    """The owner: the .env password's pseudo-account, or the founder (the first admin made by setup when there is no .env password)."""
+    """The owner: the founder (the first admin, made by setup), or the stand-in used while nobody can log in yet (a fresh install)."""
     return name == OWNER or bool(_load().get(name, {}).get("founder"))
+
+
+def founder_name():
+    for n, u in _load().items():
+        if u.get("founder"):
+            return n
+    return None
+
+
+def ensure_founder():
+    """There is no .env password to fall back on, so someone must be the owner: if nobody is, the earliest admin becomes it.
+    Returns that account's name when it just happened."""
+    with _lock:
+        d = _load()
+        if any(u.get("founder") for u in d.values()):
+            return None
+        admins = sorted((u.get("created") or 0, n) for n, u in d.items() if u.get("role") == "admin")
+        if not admins:
+            return None
+        d[admins[0][1]]["founder"] = True
+        _write(d)
+        return admins[0][1]
 
 
 def listing():

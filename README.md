@@ -45,17 +45,17 @@ The Kick app doesn't list Shortcuts in its share sheet: copy the link, then run 
 
 Remote on the Home Screen: open `http://<pi-ip>:8765` in Safari → Share → Add to Home Screen. It opens on the All TVs view; tap a TV to control it.
 
-## Password
-
-Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose up -d`. The remote then shows a password-only login page (no username) and remembers you for 180 days. The logout icon is at the top right. Each login is a random token kept (hashed) in `/data/sessions.json`; logging out ends it on the Pi, and changing the password logs every phone out. `curl -u :<password>` still works for scripts. A `/play` Shortcut that skips the picker can't show the login page, so end its URL with `&t=<password>`: `http://<pi-ip>:8765/play?u=<encoded>&target=bedroom&t=<password>`. Plain HTTP on your LAN, so it keeps casual users out, not a determined sniffer.
-
 ## Accounts, roles and the setup wizard
 
-- **First run:** with no `PASSWORD` and no accounts, the remote is open and sends you straight to the setup wizard. Step 1 creates the first admin account (the "owner"); from then on login is required. The wizard asks for a setup code that is printed in the container's log (`docker logs tvremote`), so only someone with access to the Pi can claim the install, and it only works when you open the remote by its IP address or a `.local` name. With a `PASSWORD` set, the wizard offers to add a named admin or skip.
-- **Roles:** `admin` (manage people, requests, guest links, Debug) and `user` (use the TVs, own favourites, own Kick link). Only the owner can change other admins. The last admin can't be removed or demoted when there is no `.env` password.
+There is no password in `.env`: logging in is by account.
+
+- **First run:** the remote sends you straight to the setup wizard. Step 1 creates the first admin account (the "owner"), and from then on login is required. The wizard asks for a setup code printed in the container's log (`docker logs tvremote`), so only someone with access to the Pi can claim the install, and it only works when you open the remote by its IP address or a `.local` name. Until that admin exists nothing can be changed. The wizard is the only page until you finish it.
+- **Upgrading from the old `.env` password:** delete the `PASSWORD=` line from `.env` (it is ignored now) and rebuild. Your first admin account becomes the owner and inherits the old favourites and Kick link. Old password logins stop working: log in with your account.
+- **Roles:** `admin` (manage people, requests, guest links, Debug) and `user` (use the TVs, own favourites, own Kick link). Only the owner can change other admins. The last admin can't be removed or demoted.
 - **Settings** (the gear): your account and password, Kick and Twitch links, and for admins the people list, access requests from the login page, one-time guest links (control the TVs for a set time, nothing else), and the home-screen switch.
-- **Keep `PASSWORD`?** It's optional, but your Shortcut (`&t=<password>`) and `curl -u :<password>` scripts use it, and it is the way back in if the accounts file is lost. Locked out with no `PASSWORD` (or `users.json` is damaged: login stays required rather than opening up)? Delete `users.json` from the `tvremote-data` volume and the wizard runs again. Too many failed logins from one address (10 in 10 minutes) are refused for a while.
-- **Data:** small JSON files in `/data`, no database: `users.json`, `sessions.json`, `favourites*.json`, `kick_link*.json`, `requests.json`, `invites*.json`, `activity.json`, `setup.json`.
+- **Shortcuts and scripts:** the "Play on Pi" Shortcut opens the page in Safari, where you are logged in. A Shortcut or script that calls the API without a browser sends Basic auth with an account: `curl -u ben:<password> http://<pi-ip>:8765/api/status`.
+- **Locked out, or the accounts file is damaged** (login stays required rather than opening up)? Delete `users.json` from the `tvremote-data` volume and the wizard runs again. Too many failed logins from one address (10 per account, 30 overall, in 10 minutes) are refused for a while.
+- **Data:** small JSON files in `/data`, no database: `users.json`, `sessions.json`, `session.key`, `favourites*.json`, `kick_link*.json`, `requests.json`, `invites*.json`, `activity.json`, `setup.json`.
 
 ## Roku TVs, Chromecast and input switching
 
@@ -125,4 +125,4 @@ Changing the volume from the remote shows a short volume bar on the Pi's screen.
 - **Bedroom missing from the picker or "not found on the network":** the Chromecast must be on the same network as the Pi (no guest network or client isolation). The container uses host networking so mDNS works.
 - **Volume bar or stats text not showing:** only the Pi's screen can show them; the Chromecast can't.
 - **"osd-overlay: required argument data not set" in the log:** an old build; update (clearing an overlay needs an empty data argument).
-- `/play` is a plain GET; set `PASSWORD` (above) if the network isn't trusted.
+- `/play` is a plain GET and needs a logged-in browser (the login page), or Basic auth with an account.

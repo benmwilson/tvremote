@@ -12,6 +12,7 @@ import activity  # noqa: E402
 import accounts  # noqa: E402
 import app as server  # noqa: E402
 import kick  # noqa: E402
+from helpers import founder_client  # noqa: E402
 
 
 class AccessTest(unittest.TestCase):
@@ -20,15 +21,14 @@ class AccessTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir, True)
         for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir),
                   mock.patch.object(server, "FAV_FILE", os.path.join(self.dir, "favourites.json")),
-                  mock.patch.object(kick, "DATA", self.dir), mock.patch.object(server, "PASSWORD", "owner-pw"),
+                  mock.patch.object(kick, "DATA", self.dir),
                   mock.patch.object(server.time, "sleep")):
             p.start()
             self.addCleanup(p.stop)
         access._last_by_ip.clear()
         activity.reset()
         server._fails.clear()
-        self.owner = server.app.test_client()
-        self.owner.post("/login", data={"password": "owner-pw"})
+        self.owner = founder_client(server)
 
     def test_requesting_access_needs_no_login_and_lands_in_the_admin_list(self):
         anon = server.app.test_client()
@@ -123,7 +123,6 @@ class AccessTest(unittest.TestCase):
         self.assertEqual(sam.post("/api/account/password", json={"current": "secret1", "new": "another1"}).status_code, 200)
         self.assertEqual(sam.get("/api/favourites").status_code, 401)  # signed out everywhere
         self.assertTrue(accounts.verify("sam", "another1"))
-        self.assertEqual(self.owner.post("/api/account/password", json={"current": "a", "new": "bbbbbb"}).status_code, 400)  # the owner's is in .env
 
     def test_stats_last_login_last_action_and_link_use(self):
         accounts.add("sam", "secret1")
@@ -162,7 +161,7 @@ class AccessTest(unittest.TestCase):
         self.assertEqual(self.owner.post("/api/accounts/signout", json={"name": "sam"}).status_code, 200)
         self.assertEqual(sam.get("/api/favourites").status_code, 401)
         users = {u["name"]: u for u in self.owner.get("/api/accounts").get_json()["users"]}
-        self.assertTrue(users["sam"]["last_login"] and users["owner"]["owner"])
+        self.assertTrue(users["sam"]["last_login"] and users["boss"]["founder"])
 
 
 if __name__ == "__main__":

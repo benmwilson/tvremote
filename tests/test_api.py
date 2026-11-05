@@ -13,6 +13,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import app as server  # noqa: E402
 
 
+import accounts  # noqa: E402
+
+_REAL = {"session_user": server.session_user, "initialised": accounts.initialised}
+
+
+def setUpModule():
+    """These tests exercise the TV routes, not login: the app counts as set up and every request is the signed-in owner stand-in.
+    test_login_page_cookie_and_logout puts the real login back."""
+    global _patches
+    _patches = [mock.patch.object(accounts, "initialised", lambda: True), mock.patch.object(server, "session_user", lambda tok: accounts.OWNER)]
+    for p in _patches:
+        p.start()
+
+
+def tearDownModule():
+    for p in _patches:
+        p.stop()
+
+
 ROKU = {"name": "TV One", "brand": "TCL", "model": "55C803", "size": 55, "power": "PowerOn", "app": "Roku"}
 PLAYING = {"running": True, "title": "chan: a very good stream", "source": "Kick", "live": True, "paused": False,
            "position": 42.0, "quality": "1080p60,best", "drops": 1, "url": "https://kick.com/chan"}
@@ -405,29 +424,34 @@ class ShellFlow(unittest.TestCase):
             off.assert_called_once_with("living")
 
     def test_login_page_cookie_and_logout(self):
-        c = server.app.test_client()
+        import base64
         d = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, d, True)
-        with mock.patch.object(server, "PASSWORD", "pw123"), mock.patch.object(server.time, "sleep"), mock.patch.object(server, "DATA", d):
+        with mock.patch.object(server, "session_user", _REAL["session_user"]), mock.patch.object(accounts, "initialised", _REAL["initialised"]), \
+                mock.patch.dict(os.environ, {"TVREMOTE_DATA": d}), mock.patch.object(server.time, "sleep"), mock.patch.object(server, "DATA", d), \
+                mock.patch.dict(server._key, {"v": None}):
+            server._fails.clear()
+            accounts.add("ben", "hunter22", "admin", founder=True)
+            c = server.app.test_client()
             r = c.get("/", headers={"Accept": "text/html"})
             self.assertEqual((r.status_code, r.headers["Location"].split("?")[0]), (303, "/login"))
             self.assertEqual(c.get("/api/favourites").status_code, 401)  # scripts still get a plain 401
-            self.assertEqual(c.get("/api/favourites", headers={"Authorization": "Basic " + __import__("base64").b64encode(b":pw123").decode()}).status_code, 200)
-            basic = {"Authorization": "Basic " + __import__("base64").b64encode(b":pw123").decode()}
+            basic = {"Authorization": "Basic " + base64.b64encode(b"ben:hunter22").decode()}
+            self.assertEqual(c.get("/api/favourites", headers=basic).status_code, 200)  # a script logs in with an account
             self.assertEqual(c.get("/", headers={**basic, "Accept": "text/html"}).status_code, 303)  # a browser's remembered pop-up login no longer counts for pages
-            self.assertEqual(c.post("/login", data={"password": "nope"}).status_code, 401)
+            self.assertEqual(c.post("/login", data={"username": "ben", "password": "nope"}).status_code, 401)
             self.assertEqual(c.get("/api/favourites").status_code, 401)
-            r = c.post("/login", data={"password": "pw123", "next": "//evil.example"})
+            r = c.post("/login", data={"username": "ben", "password": "hunter22", "next": "//evil.example"})
             self.assertEqual((r.status_code, r.headers["Location"]), (303, "/"))  # no open redirect
             self.assertIn("HttpOnly", r.headers["Set-Cookie"])
-            self.assertEqual(c.get("/api/auth").get_json()["required"], True)  # cookie is now set
+            self.assertEqual(c.get("/api/auth").get_json()["user"], "ben")  # cookie is now set
             old = c.get_cookie("tv_auth").value
             c.get("/logout")
             self.assertEqual(c.get("/api/favourites").status_code, 401)
             c.set_cookie("tv_auth", old)  # a copied cookie is dead after logout
             self.assertEqual(c.get("/api/favourites").status_code, 401)
             self.assertNotIn(old, open(os.path.join(d, "sessions.json")).read())  # only hashes on disk
-            tok = server.new_session()
+            tok = server.new_session("ben")
             with mock.patch.object(server, "_sess_save"):  # the disk write fails: logout must still work
                 server.drop_session(tok)
             self.assertFalse(server.valid_session(tok))
@@ -435,10 +459,12 @@ class ShellFlow(unittest.TestCase):
             for junk in ("a", "b", "c"):
                 server.drop_session(junk)
             self.assertEqual(len(server._revoked), before)  # unknown tokens are not remembered
-            tok2 = server.new_session()
+            accounts.add("amy", "secret1")
+            tok2 = server.new_session("amy")
             self.assertTrue(server.valid_session(tok2))
-            with mock.patch.object(server, "PASSWORD", "changed"):  # a new password voids every session
-                self.assertFalse(server.valid_session(tok2))
+            accounts.remove("amy")  # a removed account's logins end
+            self.assertFalse(server.valid_session(tok2))
+            self.assertFalse(server.valid_session("not-a-token"))
 
     def test_refresh_has_its_own_screen_and_quality_keeps_its_own(self):
         server.state.update(url="https://kick.com/chan", quality="1080p60,best")

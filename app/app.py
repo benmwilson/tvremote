@@ -19,7 +19,6 @@ from flask import Flask, Response, abort, g, has_request_context, jsonify, send_
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("TVREMOTE_DATA", "/data")
-PASSWORD = os.environ.get("TVREMOTE_PASSWORD", "")
 PORT = int(os.environ.get("TVREMOTE_PORT", "8765"))
 CEC_PHYS = os.environ.get("TVREMOTE_CEC_PHYS", "1.0.0.0")
 SOCK = "/tmp/tvremote-mpv.sock"
@@ -81,15 +80,19 @@ _live_cache = {}
 
 @app.before_request
 def guard():
-    """CSRF check, then Basic auth when TVREMOTE_PASSWORD is set (/play also takes ?t=<password>)."""
-    g.user = accounts.OWNER  # the password, a script or no password at all is the owner; a login cookie can say otherwise
-    token_ok = bool(PASSWORD) and hmac.compare_digest(request.args.get("t", "").encode(), PASSWORD.encode())
+    """CSRF check, then login (a cookie from the login page, or Basic auth with an account for scripts)."""
+    g.user = accounts.OWNER  # the stand-in for "nobody is set up yet"; a login cookie says who it really is
     origin = request.headers.get("Origin")
     if request.method != "GET" and origin and urlparse(origin).netloc != request.host:
         return Response("Cross-site request blocked", 403)
-    if request.path == "/play" and request.headers.get("Sec-Fetch-Site") == "cross-site" and not token_ok:
+    if request.path == "/play" and request.headers.get("Sec-Fetch-Site") == "cross-site":
         return Response("Cross-site request blocked", 403)
-    if not auth_required() or re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
+    if not auth_required():
+        # A fresh install has no login yet, so nothing may change until the setup wizard has made the first admin
+        if (request.method not in ("GET", "HEAD") or request.path == "/play") and request.path != "/api/setup/admin":
+            return Response(json.dumps({"ok": False, "error": "Finish the setup first."}), 403, mimetype="application/json")
+        return None
+    if re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
@@ -104,21 +107,18 @@ def guard():
     a = request.authorization
     wants_page = "text/html" in request.headers.get("Accept", "")
     # a browser page load needs the login cookie: Safari remembers the old password pop-up and would otherwise stay logged in after logout
-    if a and not wants_page:  # curl and scripts
-        if _throttled(request.remote_addr):
+    if a and not wants_page:  # curl and scripts: Basic auth with an account
+        name = (a.username or "").strip().lower()
+        if _throttled(request.remote_addr, name):
             return too_many()
-        if PASSWORD and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
+        if name and accounts.verify(name, a.password or ""):
+            g.user = name
             return None
-        if a.username and accounts.verify(a.username, a.password or ""):
-            g.user = a.username.strip().lower()
-            return None
-        _note_fail(request.remote_addr)
+        _note_fail(request.remote_addr, name)
         time.sleep(0.8)  # slows guessing, like the login page
-    if request.path == "/play" and token_ok:
-        return None
     if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):  # a browser: show the login page
         return redirect("/login?next=" + quote(request.full_path.rstrip("?")), 303)
-    return Response("Password required", 401, {"WWW-Authenticate": 'Basic realm="TV Remote"'})
+    return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="TV Remote"'})
 
 
 SESSION_DAYS = 180
@@ -167,29 +167,59 @@ _revoked = set()  # logged-out tokens, kept in memory too so a failed disk write
 
 
 def auth_required():
-    """Login is needed once there is a .env password or accounts have ever been set up. A fresh install with neither is open until setup
-    makes the first admin. An unreadable accounts file counts as set up (fail closed)."""
-    return bool(PASSWORD) or accounts.initialised()
+    """Login is needed once accounts have ever been set up. A fresh install is closed to changes until setup makes the first admin.
+    An unreadable accounts file counts as set up (fail closed)."""
+    return accounts.initialised()
 
 
-_fails = {}  # address -> times of recent failed logins (any kind: the form, a script, the setup code)
+# Failed logins (the form, a script, the setup code), newest last. Keys: "<address>" (everything from one address, IPv6 by /64),
+# "<address>|<name>" (one account from one address) and "setup" (every guess at the setup code, from anywhere).
+_fails = {}
+WINDOW = 600
 
 
-def _throttled(ip):
+def _bucket(ip):
+    try:
+        a = ipaddress.ip_address(ip or "")
+        return str(ipaddress.ip_network(f"{a}/64", strict=False)) if a.version == 6 else str(a)
+    except ValueError:
+        return ip or "?"
+
+
+def _recent(key, now=None):
+    now = now or time.time()
+    r = [t for t in _fails.get(key, []) if now - t < WINDOW]
+    if r:
+        _fails[key] = r
+    else:
+        _fails.pop(key, None)  # no entry for anyone with no recent failures
+    return r
+
+
+def _prune(now):
+    if len(_fails) > 5000:  # only ever drops what has expired, then the oldest: a flood of addresses can't reset anyone's count
+        for k in list(_fails):
+            _recent(k, now)
+        for k in sorted(_fails, key=lambda k: _fails[k][-1])[:max(0, len(_fails) - 4000)]:
+            del _fails[k]
+
+
+def _throttled(ip, who=""):
     now = time.time()
-    if len(_fails) > 1000:
-        _fails.clear()
-    recent = [t for t in _fails.get(ip, []) if now - t < 600]
-    _fails[ip] = recent
-    return len(recent) >= 10
+    _prune(now)
+    ip = _bucket(ip)
+    return len(_recent(ip, now)) >= 30 or bool(who) and len(_recent(f"{ip}|{who}", now)) >= 10
 
 
-def _note_fail(ip):
-    _fails.setdefault(ip, []).append(time.time())
+def _note_fail(ip, who=""):
+    ip, now = _bucket(ip), time.time()
+    for k in (ip, f"{ip}|{who}" if who else None):
+        if k:
+            _fails.setdefault(k, []).append(now)
 
 
-def _note_ok(ip):
-    _fails.pop(ip, None)
+def _note_ok(ip, who):
+    _fails.pop(f"{_bucket(ip)}|{who}", None)  # only this account's count: a login that works can't wipe the failures against others
 
 
 def too_many():
@@ -200,9 +230,7 @@ _key = {"v": None}
 
 
 def _session_key():
-    if PASSWORD:
-        return PASSWORD.encode()  # a new password voids every session
-    if _key["v"] is None:  # no .env password: a random key kept in /data
+    if _key["v"] is None:  # a random key kept in /data
         path = os.path.join(DATA, "session.key")
         try:
             with open(path, "rb") as f:
@@ -229,7 +257,7 @@ def new_session(user=accounts.OWNER, seconds=None, extra=None):
     with _sessions_lock:
         d = {k: v for k, v in _sess_load().items() if _exp(v) > time.time()}
         exp = time.time() + (seconds or SESSION_DAYS * 86400)
-        d[_h(tok)] = exp if user == accounts.OWNER else {"exp": exp, "user": user, **(extra or {})}
+        d[_h(tok)] = {"exp": exp, "user": user, **(extra or {})}
         _sess_save(d)
     return tok
 
@@ -246,7 +274,7 @@ def session_user(tok):
     if v is None or _exp(v) <= time.time():
         return None
     if not isinstance(v, dict):
-        return accounts.OWNER
+        return None  # an old-style session (from when the .env password existed) is not a login any more
     return v["user"] if v["user"] == accounts.GUEST or accounts.exists(v["user"]) else None
 
 
@@ -309,7 +337,7 @@ form{width:min(340px,86vw);display:grid;gap:14px}h1{margin:0 0 6px;font-size:28p
 input,button{font:inherit;min-height:52px;border-radius:14px;border:0;padding:0 16px;box-sizing:border-box;width:100%}
 input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em;margin:0}</style></head>
 <body><form method="post" action="/login"><img src="/logo.svg" width="84" height="84" alt="" style="justify-self:center;border-radius:20px"><h1 style="text-align:center">TV Remote</h1>
-<input name="username" placeholder="Username (blank for the owner)" autocomplete="username" autocapitalize="none" aria-label="Username">
+<input name="username" placeholder="Username" autocomplete="username" autocapitalize="none" aria-label="Username">
 <input type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password" autofocus required>
 <input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button><a href="/request" style="text-align:center;color:#8c97a8;padding:10px">Request access</a></form></body></html>"""
 
@@ -321,23 +349,18 @@ def login():
         return redirect(nxt, 303)
     err = ""
     if request.method == "POST":
-        if _throttled(request.remote_addr):
-            return too_many()
         who = request.form.get("username", "").strip().lower()
-        if accounts.verify(who, request.form.get("password", "")):  # always runs the slow hash, even for an unknown name
-            user = who
-        elif PASSWORD and not accounts.exists(who) and hmac.compare_digest(request.form.get("password", "").encode(), PASSWORD.encode()):
-            user = accounts.OWNER  # as before: any other username with the password
-        else:
-            user = None
+        if _throttled(request.remote_addr, who):
+            return too_many()
+        user = who if accounts.verify(who, request.form.get("password", "")) else None  # always runs the slow hash, even for an unknown name
         if user:
-            _note_ok(request.remote_addr)
+            _note_ok(request.remote_addr, user)
             accounts.touch(user)
             activity.note(user, "Logged in")
             r = redirect(nxt, 303)
             r.set_cookie("tv_auth", new_session(user), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
             return r
-        _note_fail(request.remote_addr)
+        _note_fail(request.remote_addr, who)
         time.sleep(0.8)  # slows guessing
         err = "Wrong username or password"
     return Response(LOGIN_PAGE.replace("__NEXT__", html.escape(nxt, quote=True)).replace("__ERR__", err), 401 if err else 200,
@@ -718,9 +741,9 @@ def display_title(url):
 # ---------- favourites ----------
 
 def fav_file(user=None):
-    """The owner's favourites keep their old file; an account gets its own. Outside a request (background threads) it is the owner's."""
-    user = user or (g.user if has_request_context() else accounts.OWNER)
-    user = accounts.OWNER if user == accounts.GUEST else user
+    """Each account has its own favourites file. Outside a request (background threads, the TV's home screen) it is the owner's."""
+    user = user or (g.user if has_request_context() else (accounts.founder_name() or accounts.OWNER))
+    user = (accounts.founder_name() or accounts.OWNER) if user == accounts.GUEST else user  # guests see the owner's favourites
     return FAV_FILE if user == accounts.OWNER else os.path.join(DATA, f"favourites.{user}.json")
 
 
@@ -1599,6 +1622,8 @@ def kick_chat():
 
 
 def admin_only():
+    if not auth_required():
+        abort(Response(json.dumps({"ok": False, "error": "Finish the setup first."}), 403, mimetype="application/json"))
     if accounts.role(g.user) != "admin":
         abort(Response(json.dumps({"ok": False, "error": "Only an admin can do that."}), 403, mimetype="application/json"))
 
@@ -1611,9 +1636,9 @@ def may_change(name, own_password=False):
 
 
 def only_admin(name):
-    """True when `name` is the last admin and there is no .env password to fall back on: removing or demoting them would lock everyone out."""
+    """True when `name` is the last admin: removing or demoting them would lock everyone out."""
     admins = [u["name"] for u in accounts.listing() if u["role"] == "admin"]
-    return not PASSWORD and admins == [name]
+    return admins == [name]
 
 
 def refuse():
@@ -1623,7 +1648,7 @@ def refuse():
 @app.get("/api/accounts")
 def accounts_list():
     admin_only()
-    people = ([{"name": accounts.OWNER, "role": "admin", "owner": True, "created": None, "last_login": None}] if PASSWORD else []) + accounts.listing()
+    people = accounts.listing()
     return jsonify(users=[{**u, "favs": len(load_favs(u["name"])), "last": activity.last(u["name"])} for u in people])
 
 
@@ -1694,7 +1719,7 @@ def accounts_signout():
 def account_password():
     data = request.get_json(silent=True) or {}
     if g.user == accounts.OWNER:
-        return jsonify(ok=False, error="The owner's password is set in .env on the Pi."), 400
+        return jsonify(ok=False, error="Create an account first."), 400
     try:
         accounts.change_password(g.user, data.get("current"), data.get("new"))
     except ValueError as e:
@@ -1873,6 +1898,13 @@ def host_ok():
         return h == "localhost" or "." not in h or h.endswith((".local", ".lan", ".home.arpa", ".localdomain"))
 
 
+def adopt_open_data(name):
+    """The favourites and Kick link made before accounts existed belong to the owner: give them to the founder (once)."""
+    for old, new in ((FAV_FILE, fav_file(name)), (kick._path(accounts.OWNER), kick._path(name))):
+        if os.path.exists(old) and not os.path.exists(new):
+            os.replace(old, new)
+
+
 SETUP_FILE = "setup.json"
 _setup_lock = threading.Lock()
 
@@ -1897,8 +1929,8 @@ def setup_state():
     if not fresh and accounts.role(g.user) != "admin":
         return jsonify(needed=False)
     has_admin = any(u["role"] == "admin" for u in accounts.listing())
-    return jsonify(needed=not setup_done() and not has_admin, done=setup_done(), fresh=fresh, has_admin=has_admin,
-                   password_set=bool(PASSWORD), user=g.user if not fresh else None, needs_code=fresh)
+    return jsonify(needed=not setup_done(), done=setup_done(), fresh=fresh, has_admin=has_admin,
+                   user=g.user if not fresh else None, needs_code=fresh)
 
 
 @app.post("/api/setup/admin")
@@ -1911,10 +1943,11 @@ def setup_admin():
             ip = request.remote_addr
             if not host_ok():
                 return jsonify(ok=False, error="Open the remote by its IP address (or a .local name) to set it up."), 403
-            if _throttled(ip):
+            if _throttled(ip, "setup") or len(_recent("setup")) >= 10:  # per address, and 10 wrong guesses from anywhere stop everyone for a while
                 return too_many()
             if not hmac.compare_digest(str(data.get("code") or "").strip().lower().encode(), SETUP_CODE.encode()):
-                _note_fail(ip)
+                _note_fail(ip, "setup")
+                _fails.setdefault("setup", []).append(time.time())
                 return jsonify(ok=False, error="That setup code isn't right. It is printed in the container's log: docker logs tvremote"), 403
         else:
             admin_only()
@@ -1924,7 +1957,7 @@ def setup_admin():
         if accounts.exists(wanted):
             return jsonify(ok=False, error="That name is taken."), 400  # setup creates accounts, it never overwrites one
         try:
-            name = accounts.add(wanted, data.get("password"), "admin", founder=fresh and not PASSWORD)
+            name = accounts.add(wanted, data.get("password"), "admin", founder=fresh)
         except ValueError as e:
             return jsonify(ok=False, error=str(e)), 400
     r = jsonify(ok=True, name=name)
@@ -1937,7 +1970,7 @@ def setup_admin():
 @app.post("/api/setup/finish")
 def setup_finish():
     admin_only()
-    if not PASSWORD and not any(u["role"] == "admin" for u in accounts.listing()):
+    if not any(u["role"] == "admin" for u in accounts.listing()):
         return jsonify(ok=False, error="Create the admin account first."), 400
     setup_mark()
     return jsonify(ok=True)
@@ -1973,6 +2006,9 @@ if __name__ == "__main__":
             threading.Thread(target=tlscallback.make_server(kick.REDIRECT, PORT, DATA).serve_forever, daemon=True).start()
         except Exception as e:  # no openssl or the port is taken: the rest of the app still runs
             print("Kick login listener not started:", e, flush=True)
+    founder = accounts.ensure_founder()  # no .env password any more: somebody has to be the owner
+    if founder:
+        adopt_open_data(founder)
     if not auth_required():
         print(f"FIRST RUN: open the remote and enter this setup code to create the admin account: {SETUP_CODE}", flush=True)
     from waitress import serve

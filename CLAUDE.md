@@ -198,7 +198,7 @@ Also: in Safari, open `http://<pi-ip>:8765` → Share → Add to Home Screen ("T
 - `pi` = mpv on the living-room TV. `chromecast` = discovered with pychromecast via mDNS (container is `network_mode: host`).
 - Names: "Living room" (pi) and "Bedroom" (the Chromecast's friendly name; renamable in `/data/targets.json`).
 - UI: opens on All TVs (a card per TV); tap one for its remote. `/share?u=<link>` is the picker the iPhone Shortcut opens. All controls and status act on the selected target; an unknown `?target=` is refused, never sent to the Pi.
-- `/play` accepts `&target=<living|bedroom>` (default living). The Shortcut can have a second version "Play in Bedroom" that adds `&target=bedroom`. (`&t=` is already the password token.)
+- `/play` accepts `&target=<living|bedroom>` (default living). The Shortcut can have a second version "Play in Bedroom" that adds `&target=bedroom`.
 
 ### Chromecast playback
 - YouTube (video and live) → the Chromecast's YouTube receiver (pychromecast quick_play "youtube").
