@@ -1,29 +1,29 @@
 """The TV's home screen: a fullscreen window that is always there behind the streams, so the Pi desktop never shows
-between them. It shows Ready (clock, date, the remote's address, your favourites), Loading, "Not live right now",
+between them. It shows Ready (clock, date, the remote's address), Loading, "Not live right now",
 "Stream ended" and error screens.
 
-One mpv shows a plain still picture; the text is a subtitle file (osd-overlay and styled show-text were dropped by this
-window on the Pi, subtitles are not). While a stream plays the shell is paused and silent, so it costs the stream nothing
-(a redrawing overlay on top of moving video is what dropped frames for chat).
+One mpv plays a plain colour; the text is a subtitle file (osd-overlay and styled show-text were dropped by this window
+on the Pi, subtitles are not). The file is written ahead of time with one event per second (the clock's colon blinks) or
+per dot frame, timed to the video clock, so mpv does the animating and nothing redraws: reloading a subtitle every second
+flashed the whole screen. While a stream plays the shell is paused and silent, so it costs the stream nothing.
 shortcut: relies on the desktop stacking a newer fullscreen window above this one; if a stream ever appears behind it,
 turn the home screen off from the remote and tell me what the Pi's desktop does."""
 import os
 import re
 import socket
-import struct
 import subprocess
 import threading
 import time
-import zlib
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import mpvipc
 from chat import _esc as esc
 
 SOCK = "/tmp/tvremote-shell.sock"
 LOG = "/tmp/tvremote-shell.log"
-ASS_FILE = "/tmp/tvremote-shell.ass"
-BG_FILE = "/tmp/tvremote-shell-bg.png"
+ASS_FILES = ("/tmp/tvremote-shell-a.ass", "/tmp/tvremote-shell-b.ass")  # alternate, so a new one loads before the old goes
+IDLE_SPAN = 300  # seconds of clock written ahead; the file is renewed a little before it runs out
+FOREVER = 3 * 86400  # a still screen stays up for days of video time
 W, H = 1920, 1080
 BG = "0b0e14"
 VO_ORDER = tuple(v for v in os.environ.get("TVREMOTE_SHELL_VO", "wlshm,gpu").split(",") if v)  # wlshm: plain software drawing; gpu if it won't open
@@ -79,25 +79,23 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
     return r"{\an5\pos(960,540)\bord0\shad0}" + r"\N".join(lines)
 
 
-def bg_png(rgb_hex, w=64, h=36):
-    """A small solid-colour PNG; mpv scales it to fill the screen."""
-    rgb = bytes.fromhex(rgb_hex)
-    raw = (b"\x00" + rgb * w) * h
-
-    def chunk(t, d):
-        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d))
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+def stamp(sec):
+    """Seconds as the ASS time h:mm:ss.cc."""
+    cs = int(round(max(0.0, sec) * 100))
+    h, cs = divmod(cs, 360000)
+    m, cs = divmod(cs, 6000)
+    sc, cs = divmod(cs, 100)
+    return f"{h}:{m:02d}:{sc:02d}.{cs:02d}"
 
 
-def ass_file(text):
-    """A subtitle file holding one event, on screen for the whole (very long) run of the still picture."""
-    return (f"[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: {H}\nWrapStyle: 2\n\n"
+def ass_file(events):
+    """A subtitle file from [(start_seconds, end_seconds, text)], timed to the window's video clock."""
+    head = (f"[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: {H}\nWrapStyle: 2\n\n"
             "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
             "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
             "Style: Default,DejaVu Sans,60,&H00F6F1EE,&H00F6F1EE,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n\n"
-            "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-            "Dialogue: 0,0:00:00.00,9:59:59.99,Default,,0,0,0,,{}\n".format(text))
+            "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+    return head + "".join(f"Dialogue: 0,{stamp(a)},{stamp(b)},Default,,0,0,0,,{t}\n" for a, b, t in events)
 
 
 def write_file(path, data):
@@ -107,13 +105,13 @@ def write_file(path, data):
 
 class Shell:
     interval = 0.6        # seconds between loading-dot frames
-    idle_interval = 1     # the Ready screen redraws every second (the colon blinks); nothing is playing then, so it costs nothing
+    renew = IDLE_SPAN - 30  # seconds after which the Ready screen's file is written again
 
     def __init__(self, hint="", spawn=subprocess.Popen, ipc=mpvipc.send, ready=None, sleep=time.sleep,
                  clock=datetime.now, favs=lambda: [], write=write_file):
         self.hint, self._spawn, self._ipc, self._sleep = hint, spawn, ipc, sleep
         self._clock, self._favs, self._write = clock, favs, write
-        self._sub = False  # whether the subtitle file is loaded in the window yet
+        self._n, self._sid = 0, None  # which file to write next; the subtitle track now showing
         self._ready = ready or (lambda: os.path.exists(SOCK))
         self.proc = self.vo = self.error = None
         self.kind, self.detail = "idle", ""
@@ -125,21 +123,17 @@ class Shell:
 
     def _cmd(self, vo):
         return ["mpv", "--no-config", f"--vo={vo}", "--hwdec=no", "--fs", "--force-window=yes", "--keep-open=yes",
-                "--image-display-duration=inf", "--pause=no", "--no-audio", "--no-terminal", "--osc=no", "--osd-level=1",
+                "--loop-file=inf", "--pause=no", "--no-audio", "--no-terminal", "--osc=no", "--osd-level=1",
                 "--cursor-autohide=always", "--input-default-bindings=no", "--input-vo-keyboard=no",
                 "--wayland-app-id=tvremote-shell", "--title=TV Remote", f"--input-ipc-server={SOCK}",
-                f"--background-color=#{BG}", BG_FILE]
+                f"--background-color=#{BG}", f"av://lavfi:color=c=0x{BG}:s={W}x{H}:r=2"]
 
     def start(self):
         """Open the window with the first output that works. Returns whether it is running."""
         with self._lock:
             if self.running():
                 return True
-            self._sub = False
-            try:
-                self._write(BG_FILE, bg_png(BG))
-            except OSError:
-                pass
+            self._sid = None
             for vo in VO_ORDER:
                 try:
                     os.unlink(SOCK)
@@ -189,6 +183,47 @@ class Shell:
             out[name] = r.get("data") if r and r.get("error") == "success" else None
         return out
 
+    def _pos(self):
+        r = self._ipc(SOCK, ["get_property", "time-pos"])
+        v = r.get("data") if r and r.get("error") == "success" else None
+        return float(v) if isinstance(v, (int, float)) else 0.0
+
+    def _events(self, kind):
+        """[(start, end, text)] on the window's video clock, starting now."""
+        pos = self._pos()
+        if kind == "idle":  # one event per wall-clock second, so the colon blinks in step with the real seconds
+            now = self._clock()
+            frac, base = now.microsecond / 1e6, now.replace(microsecond=0)
+            out = []
+            for k in range(IDLE_SPAN):
+                a = pos - frac + k
+                out.append((a, a + 1, screen("idle", hint=self.hint, now=base + timedelta(seconds=k))))
+            return out
+        hint = "Pick something else on your phone" if kind in ("ended", "offline", "error") else ""
+        if kind in ("loading", "quality"):  # the dots move for 90 s, then the last frame stays
+            n = int(90 / self.interval)
+            out = [(pos + k * self.interval, pos + (k + 1) * self.interval, screen(kind, self.detail, hint, k)) for k in range(n)]
+            out[-1] = (out[-1][0], pos + FOREVER, out[-1][2])
+            return out
+        return [(pos, pos + FOREVER, screen(kind, self.detail, hint))]
+
+    def _load(self, events):
+        """Write the events to the other file, show it, then drop the old one (no blank in between)."""
+        path = ASS_FILES[self._n % 2]
+        self._n += 1
+        try:
+            self._write(path, ass_file(events))
+        except OSError:
+            return
+        r = self._ipc(SOCK, ["sub-add", path, "select"])
+        if not (r and r.get("error") == "success"):
+            return
+        old = self._sid
+        sid = self._ipc(SOCK, ["get_property", "sid"])
+        self._sid = sid.get("data") if sid and sid.get("error") == "success" else None
+        if old is not None and old != self._sid:
+            self._ipc(SOCK, ["sub-remove", old])
+
     def _show_current(self):
         kind = self.kind
         if kind == "playing":
@@ -197,38 +232,16 @@ class Shell:
             return True
         self._ipc(SOCK, ["set_property", "pause", False])
         self._ipc(SOCK, ["set_property", "sub-visibility", True])
-        self._draw(0)
-        if kind in ("loading", "quality", "idle"):
-            threading.Thread(target=self._animate, args=(self._gen, kind), daemon=True).start()
+        self._load(self._events(kind))
+        if kind == "idle":
+            threading.Thread(target=self._renew, args=(self._gen,), daemon=True).start()
         return True
 
-    def _draw(self, dots):
-        kind = self.kind
-        hint = self.hint if kind == "idle" else "Pick something else on your phone" if kind in ("ended", "offline", "error") else ""
-        extra = {}
-        if kind == "idle":
-            try:
-                extra = {"now": self._clock(), "favs": self._favs()}
-            except Exception:
-                extra = {}
-        try:
-            self._write(ASS_FILE, ass_file(screen(kind, self.detail, hint, dots, **extra)))
-        except OSError:
-            return
-        if self._sub:
-            self._ipc(SOCK, ["sub-reload"])
-        else:
-            r = self._ipc(SOCK, ["sub-add", ASS_FILE, "select"])
-            self._sub = bool(r and r.get("error") == "success")
-
-    def _animate(self, gen, kind):
-        """Loading: move the dots. Ready: keep the clock right."""
-        dots, deadline = 0, time.time() + 90
-        wait = self.idle_interval if kind == "idle" else self.interval
-        while kind == "idle" or time.time() < deadline:
-            # idle: wake just after each whole second so the colon blinks in step with the real clock
-            threading.Event().wait(wait if kind != "idle" or wait < 1 else (1.0 - time.time() % 1.0) + 0.02)
-            if gen != self._gen:
-                return
-            dots += 1
-            self._draw(dots)
+    def _renew(self, gen):
+        """The Ready screen's file only covers a few minutes ahead: write it again before it runs out."""
+        while True:
+            threading.Event().wait(self.renew)
+            with self._lock:
+                if gen != self._gen or not self.running():
+                    return
+                self._load(self._events("idle"))

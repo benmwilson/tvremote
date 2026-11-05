@@ -28,8 +28,17 @@ def make_shell(procs, sent=None, ready=True):
     sent = [] if sent is None else sent
     popen = mock.Mock(side_effect=lambda cmd, **kw: procs.pop(0))
     # writing the subtitle file is recorded as ["ass-file", text] among the window commands
-    write = lambda path, data: sent.append(["ass-file", data.decode("latin-1") if isinstance(data, bytes) else data, path])
-    s = shell.Shell(hint="Open http://pi.example:8765 on your phone", spawn=popen, ipc=lambda sock, cmd, timeout=1.0: sent.append(cmd) or {"error": "success"},
+    write = lambda path, data: sent.append(["ass-file", data, path])
+    sids = iter(range(1, 1000))
+
+    def ipc(sock, cmd, timeout=1.0):
+        sent.append(cmd)
+        if cmd == ["get_property", "sid"]:
+            return {"error": "success", "data": next(sids)}
+        if cmd == ["get_property", "time-pos"]:
+            return {"error": "success", "data": 100.0}
+        return {"error": "success"}
+    s = shell.Shell(hint="Open http://pi.example:8765 on your phone", spawn=popen, ipc=ipc,
                     ready=lambda: ready, sleep=lambda x: None, write=write)
     return s, popen, sent
 
@@ -79,42 +88,49 @@ class Idle(unittest.TestCase):
     def test_other_screens_have_no_clock(self):
         self.assertNotIn("9:05", shell.screen("ended", "chan", now=datetime(2026, 11, 4, 21, 5)))
 
-    def test_the_clock_is_redrawn_while_idle(self):
-        minutes = iter(range(10, 59))
+    def test_the_ready_file_has_an_event_for_every_second_with_a_blinking_colon(self):
         s, popen, sent = make_shell([FakeProc()])
-        s._clock = lambda: datetime(2026, 11, 4, 21, next(minutes))
-        s.idle_interval = 0.02
+        s._clock = lambda: datetime(2026, 11, 4, 21, 5, 58, 250000)
         s.start()
-        time.sleep(0.25)
-        frames = {c[1] for c in sent if c[0] == "ass-file" and c[2] == shell.ASS_FILE}
-        self.assertGreaterEqual(len(frames), 3)
+        f = [c for c in sent if c[0] == "ass-file"][-1][1]
+        self.assertEqual(f.count("Dialogue:"), shell.IDLE_SPAN)
+        self.assertIn("9:05 PM", f)
+        self.assertIn("9:06 PM", f)  # the minute rolls over inside the file
+        self.assertIn("alpha&HFF&", f)  # the hidden-colon seconds
+        first = f.split("Dialogue:")[1]
+        self.assertIn("1:39.75,0:01:40.75", first.replace(" ", "")[:80] or first)  # timed to the window clock: 100 s minus the 0.25 s already into the second
+
+    def test_the_ready_file_is_renewed_before_it_runs_out_and_not_while_playing(self):
+        s, popen, sent = make_shell([FakeProc()])
+        s.renew = 0.02
+        s.start()
+        time.sleep(0.2)
+        self.assertGreaterEqual(len([c for c in sent if c[0] == "ass-file"]), 3)
         s.show("playing")
         time.sleep(0.1)
         sent.clear()
         time.sleep(0.15)
         self.assertEqual(sent, [])
 
-    def test_the_window_shows_one_still_picture_that_never_ends(self):
+    def test_the_window_plays_a_looped_colour_so_the_clock_runs(self):
         s, popen, sent = make_shell([FakeProc()])
         s.start()
         cmd = popen.call_args[0][0]
-        self.assertIn("--image-display-duration=inf", cmd)
-        self.assertEqual(cmd[-1], shell.BG_FILE)
-        bg = [c for c in sent if c[0] == "ass-file" and c[2] == shell.BG_FILE]
-        self.assertTrue(bg and bg[0][1].startswith("\x89PNG"))
+        self.assertIn("--loop-file=inf", cmd)
+        self.assertTrue(cmd[-1].startswith("av://lavfi:color="))
 
-    def test_the_first_draw_adds_the_subtitle_and_later_draws_reload_it(self):
+    def test_each_screen_loads_a_new_subtitle_and_drops_the_old_one(self):
         s, popen, sent = make_shell([FakeProc()])
         s.start()
         s.show("loading", "chan")
-        names = [c[0] for c in sent if c[0] in ("sub-add", "sub-reload")]
-        self.assertEqual(names[0], "sub-add")
-        self.assertEqual(names.count("sub-add"), 1)
-        self.assertIn("sub-reload", names)
+        adds = [c for c in sent if c[0] == "sub-add"]
+        self.assertEqual(len(adds), 2)
+        self.assertNotEqual(adds[0][1], adds[1][1])  # alternating files
+        self.assertIn(["sub-remove", 1], sent)
 
     def test_the_subtitle_file_is_a_complete_ass_script(self):
-        f = shell.ass_file(shell.screen("idle"))
-        for want in ("PlayResX: 1920", "PlayResY: 1080", "[Events]", "Dialogue: 0,0:00:00.00,9:59:59.99", "Ready"):
+        f = shell.ass_file([(0, 70.5, shell.screen("idle"))])
+        for want in ("PlayResX: 1920", "PlayResY: 1080", "[Events]", "Dialogue: 0,0:00:00.00,0:01:10.50", "Ready"):
             self.assertIn(want, f)
 
     def test_every_screen_unpauses_the_window(self):
@@ -134,12 +150,11 @@ class QualitySwap(unittest.TestCase):
 
     def test_the_quality_screen_animates_like_loading(self):
         s, popen, sent = make_shell([FakeProc()])
-        s.interval = 0.02
         s.start()
         sent.clear()
         s.show("quality", "chan  ·  720p60")
-        time.sleep(0.2)
-        self.assertGreaterEqual(len({c[1] for c in sent if c[0] == "ass-file" and c[2] == shell.ASS_FILE}), 2)
+        f = [c for c in sent if c[0] == "ass-file"][-1][1]
+        self.assertGreater(len({l for l in f.split("\n") if "Switching quality" in l}), 2)  # a frame per dot step
         s.show("playing")
 
 
@@ -188,23 +203,20 @@ class Showing(unittest.TestCase):
         sent.clear()
         s.show("ended", "chan")
         self.assertIn(["set_property", "pause", False], sent)
-        drawn = [c for c in sent if c[0] == "ass-file" and c[2] == shell.ASS_FILE]
+        drawn = [c for c in sent if c[0] == "ass-file"]
         self.assertTrue(drawn and "Stream ended" in drawn[-1][1])
 
-    def test_loading_animates_until_something_else_is_shown(self):
+    def test_loading_dots_are_written_ahead_and_nothing_redraws(self):
         s, popen, sent = make_shell([FakeProc()])
-        s.interval = 0.02
         s.start()
         sent.clear()
         s.show("loading", "chan")
-        time.sleep(0.2)
-        frames = {c[1] for c in sent if c[0] == "ass-file" and c[2] == shell.ASS_FILE}
-        self.assertGreaterEqual(len(frames), 2)
-        s.show("playing")
-        time.sleep(0.1)
-        sent.clear()
         time.sleep(0.15)
-        self.assertEqual(sent, [])  # nothing is drawn while a stream plays
+        self.assertEqual(len([c for c in sent if c[0] == "ass-file"]), 1)  # one file, no per-frame redraws
+        f = sent[[c[0] for c in sent].index("ass-file")][1]
+        self.assertIn("Loading...", f)
+        self.assertIn("Loading", f)
+        s.show("playing")
 
     def test_show_does_nothing_when_the_shell_is_not_running(self):
         s, popen, sent = make_shell([])
