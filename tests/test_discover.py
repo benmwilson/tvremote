@@ -202,6 +202,86 @@ class StatusFreshness(unittest.TestCase):
         self.assertEqual((waits, fetch.call_count), ([1, 2, 3, 4], 4))
 
 
+class MoveSwitchesBackOff(unittest.TestCase):
+    """Move wakes a TV that was off, and puts it back to sleep when you move away from it, but only when that is safe."""
+
+    def setUp(self):
+        self.power = {"living": "PowerOn", "bedroom": "Ready"}  # the bedroom TV is off
+        self.app_id = {"living": "tvinput.hdmi1", "bedroom": "tvinput.hdmi1"}
+        ips = {"living": LIVING["ip"], "bedroom": BEDROOM["ip"]}
+        info = lambda ip: {"power": self.power[next(k for k, v in ips.items() if v == ip)], "app_id": self.app_id[next(k for k, v in ips.items() if v == ip)]}  # noqa: E731
+        self.keys = []
+        self.played = []
+        for p in (mock.patch.object(accounts, "initialised", lambda: True), mock.patch.object(server, "session_user", lambda tok: accounts.OWNER),
+                  mock.patch.object(server, "CAST", mock.MagicMock()), mock.patch.dict(server.ROKU_IPS, ips),
+                  mock.patch.dict(server.INPUTS, {"living": "HDMI1", "bedroom": "HDMI1"}), mock.patch.object(roku, "info", side_effect=info),
+                  mock.patch.object(roku, "key", side_effect=lambda ip, k: self.keys.append((ip, k))),
+                  mock.patch.object(server, "play_on", side_effect=lambda c, url, q, via=None: self.played.append((getattr(c, "id", "living"), url))),
+                  mock.patch.object(server, "stop_pi"), mock.patch.object(server, "refresh_roku_soon")):
+            p.start()
+            self.addCleanup(p.stop)
+        server._woken.clear()
+        self.addCleanup(server._woken.clear)
+        self.client = server.app.test_client()
+
+    def move(self, src, dst):
+        return self.client.post("/api/move", json={"from": src, "to": dst, "url": "https://kick.com/capped"})
+
+    def test_moving_to_an_off_tv_marks_it_and_moving_back_switches_it_off(self):
+        r = self.move("living", "bedroom")
+        self.assertEqual((r.status_code, r.get_json()["switched_off"]), (200, False))  # the living room was on before: left on
+        self.assertIn("bedroom", server._woken)
+        self.power["bedroom"] = "PowerOn"  # the move woke it
+        r = self.move("bedroom", "living")
+        self.assertTrue(r.get_json()["switched_off"])
+        self.assertEqual(self.keys, [(BEDROOM["ip"], "PowerOff")])
+        self.assertNotIn("bedroom", server._woken)
+
+    def test_a_tv_that_was_already_on_is_never_switched_off(self):
+        self.power["bedroom"] = "PowerOn"
+        self.move("living", "bedroom")
+        self.assertNotIn("bedroom", server._woken)
+        self.assertFalse(self.move("bedroom", "living").get_json()["switched_off"])
+        self.assertEqual(self.keys, [])
+
+    def test_a_tv_someone_switched_to_a_console_in_the_meantime_is_left_on(self):
+        self.move("living", "bedroom")
+        self.power["bedroom"] = "PowerOn"
+        self.app_id["bedroom"] = "tvinput.hdmi3"  # the roommate is on the Switch
+        self.assertFalse(self.move("bedroom", "living").get_json()["switched_off"])
+        self.assertEqual(self.keys, [])
+
+    def test_a_tv_switched_off_by_hand_is_forgotten(self):
+        self.move("living", "bedroom")
+        with mock.patch.object(server, "ROKU_TTL_LIVE", 0), mock.patch.object(roku, "info", return_value={"power": "Ready", "app": "Roku"}):
+            server.fetch_roku("bedroom")
+        self.assertNotIn("bedroom", server._woken)
+
+    def test_an_old_mark_expires(self):
+        server._woken["bedroom"] = server.time.time() - server.WOKEN_TTL - 1
+        self.power["bedroom"] = "PowerOn"
+        self.assertFalse(server.power_back_off("bedroom"))
+        self.assertEqual(self.keys, [])
+
+    def test_a_tv_with_no_chosen_input_is_never_switched_off(self):
+        server.INPUTS["bedroom"] = ""
+        self.move("living", "bedroom")
+        self.power["bedroom"] = "PowerOn"
+        self.assertFalse(self.move("bedroom", "living").get_json()["switched_off"])  # we can't tell it is still on our input
+
+    def test_a_failed_start_leaves_everything_alone(self):
+        with mock.patch.object(server, "play_on", side_effect=RuntimeError("Chromecast couldn't load the stream")):
+            r = self.move("living", "bedroom")
+        self.assertEqual(r.status_code, 502)
+        self.assertEqual((server._woken, self.keys), ({}, []))
+        server.stop_pi.assert_not_called()  # what is playing here keeps playing
+
+    def test_bad_requests_are_refused(self):
+        self.assertEqual(self.move("living", "living").status_code, 400)
+        self.assertEqual(self.move("living", "attic").status_code, 400)
+        self.assertEqual(self.client.post("/api/move", json={"from": "living", "to": "bedroom", "url": "not a link"}).status_code, 400)
+
+
 class TurnOn(unittest.TestCase):
     def setUp(self):
         for p in (mock.patch.object(accounts, "initialised", lambda: True), mock.patch.object(server, "session_user", lambda tok: accounts.OWNER),

@@ -65,7 +65,10 @@ app = Flask(__name__, static_folder=None)
 def tgt():
     """The Chromecast target for ?target=bedroom, None for the Pi (no target, or "living"). Anything else is
     refused: guessing would risk controlling the wrong TV."""
-    t = request.args.get("target") or "living"
+    return target_for(request.args.get("target") or "living")
+
+
+def target_for(t):
     if t == "living":
         return None
     if t == "bedroom":
@@ -139,7 +142,7 @@ SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/se
 GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
              "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
              "/api/shell", "/api/stats", "/api/chat/feed", "/api/sleep"}
-GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/logout"}
+GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/logout"}
 
 
 def guest_blocked():
@@ -827,11 +830,7 @@ def api_cmd():
             return jsonify(ok=False, error=str(e)), 502
         return jsonify(ok=ok, error=err), (200 if ok else 400)
     if action == "stop":
-        screen("idle")  # first: the home screen still shows its last screen (in the old site's colour) until it is redrawn
-        with lock:  # waits for a start that is mid-way, then ends it
-            stop_player()
-            state.update(url=None, source=None, quality=None)  # a deliberate stop leaves no old error or "now playing" behind
-        screen("idle")  # again: that start may have drawn its Loading screen after the first Ready
+        stop_pi()
         return jsonify(ok=True)
     if action == "restart":
         if not state["url"]:
@@ -860,6 +859,81 @@ def api_cmd():
     if ok and action in ("volume", "volume_delta", "mute", "unmute"):
         osd_volume()
     return jsonify(ok=ok)
+
+
+def stop_pi():
+    screen("idle")  # first: the home screen still shows its last screen (in the old site's colour) until it is redrawn
+    with lock:  # waits for a start that is mid-way, then ends it
+        stop_player()
+        state.update(url=None, source=None, quality=None)  # a deliberate stop leaves no old error or "now playing" behind
+    screen("idle")  # again: that start may have drawn its Loading screen after the first Ready
+
+
+# ---- Move: play on the other TV, stop here, and put a TV that the move woke back to sleep ----
+_woken = {}  # tv id -> when a Move switched it on from off. Nothing else adds to this, so a TV you turned on yourself is never switched off
+WOKEN_TTL = 12 * 3600
+
+
+def tv_is_off(tid):
+    ip = ROKU_IPS.get(tid)
+    if not ip:
+        return False  # no Roku, so we can't tell and won't claim to have woken it
+    try:
+        return roku.info(ip).get("power") != "PowerOn"
+    except (roku.RokuError, OSError):
+        return False
+
+
+def tv_still_on_our_input(tid):
+    """True when the TV is on and still on the HDMI input this remote put it on: nobody has switched it to a console or an app."""
+    ip, hdmi = ROKU_IPS.get(tid), INPUTS.get(tid)
+    if not (ip and hdmi):
+        return False
+    try:
+        info = roku.info(ip)
+    except (roku.RokuError, OSError):
+        return False
+    return info.get("power") == "PowerOn" and info.get("app_id") == "tvinput." + hdmi.lower()
+
+
+def power_back_off(tid):
+    """After moving away from `tid`: switch it off again if a Move had woken it and nothing else has used it since."""
+    woke = _woken.pop(tid, 0)
+    if not woke or time.time() - woke > WOKEN_TTL or not tv_still_on_our_input(tid):
+        return False
+    try:
+        roku.key(ROKU_IPS[tid], "PowerOff")
+    except (roku.RokuError, OSError) as e:
+        app.logger.warning("Couldn't switch %s back off: %s", tid, e)
+        return False
+    refresh_roku_soon(tid)
+    return True
+
+
+@app.post("/api/move")
+def api_move():
+    d = request.get_json(silent=True) or {}
+    src, dst, url = d.get("from"), d.get("to"), normalise(d.get("url") or "")
+    if src not in tvconfig.IDS or dst not in tvconfig.IDS or src == dst or not url:
+        return jsonify(ok=False, error="Pick a different TV to move it to."), 400
+    c_dst = target_for(dst)
+    was_off = tv_is_off(dst)
+    try:
+        play_on(c_dst, url, None)  # start it there first: if that fails, what is playing here is left alone
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)), 502
+    if was_off:
+        _woken[dst] = time.time()
+    _start_seq[src] = _start_seq.get(src, 0) + 1
+    if src == "bedroom":
+        c_src = target_for("bedroom")
+        try:
+            c_src.cmd("stop")
+        except Exception as e:
+            app.logger.warning("Couldn't stop the Chromecast after a move: %s", e)
+    else:
+        stop_pi()
+    return jsonify(ok=True, switched_off=power_back_off(src))
 
 
 def paused_screen(title=""):
@@ -1068,6 +1142,8 @@ def fetch_roku(tv_id):
                 info["media"] = roku.media(ROKU_IPS[tv_id])
             except (roku.RokuError, OSError):
                 pass
+        if info.get("power") != "PowerOn":
+            _woken.pop(tv_id, None)
         if was_on and info.get("power") != "PowerOn":  # went to standby (the TV's own remote, or the app)
             threading.Thread(target=on_tv_off, args=(tv_id,), daemon=True).start()
     except (roku.RokuError, OSError):
@@ -1370,6 +1446,7 @@ def api_roku_key():
         return jsonify(ok=False, error=str(e)), 502
     tid = request.args.get("target") or "living"
     if k == "PowerOff":
+        _woken.pop(tid, None)
         threading.Thread(target=on_tv_off, args=(tid,), daemon=True).start()
     if k in ("PowerOn", "PowerOff") or k.startswith("Input"):
         refresh_roku_soon(tid)

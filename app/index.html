@@ -935,12 +935,12 @@ $('move').onclick = () => {
   const to = otherTv(), url = st.url;
   if (!to || !url) return;
   return busy($('move'), async () => {
-    // start it on the other TV first: if that fails, what is playing here is left alone
+    // the Pi starts it on the other TV first (if that fails, what is playing here is left alone), stops this one, and switches
+    // back off a TV that the move had woken
     let r = null;
-    try { r = await (await fetch('/api/play?target=' + encodeURIComponent(to.id), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url})})).json(); } catch (e) {}
+    try { r = await (await fetch('/api/move', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({from: target, to: to.id, url})})).json(); } catch (e) {}
     if (!r || r.ok === false) { err((r && r.error) || 'Couldn’t start it on ' + to.name + '. It is still playing here.'); return null; }
-    await cmd('stop');
-    favLoading = null; markFavs();
+    favLoading = null; markFavs(); followTv();
     location.hash = '#/tv/' + encodeURIComponent(to.id);  // follow it to the other TV's remote
     return r;
   }, 800);
