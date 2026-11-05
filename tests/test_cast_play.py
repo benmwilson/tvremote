@@ -111,6 +111,22 @@ class SurvivesARestart(unittest.TestCase):
         self.t.state.update(url=None, source=None)
         self.assertFalse(self.t._adopt_once())
 
+    def test_a_status_that_has_not_arrived_yet_keeps_the_note_and_a_later_ask_succeeds(self):
+        self.save()
+        self.playing(state="UNKNOWN")
+        with mock.patch.object(cast.time, "sleep"), mock.patch.object(cast.time, "time", side_effect=[0, 0, 100, 100, 100, 100]):
+            self.assertFalse(self.t._adopt_once())  # right after connecting: no answer yet
+        self.assertTrue(os.path.exists(self.t._state_file()))  # so it must not give up
+        self.playing(state="PLAYING")  # the status arrived
+        self.assertTrue(self.t._adopt_once())
+
+    def test_asking_for_the_status_waits_for_it(self):
+        self.playing(state="UNKNOWN")
+        calls = []
+        self.t.cast.media_controller.update_status = lambda: (calls.append("asked"), self.playing(state="PLAYING"))
+        ms = self.t._media_status(self.t.cast, wait=2)
+        self.assertEqual((calls, ms.player_state), (["asked"], "PLAYING"))
+
     def test_nothing_saved_means_nothing_to_take_back(self):
         self.playing()
         self.assertFalse(self.t._adopt_once())

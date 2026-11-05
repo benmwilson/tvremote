@@ -304,6 +304,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .apps .note{grid-column:1/-1;margin:6px 2px;color:var(--dim);font-size:14px}
 #tvmute.muted{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}
 #tvmute.muted .ic{color:#ff8a8a}
+.mutecheck{display:flex;align-items:center;gap:8px;margin:2px 0 8px;flex-wrap:wrap;font-size:14px;color:var(--dim)}
+.mutecheck span{flex:1 1 100%}.mutecheck button{flex:1;min-height:44px}
 </style>
 </head>
 <body>
@@ -543,6 +545,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <div class="row"><button data-k="VolumeDown" aria-label="TV volume down"><svg class="ic" aria-hidden="true"><use href="#i-volume-low"/></svg>&minus;</button>
     <button id="tvmute" data-k="VolumeMute" aria-label="Mute the TV" aria-pressed="false" title="Mute or unmute. The TV doesn't report its mute state, so this shows what was last pressed here."><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg></button>
     <button data-k="VolumeUp" aria-label="TV volume up"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg>+</button></div>
+  <div class="mutecheck hide" id="mutecheck" role="group" aria-label="Is the TV muted now?"><span>Is the TV muted now?</span>
+    <button id="muteyes" type="button">Yes, muted</button><button id="muteno" type="button">No, sound on</button></div>
   <div class="row"><button data-k="InputHDMI1"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>1</button>
     <button data-k="InputHDMI2"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>2</button>
     <button data-k="InputHDMI3"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>3</button></div>
@@ -1730,15 +1734,20 @@ document.addEventListener('click', async e => {
   const hold = k === 'PowerOn' ? 4000 : /^Input/.test(k) ? 2500 : 0;  // the TV takes a moment to wake or change input
   const r = await busy(b, () => api('/api/roku/key', 'POST', {key: k}), hold);
   if (r && r.ok) {
-    if (k === 'VolumeMute') tvMuted[target] = !tvMuted[target];  // the TV doesn't say whether it is muted: this is what we last did to it
-    if (k === 'VolumeUp' || k === 'VolumeDown') tvMuted[target] = false;  // changing the volume unmutes a Roku TV
+    // The TV can't tell us whether it is muted. Until we know, the first mute press asks; after that we track what we do.
+    if (k === 'VolumeMute') { if (target in tvMuted) tvMuted[target] = !tvMuted[target]; else muteAskFor = target; }
+    if (k === 'VolumeUp' || k === 'VolumeDown') { tvMuted[target] = false; muteAskFor = null; }  // changing the volume always unmutes a Roku TV
     renderTvMute();
     followTv();
   }
 });
-const tvMuted = {};
+const tvMuted = {};  // per TV: true or false once we know, missing until then
+let muteAskFor = null;
+$('muteyes').onclick = () => { tvMuted[target] = true; muteAskFor = null; renderTvMute(); };
+$('muteno').onclick = () => { tvMuted[target] = false; muteAskFor = null; renderTvMute(); };
 function renderTvMute() {
-  const m = !!tvMuted[target], b = $('tvmute');
+  const m = tvMuted[target] === true, b = $('tvmute');
+  $('mutecheck').classList.toggle('hide', muteAskFor !== target);
   b.classList.toggle('muted', m);
   b.setAttribute('aria-pressed', String(m));
   b.setAttribute('aria-label', m ? 'Unmute the TV (it was muted from here)' : 'Mute the TV');

@@ -157,8 +157,10 @@ class CastTarget:
         if not isinstance(saved, dict) or not saved.get("url"):
             return False
         cast = self.cast
-        ms = cast.media_controller.status if cast else None
-        playing = bool(ms) and ms.player_state in ("PLAYING", "PAUSED", "BUFFERING")
+        ms = self._media_status(cast) if cast else None
+        if ms is None or ms.player_state in (None, "UNKNOWN"):
+            return False  # it hasn't told us yet: not a reason to forget the note, the loop asks again
+        playing = ms.player_state in ("PLAYING", "PAUSED", "BUFFERING")
         if saved.get("source") == "YouTube":  # the YouTube receiver doesn't expose the stream address: its app being open is the evidence
             same = bool(cast) and cast.app_id == APP_YOUTUBE
         else:
@@ -172,17 +174,32 @@ class CastTarget:
                               proxy_tried=True, error=None, first_play=saved.get("started") or time.time())
         return True
 
+    def _media_status(self, cast, wait=8):
+        """The Chromecast's media status, asking for it and waiting a few seconds: right after connecting it has often not arrived yet."""
+        mc = cast.media_controller
+        try:
+            mc.update_status()
+        except Exception:
+            pass
+        end = time.time() + wait
+        while time.time() < end and (mc.status is None or mc.status.player_state in (None, "UNKNOWN")):
+            time.sleep(0.4)
+        return mc.status
+
     def _adopt_loop(self):
-        """Wait (up to two minutes) for the Chromecast to be found after a start, then try once to take back what it is playing."""
-        for _ in range(60):
-            if self.device():
-                try:
+        """After a start: find the Chromecast and take back what it is still playing. Tries again for about three minutes, because
+        it can be slow to be found and slow to answer, and there is nothing to lose by asking again."""
+        for _ in range(18):
+            if self.state.get("url") or not os.path.exists(self._state_file()):
+                return  # something is already playing here (started by a person), or there is nothing to take back
+            try:
+                if self.device():
                     self._connect()
-                    self._adopt_once()
-                except Exception:
-                    pass  # not found or not answering: nothing to take back
-                return
-            time.sleep(2)
+                    if self._adopt_once():
+                        return
+            except Exception:
+                pass  # not found or not answering yet
+            time.sleep(10)
 
     # ---- playback ----
     def _lan_ip(self, host):
