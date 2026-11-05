@@ -224,6 +224,13 @@ class ShellFlow(unittest.TestCase):
             self.client.post("/api/cmd", json={"action": "stop"})
         self.assertEqual(self.home.shown[-1], ("idle", ""))
 
+    def test_stopping_forgets_the_last_stream_and_its_error(self):
+        server.state.update(url="https://kick.com/chan", source="Kick")
+        with mock.patch.object(server, "stop_player"):
+            self.client.post("/api/cmd", json={"action": "stop"})
+        self.assertIsNone(server.state["url"])
+        self.assertIsNone(server.state["source"])
+
     def test_a_player_that_dies_shows_why(self):
         self.watch(1, "HTTP error 404 Not Found")
         self.assertEqual(self.home.shown[-1], ("error", "That link wasn't found (404)"))

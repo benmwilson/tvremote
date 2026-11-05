@@ -477,6 +477,7 @@ def api_cmd():
     if action == "stop":
         with lock:
             stop_player()
+            state.update(url=None, source=None, quality=None)  # a deliberate stop leaves no old error or "now playing" behind
         screen("idle")
         return jsonify(ok=True)
     if action == "restart":
