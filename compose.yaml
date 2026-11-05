@@ -30,6 +30,8 @@ services:
       - TVREMOTE_CEC_PHYS=${CEC_PHYS:-1.0.0.0}
       - TVREMOTE_CEC_NAME=HunnidPi
       - TVREMOTE_PASSWORD=${PASSWORD:-}
+      - TVREMOTE_ROKU_LIVING=${ROKU_LIVING:-}
+      - TVREMOTE_ROKU_BEDROOM=${ROKU_BEDROOM:-}
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://127.0.0.1:${PORT:-8765}/api/status"]
       interval: 30s

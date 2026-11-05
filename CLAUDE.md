@@ -5,11 +5,11 @@ Runs as a single Docker container on the Pi.
 
 ## Target flow
 1. On iPhone: copy a link (or Share from Safari) → run the "Play on Pi" Shortcut.
-2. Shortcut opens `http://192.168.1.138:8765/play?u=<url-encoded link>` in Safari.
+2. Shortcut opens `http://<pi-ip>:8765/play?u=<url-encoded link>` in Safari.
 3. Pi starts playback on the TV, switches the TV input to the Pi (CEC), then redirects to the web remote.
 4. Web remote shows what's playing and has controls: pause, volume, mute, seek, quality, stop, favourites.
 
-The Shortcut needs no SSH: Receive any input (fallback: Get Clipboard) → URL Encode → Text `http://192.168.1.138:8765/play?u=<encoded>` → Open URLs.
+The Shortcut needs no SSH: Receive any input (fallback: Get Clipboard) → URL Encode → Text `http://<pi-ip>:8765/play?u=<encoded>` → Open URLs.
 
 ## Supported sources
 Route by URL host. Keep the routing in one table in app.py so new sites are one line.
@@ -92,12 +92,12 @@ using the Pi's hardware decoder. So the container needs the host's sockets and d
 - No SSH from Claude Code. Ben runs every Pi-side command himself in Termius and pastes the output back.
   Give him one copy-paste block at a time, in a code block, with what to look for in the output.
 - Deploy (Ben runs on the Pi): `cd ~/tvremote && git pull && docker compose up -d --build`
-- Test from the PC over HTTP (no SSH needed): `curl http://192.168.1.138:8765/api/status`
+- Test from the PC over HTTP (no SSH needed): `curl http://<pi-ip>:8765/api/status`
 - Logs (Ben runs on the Pi): `docker logs --tail 50 tvremote`
 
 ## Hardware
-- Raspberry Pi 4 `hunnidpi`, 192.168.1.138, user `ben` (uid 1000), Debian Trixie (Raspberry Pi OS), labwc Wayland desktop, wired Ethernet, Docker installed, ben in the docker group
-- HDMI-A-1 → TCL Roku TV 55C803; the Pi appears in TV CEC as "HDMI 1: HunnidPi", physical address 1.0.0.0
+- Raspberry Pi 4 (address, hostname and user in the untracked `CLAUDE.local.md`), uid 1000, Debian Trixie (Raspberry Pi OS), labwc Wayland desktop, wired Ethernet, Docker installed, ben in the docker group
+- HDMI-A-1 → the living-room Roku TV; the Pi appears in TV CEC as "HDMI 1: <CEC name>", physical address 1.0.0.0
 
 ## Verified working on the host (keep these in the container)
 - `mpv.conf`: `vo=dmabuf-wayland`, `hwdec=v4l2m2m`, `fs`
@@ -111,7 +111,7 @@ using the Pi's hardware decoder. So the container needs the host's sockets and d
   `--active-source phys-addr=1.0.0.0`.
 
 ## Constraints
-- The TV remote can't control the Pi (the TCL Roku TV forwards no CEC key presses). The phone is the remote.
+- The TV remote can't control the Pi (the Roku TV forwards no CEC key presses). The phone is the remote.
 - The Kick iOS app hides Shortcuts from its share sheet, hence Copy → run Shortcut (Back Tap).
 
 ## Setup instructions for Claude Code
@@ -154,8 +154,8 @@ The first build on a Pi 4 takes several minutes. He pastes the output back. Fix 
 run `git pull && docker compose up -d --build` again.
 
 ### 3. Test (all must pass)
-- `curl -s http://192.168.1.138:8765/api/status` returns JSON.
-- For each source, start via `curl "http://192.168.1.138:8765/play?u=<encoded>"`, wait 10s, then check `/api/status`
+- `curl -s http://<pi-ip>:8765/api/status` returns JSON.
+- For each source, start via `curl "http://<pi-ip>:8765/play?u=<encoded>"`, wait 10s, then check `/api/status`
   shows running with a title. If something fails, ask Ben for `docker logs --tail 50 tvremote`:
   - Kick: `https://kick.com/capped` (or any live channel)
   - Twitch: a live channel from `https://www.twitch.tv/directory`
@@ -172,17 +172,17 @@ run `git pull && docker compose up -d --build` again.
 "Play on Pi":
 1. Receive **Any** input from **Share Sheet**; if there's no input: **Get Clipboard**.
 2. **URL Encode** → Shortcut Input.
-3. **Text**: `http://192.168.1.138:8765/play?u=` + URL Encoded Text.
+3. **Text**: `http://<pi-ip>:8765/play?u=` + URL Encoded Text.
 4. **Open URLs** → Text.
 5. Details: Show in Share Sheet on, Add to Home Screen. Optional: Settings → Accessibility → Touch → Back Tap → Double Tap → Play on Pi.
 Replace the old SSH-based "Play on Pi" action with these steps.
-Also: in Safari, open `http://192.168.1.138:8765` → Share → Add to Home Screen ("TV Remote").
+Also: in Safari, open `http://<pi-ip>:8765` → Share → Add to Home Screen ("TV Remote").
 
 ### 5. Done when
 - All tests in step 3 pass, Ben confirms picture and sound on the TV, README matches what was built, everything is pushed.
 
 ## Two TVs (targets)
-- Living room: TCL Roku TV, Pi 4 on HDMI → mpv in the container (target type `pi`).
+- Living room: Roku TV, Pi 4 on HDMI → mpv in the container (target type `pi`).
 - Bedroom: Roku TV with a Chromecast plugged in (target type `chromecast`; model unknown, detect Google TV vs older dongle from the mDNS model name).
 
 ### Targets
