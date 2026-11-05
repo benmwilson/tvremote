@@ -297,6 +297,11 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .pw>input{padding-right:70px!important}
 .pw-t{position:absolute!important;right:4px;top:50%;transform:translateY(-50%);width:auto!important;min-height:40px!important;padding:0 12px!important;background:none!important;color:var(--dim);font-size:14px;font-weight:600;border-radius:10px}
 .pw-t:focus-visible{outline:2px solid var(--tv,#62b0ff)}
+.apps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:6px}
+.apps .app{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 6px;min-height:0;height:auto;background:var(--card2,var(--line));border-radius:12px;min-width:0}
+.apps .app img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:var(--line)}
+.apps .app span{font-size:12px;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apps .note{grid-column:1/-1;margin:6px 2px;color:var(--dim);font-size:14px}
 </style>
 </head>
 <body>
@@ -539,6 +544,9 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <div class="row"><button data-k="InputHDMI1"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>1</button>
     <button data-k="InputHDMI2"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>2</button>
     <button data-k="InputHDMI3"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>3</button></div>
+  <details id="appsbox" style="margin-top:12px"><summary style="min-height:44px;line-height:44px;color:var(--dim)">TV apps</summary>
+    <div id="apps" class="apps" aria-live="polite"></div>
+  </details>
   <details style="margin-top:12px"><summary style="min-height:44px;line-height:44px;color:var(--dim)">TV navigation</summary>
     <div class="pad">
     <div class="row"><button data-k="Home" aria-label="Home"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></button><button data-k="Up" aria-label="Up"><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button><button data-k="Back" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button></div>
@@ -695,6 +703,7 @@ function render() {
   $('src').className = 'badge ' + (run || st.starting ? (st.source || '') : '');
   $('live').classList.toggle('hide', !(run && st.live));
   $('title').textContent = run ? (st.title || st.url) : st.starting ? 'Starting…' : st.error ? 'Playback stopped' : ext ? ext.app : 'Nothing playing';
+  const extCtl = !!ext && !!ext.controllable;  // a pause button only while that app's player is really open
   const nowUrl = run ? st.url : '';
   if (nowUrl !== nowAvFor) {  // the streamer's picture and a link to their page
     nowAvFor = nowUrl;
@@ -733,9 +742,9 @@ function render() {
   setBtn($('pp'), st.paused ? 'play' : 'pause', st.paused ? 'Paused' : '');
   $('seek').classList.toggle('hide', !run || st.live);
   if (!up && !starting && !st.error) $('meta').textContent = ext
-    ? (ext.paused ? 'Paused' : 'Playing') + ' on the TV itself, not through this remote. Starting something here will switch the TV to the Pi.'
+    ? (extCtl ? (ext.paused ? 'Paused' : 'Playing') : 'Open') + ' on the TV itself, not through this remote. Starting something here will switch the TV to the Pi.'
     : 'Pick something below, or open a favourite.';
-  $('extpp').classList.toggle('hide', !ext);
+  $('extpp').classList.toggle('hide', !extCtl);
   setBtn($('extpp'), ext && ext.paused ? 'play' : 'pause', ext && ext.paused ? 'Paused' : '');
   setBtn($('mute'), st.muted ? 'mute' : 'volume', '');
   $('mute').setAttribute('aria-label', st.muted ? 'Unmute' : 'Mute');
@@ -930,6 +939,28 @@ $('tvwake').onclick = async () => {
   if (r && r.ok) followTv();
 };
 $('refresh').onclick = () => busy($('refresh'), () => cmd('restart')).then(() => setTimeout(poll, 1500));
+// ---- the TV's own apps (YouTube, Netflix, Plex...): tap one to launch it on that TV ----
+let appsFor = null;
+async function loadApps() {
+  if (appsFor === target) return;
+  const box = $('apps'), tv = target;
+  box.replaceChildren(el('p', 'note', 'Loading the TV\u2019s apps\u2026'));
+  const r = await fetch('/api/roku/apps?target=' + encodeURIComponent(tv)).then(x => x.json()).catch(() => null);
+  if (tv !== target) return;  // moved to another TV while it loaded
+  if (!Array.isArray(r)) { box.replaceChildren(el('p', 'note', (r && r.error) || 'Couldn\u2019t load the TV\u2019s apps.')); return; }
+  appsFor = tv;
+  box.replaceChildren(...(r.length ? r : [null]).map(a => {
+    if (!a) return el('p', 'note', 'No apps found on this TV.');
+    const b = el('button', 'app'); b.type = 'button';
+    const img = el('img'); img.alt = ''; img.loading = 'lazy'; img.src = '/api/roku/icon?target=' + encodeURIComponent(tv) + '&id=' + encodeURIComponent(a.id);
+    img.onerror = () => img.remove();  // no icon: the name is enough
+    b.append(img, el('span', null, a.name)); b.title = 'Open ' + a.name + ' on ' + ((targets.find(t => t.id === tv) || {}).name || 'the TV');
+    b.setAttribute('aria-label', 'Open ' + a.name + ' on the TV');
+    b.onclick = async () => { const x = await busy(b, () => api('/api/roku/launch', 'POST', {id: a.id}), 1500); if (x && x.ok) followTv(); };
+    return b;
+  }));
+}
+$('appsbox').addEventListener('toggle', () => { if ($('appsbox').open) loadApps(); });
 const otherTv = () => (targets || []).find(t => t.id !== target && t.reachable);
 $('move').onclick = () => {
   const to = otherTv(), url = st.url;
@@ -1672,7 +1703,7 @@ function show() {
   if (v === 'tv') {
     const id = decodeURIComponent(location.hash.slice(5));
     if (id !== target) {
-      target = id; st = {}; lastRun = null; qualFor = null; $('qual').innerHTML = '';
+      target = id; st = {}; lastRun = null; qualFor = null; appsFor = null; $('appsbox').open = false; $('qual').innerHTML = '';
       try { localStorage.setItem('target', id); } catch (e) {}
       loadFavs(); poll(); loadShell();
     }

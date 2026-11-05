@@ -1,4 +1,5 @@
 """Roku TV control over ECP (port 8060). Needs 'Control by mobile apps' set to Permissive for keypresses."""
+import html
 import re
 import urllib.error
 import urllib.request
@@ -50,6 +51,30 @@ def media(ip):
     state = re.search(r'<player\b[^>]*\bstate="([^"]*)"', xml)
     dur = re.match(r"(\d+)\s*ms", _tag(xml, "duration") or "")
     return {"state": state.group(1) if state else None, "duration": int(dur.group(1)) / 1000 if dur else None}
+
+
+def apps(ip):
+    """The apps installed on the TV: [{"id", "name"}], in the TV's own order. Inputs and menus are left out."""
+    xml = _call(ip, "/query/apps")
+    return [{"id": m.group(1), "name": html.unescape(m.group(3)).strip()}
+            for m in re.finditer(r'<app\b[^>]*?\bid="(\d+)"[^>]*?\btype="(\w+)"[^>]*>([^<]*)</app>', xml) if m.group(2) == "appl"]
+
+
+def launch(ip, app_id):
+    if not re.fullmatch(r"\d{1,12}", str(app_id)):
+        raise RokuError("Unknown app")
+    _call(ip, f"/launch/{app_id}", "POST")
+
+
+def icon(ip, app_id):
+    """(bytes, content type) of an app's icon, or raises RokuError. Small: a TV icon is tens of kilobytes."""
+    if not re.fullmatch(r"\d{1,12}", str(app_id)):
+        raise RokuError("Unknown app")
+    try:
+        with urllib.request.urlopen(f"http://{ip}:8060/query/icon/{app_id}", timeout=4) as r:
+            return r.read(400_000), r.headers.get_content_type()
+    except (urllib.error.URLError, OSError) as e:
+        raise RokuError(f"No icon ({e})")
 
 
 def key(ip, name):

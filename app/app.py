@@ -141,8 +141,8 @@ SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/se
 # later) is refused, so a new endpoint is closed to guests until it is listed here on purpose.
 GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
              "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
-             "/api/shell", "/api/stats", "/api/chat/feed", "/api/sleep"}
-GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/logout"}
+             "/api/shell", "/api/stats", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon"}
+GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/api/roku/launch", "/logout"}
 
 
 def guest_blocked():
@@ -1152,10 +1152,13 @@ def fetch_roku(tv_id):
     _roku_busy.discard(tv_id)
 
 
+ROKU_OWN_SCREENS = ("roku", "home", "roku dynamic menu")  # the TV's own home screen and menu: nothing is playing there
+
+
 def external_app(r):
     """The app the TV itself is running (YouTube, Netflix...), or None when it is on an HDMI input, the home screen, or off."""
     app, app_id = (r or {}).get("app"), (r or {}).get("app_id") or ""
-    if (r or {}).get("power") != "PowerOn" or not app or app_id.startswith("tvinput.") or app.strip().lower() in ("roku", "home"):
+    if (r or {}).get("power") != "PowerOn" or not app or app_id.startswith("tvinput.") or app.strip().lower() in ROKU_OWN_SCREENS:
         return None
     return app
 
@@ -1167,7 +1170,9 @@ def external_now(tv_id):
     if not app:
         return None
     state = (r.get("media") or {}).get("state")
-    return {"app": app, "state": state, "paused": state == "pause", "duration": (r.get("media") or {}).get("duration")}
+    # only an app whose player is really open can be paused: a menu, a browse screen or a closed player reports "close" (or nothing)
+    return {"app": app, "state": state, "paused": state == "pause", "controllable": state in ("play", "pause", "buffer"),
+            "duration": (r.get("media") or {}).get("duration")}
 
 
 def roku_details(tv_id):
@@ -1347,6 +1352,8 @@ def apply_tv_config(cfg):
         CAST.cfg.update(name=LABELS["bedroom"], device=b.get("device") or None)
         CAST.name = LABELS["bedroom"]
     _roku.clear()  # details cached for the old addresses
+    _apps.clear()
+    _icons.clear()
 
 
 @app.get("/api/discover")
@@ -1450,6 +1457,75 @@ def api_roku_key():
         threading.Thread(target=on_tv_off, args=(tid,), daemon=True).start()
     if k in ("PowerOn", "PowerOff") or k.startswith("Input"):
         refresh_roku_soon(tid)
+    return jsonify(ok=True)
+
+
+_apps = {}  # tv id -> (fetched at, [apps]): the installed apps change rarely
+_icons = {}  # (tv id, app id) -> (bytes, content type)
+
+
+def tv_apps(tid, ip):
+    got = _apps.get(tid)
+    if got and time.time() - got[0] < 600:
+        return got[1]
+    items = roku.apps(ip)
+    _apps[tid] = (time.time(), items)
+    return items
+
+
+@app.get("/api/roku/apps")
+def api_roku_apps():
+    ip = roku_ip()
+    if not ip:
+        return jsonify(ok=False, error="No Roku configured for this TV"), 404
+    try:
+        return jsonify(tv_apps(request.args.get("target") or "living", ip))
+    except roku.RokuError as e:
+        return jsonify(ok=False, error=str(e)), 502
+
+
+@app.get("/api/roku/icon")
+def api_roku_icon():
+    tid, ip, aid = request.args.get("target") or "living", roku_ip(), request.args.get("id", "")
+    if not ip:
+        abort(404)
+    try:
+        if aid not in {a["id"] for a in tv_apps(tid, ip)}:  # only apps that are really installed
+            abort(404)
+        if (tid, aid) not in _icons:
+            if len(_icons) > 80:
+                _icons.clear()
+            _icons[(tid, aid)] = roku.icon(ip, aid)
+    except roku.RokuError:
+        abort(404)
+    data, kind = _icons[(tid, aid)]
+    return Response(data, mimetype=kind if kind.startswith("image/") else "image/png", headers={"Cache-Control": "max-age=86400"})
+
+
+@app.post("/api/roku/launch")
+def api_roku_launch():
+    tid, ip = request.args.get("target") or "living", roku_ip()
+    if not ip:
+        return jsonify(ok=False, error="No Roku configured for this TV"), 404
+    aid = str((request.get_json(silent=True) or {}).get("id", ""))
+    try:
+        if aid not in {a["id"] for a in tv_apps(tid, ip)}:
+            return jsonify(ok=False, error="That app isn't installed on this TV."), 400
+        if tv_is_off(tid):  # a TV in standby needs waking first, then a few seconds before it takes the app
+            roku.key(ip, "PowerOn")
+
+            def later():
+                time.sleep(6)
+                try:
+                    roku.launch(ip, aid)
+                except (roku.RokuError, OSError) as e:
+                    app.logger.warning("Launching app %s on %s failed: %s", aid, tid, e)
+            threading.Thread(target=later, daemon=True).start()
+        else:
+            roku.launch(ip, aid)
+    except roku.RokuError as e:
+        return jsonify(ok=False, error=str(e)), 502
+    refresh_roku_soon(tid)
     return jsonify(ok=True)
 
 
@@ -1931,6 +2007,10 @@ def action_label():
         return "Saved a favourite" if m == "POST" else "Removed a favourite"
     if m == "POST" and p == "/api/roku/key":
         return "Used the TV remote" + where
+    if m == "POST" and p == "/api/move":
+        return f"Moved {fav_name(normalise(data.get('url') or '') or '')} from {data.get('from')} to {data.get('to')}"[:80]
+    if m == "POST" and p == "/api/roku/launch":
+        return "Opened a TV app" + where
     if m == "POST" and p == "/api/kick/chat":
         return "Sent a Kick chat message"
     return None

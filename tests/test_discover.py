@@ -19,6 +19,8 @@ import targets  # noqa: E402
 import tvconfig  # noqa: E402
 from helpers import founder_client  # noqa: E402
 
+_REAL_SESSION_USER = server.session_user
+
 LIVING = {"ip": "192.168.1.141", "name": "MAIN ROOM", "brand": "TCL", "model": "55C803", "size": 55, "app_id": "tvinput.hdmi1"}
 BEDROOM = {"ip": "192.168.1.142", "name": "Ben's Roku TV", "brand": "TCL", "model": "43S425-CA", "size": 43, "app_id": "tvinput.hdmi2"}
 CAST = {"name": "Bedroom TV", "model": "Chromecast", "host": "192.168.1.156"}
@@ -276,10 +278,104 @@ class MoveSwitchesBackOff(unittest.TestCase):
         self.assertEqual((server._woken, self.keys), ({}, []))
         server.stop_pi.assert_not_called()  # what is playing here keeps playing
 
+    def test_a_move_and_an_app_launch_are_recorded_in_the_activity_log(self):
+        import activity
+        activity.reset()
+        with mock.patch.object(server, "play_on"), mock.patch.object(server, "stop_pi"), mock.patch.object(server, "tv_is_off", return_value=False),                 mock.patch.object(server, "refresh_roku_soon"), mock.patch.object(server, "power_back_off", return_value=False):
+            self.move("living", "bedroom")
+        self.assertEqual(activity.last("owner")["text"], "Moved capped from living to bedroom")
+        with mock.patch.object(roku, "_call", return_value=APPS_XML), mock.patch.object(server, "tv_is_off", return_value=False),                 mock.patch.dict(server.ROKU_IPS, {"living": LIVING["ip"]}):
+            server._apps.clear()
+            self.client.post("/api/roku/launch?target=living", json={"id": "837"})
+        self.assertEqual(activity.last("owner")["text"], "Opened a TV app (living)")
+
     def test_bad_requests_are_refused(self):
         self.assertEqual(self.move("living", "living").status_code, 400)
         self.assertEqual(self.move("living", "attic").status_code, 400)
         self.assertEqual(self.client.post("/api/move", json={"from": "living", "to": "bedroom", "url": "not a link"}).status_code, 400)
+
+
+APPS_XML = """<apps>
+<app id="tvinput.hdmi1" type="tvin" version="1.0.0">HDMI 1</app>
+<app id="837" type="appl" version="2.1.4">YouTube</app>
+<app id="12" type="appl" version="4.9.1">Netflix</app>
+<app id="13535" type="appl" version="5.1">Plex - Free Movies &amp; TV</app>
+<app id="562859" type="menu" version="1.0.0">Roku Dynamic Menu</app>
+</apps>"""
+
+
+class RokuApps(unittest.TestCase):
+    def setUp(self):
+        for p in (mock.patch.object(accounts, "initialised", lambda: True), mock.patch.object(server, "session_user", lambda tok: accounts.OWNER),
+                  mock.patch.object(server, "CAST", None), mock.patch.dict(server.ROKU_IPS, {"living": LIVING["ip"], "bedroom": ""}),
+                  mock.patch.object(server, "refresh_roku_soon")):
+            p.start()
+            self.addCleanup(p.stop)
+        server._apps.clear()
+        server._icons.clear()
+        self.client = server.app.test_client()
+
+    def test_only_real_apps_are_listed_with_clean_names(self):
+        with mock.patch.object(roku, "_call", return_value=APPS_XML):
+            self.assertEqual(roku.apps("1.2.3.4"), [{"id": "837", "name": "YouTube"}, {"id": "12", "name": "Netflix"},
+                                                    {"id": "13535", "name": "Plex - Free Movies & TV"}])  # no HDMI input, no menu; &amp; decoded
+
+    def test_the_list_is_kept_for_a_while(self):
+        with mock.patch.object(roku, "_call", return_value=APPS_XML) as call:
+            self.assertEqual(len(self.client.get("/api/roku/apps?target=living").get_json()), 3)
+            self.client.get("/api/roku/apps?target=living")
+            self.assertEqual(call.call_count, 1)
+
+    def test_launching_an_installed_app_posts_to_that_app_only(self):
+        with mock.patch.object(roku, "_call", return_value=APPS_XML) as call, mock.patch.object(server, "tv_is_off", return_value=False):
+            self.assertEqual(self.client.post("/api/roku/launch?target=living", json={"id": "837"}).get_json(), {"ok": True})
+            call.assert_called_with(LIVING["ip"], "/launch/837", "POST")
+
+    def test_an_app_that_is_not_installed_or_a_made_up_id_is_refused(self):
+        with mock.patch.object(roku, "_call", return_value=APPS_XML) as call:
+            for bad in ("99999", "../keypress/PowerOff", "837/../x", ""):
+                self.assertEqual(self.client.post("/api/roku/launch?target=living", json={"id": bad}).status_code, 400, bad)
+            self.assertNotIn("/launch/", " ".join(str(c) for c in call.call_args_list))
+        with self.assertRaises(roku.RokuError):
+            roku.launch("1.2.3.4", "1; rm")
+
+    def test_a_tv_in_standby_is_woken_first_and_the_app_follows(self):
+        calls, waits = [], []
+
+        class Now:
+            def __init__(self, target=None, args=(), daemon=None):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        with mock.patch.object(roku, "_call", side_effect=lambda ip, path, method="GET", timeout=4: calls.append((path, method)) or APPS_XML),                 mock.patch.object(roku, "key", side_effect=lambda ip, k: calls.append(("key", k))), mock.patch.object(server, "tv_is_off", return_value=True),                 mock.patch.object(server.time, "sleep", side_effect=waits.append), mock.patch.object(server.threading, "Thread", Now):
+            self.assertTrue(self.client.post("/api/roku/launch?target=living", json={"id": "12"}).get_json()["ok"])
+        self.assertEqual([c for c in calls if c[0] in ("key", "/launch/12")], [("key", "PowerOn"), ("/launch/12", "POST")])
+        self.assertEqual(waits, [6])
+
+    def test_icons_come_through_for_installed_apps_only(self):
+        with mock.patch.object(roku, "_call", return_value=APPS_XML), mock.patch.object(roku, "icon", return_value=(b"PNG-data", "image/png")) as icon:
+            r = self.client.get("/api/roku/icon?target=living&id=837")
+            self.assertEqual((r.status_code, r.data, r.mimetype), (200, b"PNG-data", "image/png"))
+            self.client.get("/api/roku/icon?target=living&id=837")
+            self.assertEqual(icon.call_count, 1)  # fetched once, then kept
+            self.assertEqual(self.client.get("/api/roku/icon?target=living&id=555").status_code, 404)
+            self.assertEqual(self.client.get("/api/roku/icon?target=living&id=a/b").status_code, 404)
+
+    def test_a_tv_with_no_roku_has_no_apps(self):
+        self.assertEqual(self.client.get("/api/roku/apps?target=bedroom").status_code, 404)
+
+    def test_guests_may_open_apps_like_they_may_press_remote_keys(self):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        url = "/api/roku/launch?target=living"
+        with mock.patch.dict(os.environ, {"TVREMOTE_DATA": d}), mock.patch.dict(sessions.key_cache, {"v": None}),                 mock.patch.object(accounts, "initialised", lambda: True), mock.patch.object(server, "session_user", _REAL_SESSION_USER):
+            tok = server.new_session(accounts.GUEST, 3600, {"label": "g"})
+            g = server.app.test_client()
+            g.set_cookie("tv_auth", tok)
+            self.assertNotEqual(g.post(url, json={"id": "1"}).status_code, 403)
+            self.assertNotEqual(g.get("/api/roku/apps?target=living").status_code, 403)
 
 
 class TurnOn(unittest.TestCase):
@@ -349,6 +445,7 @@ class WhatTheTvIsPlayingByItself(unittest.TestCase):
         self.assertEqual(ext({"power": "PowerOn", "app": "YouTube", "app_id": "837"}), "YouTube")
         self.assertIsNone(ext({"power": "PowerOn", "app": "Pi", "app_id": "tvinput.hdmi1"}))  # an HDMI input: the Pi, or a console
         self.assertIsNone(ext({"power": "PowerOn", "app": "Roku", "app_id": None}))  # the home screen
+        self.assertIsNone(ext({"power": "PowerOn", "app": "Roku Dynamic Menu", "app_id": "562859"}))  # the Roku's own menu (seen on the real bedroom TV)
         self.assertIsNone(ext({"power": "Ready", "app": "YouTube", "app_id": "837"}))  # in standby
         self.assertIsNone(ext({}))
 
@@ -364,6 +461,18 @@ class WhatTheTvIsPlayingByItself(unittest.TestCase):
             self.assertTrue(self.client.get("/api/status").get_json()["external"]["paused"])
             card = server.make_card("living", {"running": False})
         self.assertEqual((card["external"]["app"], card["now"]), ("YouTube", None))
+
+    def test_a_pause_button_only_for_an_app_whose_player_is_really_open(self):
+        for state, controllable in (("play", True), ("pause", True), ("buffer", True), ("close", False), ("stop", False), (None, False)):
+            media = {"state": state, "duration": None} if state else {}
+            with self.details(media=media):
+                got = self.client.get("/api/status").get_json()["external"]
+            self.assertEqual(got["controllable"], controllable, state)  # an app that is only browsing has nothing to pause
+
+    def test_the_roku_menu_is_not_reported_as_something_playing(self):
+        with self.details(app="Roku Dynamic Menu", app_id="562859", media={"state": "close", "duration": None}):
+            self.assertIsNone(self.client.get("/api/status").get_json()["external"])
+            self.assertIsNone(server.make_card("living", {"running": False})["external"])
 
     def test_nothing_external_when_this_remote_is_playing_or_the_tv_is_on_the_pi(self):
         with self.details():
