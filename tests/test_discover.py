@@ -161,10 +161,52 @@ class Endpoints(unittest.TestCase):
             key.assert_called_once_with(LIVING["ip"], "Info")
 
 
+class StatusFreshness(unittest.TestCase):
+    def setUp(self):
+        for p in (mock.patch.object(accounts, "initialised", lambda: True), mock.patch.object(server, "session_user", lambda tok: accounts.OWNER),
+                  mock.patch.object(server, "CAST", None), mock.patch.dict(server.ROKU_IPS, {"living": LIVING["ip"], "bedroom": ""})):
+            p.start()
+            self.addCleanup(p.stop)
+        self.client = server.app.test_client()
+
+    def test_the_tv_is_asked_often_while_a_phone_is_looking_and_slowly_otherwise(self):
+        server._viewed["t"] = 0.0
+        self.assertEqual(server.roku_ttl(), server.ROKU_TTL)
+        self.client.get("/api/targets")
+        self.assertEqual(server.roku_ttl(), server.ROKU_TTL_LIVE)
+        self.assertLess(server.ROKU_TTL_LIVE, 5)
+        t = server.time.time()
+        with mock.patch.object(server.time, "time", return_value=t + 31):
+            self.assertEqual(server.roku_ttl(), server.ROKU_TTL)  # the phone went away
+
+    def test_power_and_input_keys_trigger_the_quick_recheck_but_other_keys_do_not(self):
+        with mock.patch.object(roku, "key"), mock.patch.object(server, "refresh_roku_soon") as soon:
+            for k in ("PowerOn", "PowerOff", "InputHDMI2"):
+                self.client.post("/api/roku/key?target=living", json={"key": k})
+            self.assertEqual(soon.call_count, 3)
+            self.client.post("/api/roku/key?target=living", json={"key": "VolumeUp"})
+            self.assertEqual(soon.call_count, 3)
+
+    def test_the_recheck_asks_the_tv_at_one_three_six_and_ten_seconds(self):
+        waits = []
+
+        class Now:  # run the background thread's work right here, so the test sees exactly its sleeps and fetches
+            def __init__(self, target=None, args=(), daemon=None):
+                self.target, self.args = target, args
+
+            def start(self):
+                self.target(*self.args)
+
+        with mock.patch.object(server.time, "sleep", side_effect=waits.append), mock.patch.object(server, "fetch_roku") as fetch,                 mock.patch.object(server.threading, "Thread", Now):
+            server.refresh_roku_soon("living")
+        self.assertEqual((waits, fetch.call_count), ([1, 2, 3, 4], 4))
+
+
 class TurnOn(unittest.TestCase):
     def setUp(self):
         for p in (mock.patch.object(accounts, "initialised", lambda: True), mock.patch.object(server, "session_user", lambda tok: accounts.OWNER),
-                  mock.patch.object(server, "CAST", None), mock.patch.object(server, "switch_tv_to_pi"), mock.patch.object(server, "switch_input")):
+                  mock.patch.object(server, "CAST", None), mock.patch.object(server, "switch_tv_to_pi"), mock.patch.object(server, "switch_input"),
+                  mock.patch.object(server, "refresh_roku_soon")):
             p.start()
             self.addCleanup(p.stop)
         self.client = server.app.test_client()

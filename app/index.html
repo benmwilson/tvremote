@@ -927,7 +927,7 @@ $('go').onclick = () => {
 $('link').onkeydown = e => { if (e.key === 'Enter') $('go').click(); };
 $('tvwake').onclick = async () => {
   const r = await busy($('tvwake'), () => api('/api/tv/wake', 'POST'), 7000);  // it takes a few seconds to wake and pick its input
-  if (r && r.ok) { loadTargets(); setTimeout(loadTargets, 4000); setTimeout(loadTargets, 8000); }
+  if (r && r.ok) followTv();
 };
 $('refresh').onclick = () => busy($('refresh'), () => cmd('restart')).then(() => setTimeout(poll, 1500));
 const otherTv = () => (targets || []).find(t => t.id !== target && t.reachable);
@@ -1696,8 +1696,10 @@ document.addEventListener('click', async e => {
   const k = b.dataset.k;
   const hold = k === 'PowerOn' ? 4000 : /^Input/.test(k) ? 2500 : 0;  // the TV takes a moment to wake or change input
   const r = await busy(b, () => api('/api/roku/key', 'POST', {key: k}), hold);
-  if (r && r.ok) setTimeout(loadTargets, 500);
+  if (r && r.ok) followTv();
 });
+// after a power or input change, look again a few times as the TV settles (the Pi re-asks the TV on the same beat)
+const followTv = () => [500, 1500, 3500, 7000, 11000].forEach(ms => setTimeout(loadTargets, ms));
 
 // ---- share picker: /share?u=<link> ----
 const picker = {url: '', started: false, busy: '', msg: {}};

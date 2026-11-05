@@ -1018,7 +1018,22 @@ def stream_label(quality):
 
 _roku = {}       # tv_id -> (fetched at, info)
 _roku_busy = set()
-ROKU_TTL = 15    # seconds: TV details change rarely, and every ECP call costs two round trips
+ROKU_TTL = 15       # seconds between asking a TV nobody is looking at (standby detection still needs it)
+ROKU_TTL_LIVE = 3   # ...and while a phone has the remote open, so a TV switching on or off shows within a few seconds
+_viewed = {"t": 0.0}  # when a phone last asked for the TVs
+
+
+def roku_ttl():
+    return ROKU_TTL_LIVE if time.time() - _viewed["t"] < 30 else ROKU_TTL
+
+
+def refresh_roku_soon(tv_id):
+    """After a power or input key: ask the TV again a few times as it settles, so the page catches the change quickly."""
+    def run():
+        for wait in (1, 2, 3, 4):  # 1, 3, 6 and 10 seconds after the key
+            time.sleep(wait)
+            fetch_roku(tv_id)
+    threading.Thread(target=run, daemon=True).start()
 
 
 def on_tv_off(tv_id):
@@ -1084,7 +1099,7 @@ def roku_details(tv_id):
     if not ROKU_IPS.get(tv_id):
         return {}
     fetched, info = _roku.get(tv_id, (0, {}))
-    if time.time() - fetched > ROKU_TTL and tv_id not in _roku_busy:
+    if time.time() - fetched > roku_ttl() and tv_id not in _roku_busy:
         _roku_busy.add(tv_id)
         threading.Thread(target=fetch_roku, args=(tv_id,), daemon=True).start()
     return info
@@ -1227,6 +1242,7 @@ def api_targets_refresh():
 @app.get("/api/targets")
 def api_targets():
     """One card per TV from the background cache; never waits on a TV. type/online/roku are kept for the old UI."""
+    _viewed["t"] = time.time()
     out = []
     for c in cards.snapshot():
         if not TV_ENABLED.get(c["id"], True):
@@ -1336,6 +1352,7 @@ def api_tv_wake():
         if tid == "living":
             switch_tv_to_pi()  # the Pi's TV is also woken and selected over HDMI-CEC
     threading.Thread(target=go, daemon=True).start()
+    refresh_roku_soon(tid)
     return jsonify(ok=True)
 
 
@@ -1351,8 +1368,11 @@ def api_roku_key():
         roku.key(ip, k)
     except roku.RokuError as e:
         return jsonify(ok=False, error=str(e)), 502
+    tid = request.args.get("target") or "living"
     if k == "PowerOff":
-        threading.Thread(target=on_tv_off, args=(request.args.get("target") or "living",), daemon=True).start()
+        threading.Thread(target=on_tv_off, args=(tid,), daemon=True).start()
+    if k in ("PowerOn", "PowerOff") or k.startswith("Input"):
+        refresh_roku_soon(tid)
     return jsonify(ok=True)
 
 
