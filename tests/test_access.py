@@ -102,6 +102,14 @@ class AccessTest(unittest.TestCase):
         for path in ("/api/accounts", "/api/access", "/api/debug", "/auth/kick/start"):
             self.assertEqual(guest.get(path).status_code, 403, path)
         self.assertEqual(guest.post("/api/kick/chat", json={"channel": "x", "text": "hi"}).status_code, 403)
+        self.assertEqual(guest.post("/api/shell", json={"enabled": False}).status_code, 403)  # the home-screen switch is not theirs
+        self.assertEqual(guest.post("/api/stats", json={"enabled": True}).status_code, 403)
+        # default deny: a route nobody listed (like one added next month) is closed to guests, not open by accident
+        self.assertEqual(guest.get("/api/some-future-route").status_code, 403)
+        self.assertEqual(guest.post("/api/some-future-route").status_code, 403)
+        for path in ("/", "/api/auth", "/api/targets", "/api/favourites", "/api/kick", "/api/shell", "/api/stats"):
+            self.assertNotEqual(guest.get(path).status_code, 403, path)  # what the page needs to show the TVs
+        self.assertNotEqual(guest.post("/api/cmd", json={"action": "pause"}).status_code, 403)
 
     def test_changing_your_own_password(self):
         accounts.add("sam", "secret1")

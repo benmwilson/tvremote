@@ -114,10 +114,21 @@ def guard():
 SESSION_DAYS = 180
 
 
+# What a one-time-link guest may do: use the TVs and see the pages that show them. Everything else (including any route added
+# later) is refused, so a new endpoint is closed to guests until it is listed here on purpose.
+GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
+             "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
+             "/api/shell", "/api/stats", "/api/chat/feed", "/api/sleep"}
+GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/logout"}
+
+
 def guest_blocked():
-    """What a one-time-link guest may not do: change favourites, link accounts, anything about accounts."""
-    return (request.method != "GET" and request.path.startswith("/api/favourites")) or \
-        request.path.startswith(("/auth/kick", "/api/kick/chat", "/api/kick/unlink", "/api/account"))
+    path = request.path
+    if request.method in ("GET", "HEAD"):
+        return not (path in GUEST_GET or re.fullmatch(r"/icon-\d+\.png", path))
+    return not (request.method == "POST" and path in GUEST_POST)
+
+
 _sessions_lock = threading.Lock()
 
 
