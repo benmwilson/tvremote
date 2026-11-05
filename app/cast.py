@@ -150,6 +150,7 @@ class CastTarget:
         source, player = self.resolve(url)
         q = self._quality(player, quality)
         cast = self._connect()
+        hlsproxy.clear()  # any previous relay session ends; _start_proxy sets a new one
         with self.lock:
             self.state.update(url=url, source=source, player=player, quality=q, error=None,
                               started=time.time(), via=None, proxy_tried=False, mode=via)
@@ -190,6 +191,7 @@ class CastTarget:
     def cmd(self, action, value=None, quality=None):
         """Returns (ok, error)."""
         if action == "stop":
+            hlsproxy.clear()
             if self.cast:
                 self.cast.quit_app()
             self.state["url"] = None

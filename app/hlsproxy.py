@@ -66,6 +66,14 @@ def valid(candidate):
     return bool(t) and hmac.compare_digest(candidate.encode(), t.encode())
 
 
+def clear():
+    """End of the relay session: the token and upstream stop working."""
+    with _lock:
+        _up["url"] = _up["token"] = None
+        _cache.clear()
+        _allowed.clear()
+
+
 def set_upstream(url):
     with _lock:
         _up["url"] = url
