@@ -30,13 +30,15 @@ LINE = 1.0                  # measured on the Pi: a text line is about its font 
 _L = r"{\an7\pos(830,%d)\fscx260\fscy260\shad0\p1"
 
 
-def logo_pieces(y):
-    """The mark as ASS drawings with its drawing origin at height y (solid accent colour; subtitles have no gradients)."""
+def logo_pieces(y, accent=None):
+    """The mark as ASS drawings with its drawing origin at height y (solid colour: the accent, or the default blue; subtitles have no gradients)."""
+    c = accent or ACCENT
+    head = (_L % y) + r"\1a&HFF&\3c&H" + c + r"&\bord8}"
     return [
-        (_L % y) + r"\1a&HFF&\3c&HFFB062&\bord8}m 26 22 l 74 22 b 80 22 86 28 86 34 l 86 58 b 86 64 80 70 74 70 l 26 70 b 20 70 14 64 14 58 l 14 34 b 14 28 20 22 26 22{\p0}",
-        (_L % y) + r"\1c&HFFB062&\3c&HFFB062&\bord5}m 44 36 l 44 56 l 61 46{\p0}",
-        (_L % y) + r"\1a&HFF&\3c&HFFB062&\bord8}m 38 82 l 62 82{\p0}",
-        (_L % y) + r"\1a&HFF&\3c&HFFB062&\bord8}m 50 73 l 50 82{\p0}",
+        head + r"m 26 22 l 74 22 b 80 22 86 28 86 34 l 86 58 b 86 64 80 70 74 70 l 26 70 b 20 70 14 64 14 58 l 14 34 b 14 28 20 22 26 22{\p0}",
+        (_L % y) + r"\1c&H" + c + r"&\3c&H" + c + r"&\bord5}m 44 36 l 44 56 l 61 46{\p0}",
+        head + r"m 38 82 l 62 82{\p0}",
+        head + r"m 50 73 l 50 82{\p0}",
     ]
 
 
@@ -57,6 +59,7 @@ BG = "0b0e14"
 VO_ORDER = tuple(v for v in os.environ.get("TVREMOTE_SHELL_VO", "wlshm,gpu").split(",") if v)  # wlshm: plain software drawing; gpu if it won't open
 # ASS colours are BGR
 TEXT, DIM, ACCENT, BAD, WARN = "F6F1EE", "A9978C", "FFB062", "6B6BFF", "47B5FF"
+SRC_BGR = {"Kick": "18FC53", "Twitch": "FF70A9", "YouTube": "3B3BFF"}  # the sites' colours, as ASS wants them (BGR)
 HEADS = {"idle": ("Ready", ACCENT), "loading": ("Loading", ACCENT), "quality": ("Switching quality", ACCENT), "refresh": ("Refreshing the stream", ACCENT), "error": ("Couldn't play", BAD),
          "offline": ("Not live right now", WARN), "ended": ("Stream ended", DIM)}
 PROPS = ("current-vo", "vo-configured", "fullscreen", "osd-width", "osd-height", "pause", "core-idle", "eof-reached",
@@ -83,9 +86,11 @@ def clock12(now):
     return "%d%s%02d %s" % (now.hour % 12 or 12, colon, now.minute, "AM" if now.hour < 12 else "PM")
 
 
-def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
+def screen(kind, detail="", hint="", dots=0, now=None, favs=(), accent=None):
     """ASS text for one screen, centred. The Ready screen carries the clock, date and the remote's address."""
     head, colour = HEADS[kind]
+    if accent and kind in ("idle", "loading", "quality", "refresh"):
+        colour = accent  # the playing site's colour (errors and "not live" keep their own)
     detail = clean(detail)
     if kind == "idle":
         now = now or datetime.now()
@@ -118,7 +123,7 @@ def stamp(sec):
     return f"{h}:{m:02d}:{sc:02d}.{cs:02d}"
 
 
-def ass_file(events):
+def ass_file(events, accent=None):
     """A subtitle file from [(start_seconds, end_seconds, text)], timed to the window's video clock."""
     head = (f"[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: {H}\nWrapStyle: 2\n\n"
             "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
@@ -129,7 +134,7 @@ def ass_file(events):
     body = "".join(f"Dialogue: 0,{stamp(a)},{stamp(b)},Default,,0,0,0,,{t.replace('@@Y@@', str(ty))}\n" for a, b, t in events)
     if events:  # the logo is its own events spanning the file, so it never flickers when the text changes
         span = f"{stamp(min(e[0] for e in events))},{stamp(max(e[1] for e in events))}"
-        body += "".join(f"Dialogue: 0,{span},Default,,0,0,0,,{piece}\n" for piece in logo_pieces(ly))
+        body += "".join(f"Dialogue: 0,{span},Default,,0,0,0,,{piece}\n" for piece in logo_pieces(ly, accent))
     return head + body
 
 
@@ -149,7 +154,7 @@ class Shell:
         self._n, self._sid = 0, None  # which file to write next; the subtitle track now showing
         self._ready = ready or (lambda: os.path.exists(SOCK))
         self.proc = self.vo = self.error = None
-        self.kind, self.detail = "idle", ""
+        self.kind, self.detail, self.accent = "idle", "", None
         self._gen = 0
         self._lock = threading.RLock()
 
@@ -203,10 +208,10 @@ class Shell:
                 except Exception:
                     pass
 
-    def show(self, kind, detail=""):
+    def show(self, kind, detail="", accent=None):
         """kind: idle, loading, error, offline, ended, or playing (hide everything). Returns whether it was shown."""
         with self._lock:
-            self.kind, self.detail = kind, detail
+            self.kind, self.detail, self.accent = kind, detail, accent
             self._gen += 1
             return self._show_current() if self.running() else False
 
@@ -232,23 +237,23 @@ class Shell:
             out = []
             for k in range(IDLE_SPAN):
                 a = pos - frac + k
-                out.append((a, a + 1, screen("idle", hint=self.hint, now=base + timedelta(seconds=k))))
+                out.append((a, a + 1, screen("idle", hint=self.hint, now=base + timedelta(seconds=k), accent=self.accent)))
             return out
         hint = "Pick something else on your phone" if kind in ("ended", "offline", "error") else ""
         if kind in ("loading", "quality", "refresh"):  # the dots (or wheel) move for 90 s, then the last frame stays
             step = 0.25 if kind == "refresh" else self.interval
             n = int(90 / step)
-            out = [(pos + k * step, pos + (k + 1) * step, screen(kind, self.detail, hint, k)) for k in range(n)]
+            out = [(pos + k * step, pos + (k + 1) * step, screen(kind, self.detail, hint, k, accent=self.accent)) for k in range(n)]
             out[-1] = (out[-1][0], pos + FOREVER, out[-1][2])
             return out
-        return [(pos, pos + FOREVER, screen(kind, self.detail, hint))]
+        return [(pos, pos + FOREVER, screen(kind, self.detail, hint, accent=self.accent))]
 
     def _load(self, events):
         """Write the events to the other file, show it, then drop the old one (no blank in between)."""
         path = ASS_FILES[self._n % 2]
         self._n += 1
         try:
-            self._write(path, ass_file(events))
+            self._write(path, ass_file(events, self.accent))
         except OSError:
             return
         r = self._ipc(SOCK, ["sub-add", path, "select"])

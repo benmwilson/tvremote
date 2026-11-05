@@ -220,6 +220,8 @@ class CastTarget:
             rc.set_volume(max(0.0, min(1.0, (cast.status.volume_level or 0) + float(value) / 100)))
         elif action == "seek":
             mc.seek(max(0.0, ms.adjusted_current_time + float(value)))
+        elif action == "seek_to":
+            mc.seek(max(0.0, float(value)))
         else:
             return False, "Unknown action"
         return True, None

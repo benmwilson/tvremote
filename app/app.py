@@ -294,10 +294,14 @@ def save_settings():
     os.replace(tmp, SETTINGS_FILE)
 
 
-def screen(kind, detail=""):
-    """Show a screen on the TV's home screen, if it is on."""
+def screen(kind, detail="", source=None):
+    """Show a screen on the TV's home screen, if it is on. `source` (Kick, Twitch, YouTube) tints it in that site's colour."""
     if HOME and settings.get("shell"):
-        HOME.show(kind, detail)
+        accent = shell.SRC_BGR.get(source)
+        if accent:
+            HOME.show(kind, detail, accent)
+        else:
+            HOME.show(kind, detail)
 
 
 def describe_error(raw):
@@ -377,6 +381,8 @@ def _watch(proc):
             break
         time.sleep(0.5)
     if proc.poll() is None:
+        if settings.get("volume") is not None:
+            mpv(["set_property", "volume", settings["volume"]])  # a new mpv starts at 100: put back what was chosen
         screen("playing")
     proc.wait()
     if state["proc"] is not proc:
@@ -464,7 +470,7 @@ def _stall_monitor(proc):
 
 def start_player(url, quality=None, screen_kind="loading"):
     # before the old stream stops, so a swap never shows the desktop
-    screen(screen_kind, fav_name(url) + ("  \u00b7  " + quality if screen_kind == "quality" and quality else ""))
+    screen(screen_kind, fav_name(url) + ("  \u00b7  " + quality if screen_kind == "quality" and quality else ""), route(url)[0])
     stop_player()
     source, player = resolve(url)
     try:
@@ -636,6 +642,90 @@ def switch_input(tid):
         pass  # best effort: playback already started
 
 
+RECENT_FILE = os.path.join(DATA, "recents.json")
+
+
+def load_recents():
+    try:
+        with open(RECENT_FILE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return []
+
+
+def remember(url):
+    """Keep the last few links that were played, newest first."""
+    try:
+        items = [r for r in load_recents() if r.get("url") != url]
+        items.insert(0, {"name": fav_name(url)[:40], "url": url, "source": route(url)[0]})
+        with open(RECENT_FILE + ".tmp", "w") as f:
+            json.dump(items[:8], f)
+        os.replace(RECENT_FILE + ".tmp", RECENT_FILE)
+    except OSError:
+        pass  # history is a convenience
+
+
+_sleep = {}  # per TV: when to stop (epoch seconds)
+
+
+@app.route("/api/sleep", methods=["GET", "POST"])
+def api_sleep():
+    """Stop playing (and switch the TV off) after N minutes. POST {minutes}: 0 cancels."""
+    tid = request.args.get("target") or "living"
+    if tid not in ("living", "bedroom"):
+        return jsonify(ok=False, error="Unknown TV."), 400
+    if request.method == "POST":
+        try:
+            m = int((request.get_json(silent=True) or {}).get("minutes", 0))
+        except (TypeError, ValueError):
+            return jsonify(ok=False, error="Bad value"), 400
+        if not 0 <= m <= 720:
+            return jsonify(ok=False, error="Choose up to 12 hours."), 400
+        if m:
+            _sleep[tid] = time.time() + m * 60
+        else:
+            _sleep.pop(tid, None)
+    return jsonify(ok=True, at=_sleep.get(tid))
+
+
+def on_sleep(tid):
+    """The timer ran out: stop what is playing and turn the TV off."""
+    if tid == "living":
+        with lock:
+            stop_player()
+            state.update(url=None, source=None, quality=None)
+        screen("idle")
+    elif CAST:
+        try:
+            CAST.cmd("stop")
+        except Exception:
+            pass
+    ip = ROKU_IPS.get(tid)
+    if ip:
+        try:
+            roku.key(ip, "PowerOff")
+        except (roku.RokuError, OSError):
+            pass
+
+
+def check_sleep(now=None):
+    now = now or time.time()
+    for tid in [t for t, at in _sleep.items() if at <= now]:
+        _sleep.pop(tid, None)
+        on_sleep(tid)
+
+
+def sleep_loop():
+    while True:
+        time.sleep(5)
+        check_sleep()
+
+
+@app.get("/api/recents")
+def api_recents():
+    return jsonify(load_recents())
+
+
 _start_seq = {}  # per TV: the newest start request. A request that is no longer the newest quits without starting.
 
 
@@ -643,6 +733,10 @@ def play_on(c, url, quality, via=None):
     """Start `url` on the Chromecast target `c`, or on the Pi when c is None. Newest tap wins: an older start that is
     still working out its link (yt-dlp can take ~20 s) gives up instead of running after the newer one."""
     tid = c.id if c else "living"
+    cur = c.state if c else state
+    if cur.get("url") == url and time.time() - (cur.get("started") or 0) < 3:
+        return  # the same link was started a moment ago (a double tap): leave it be
+    remember(url)
     seq = _start_seq[tid] = _start_seq.get(tid, 0) + 1
     newest = lambda: _start_seq.get(tid) == seq
     if c:
@@ -676,6 +770,7 @@ COMMANDS = {
     "volume": lambda v: ["set_property", "volume", max(0.0, min(130.0, float(v)))],
     "volume_delta": lambda v: ["add", "volume", float(v)],
     "seek": lambda v: ["seek", float(v), "relative"],
+    "seek_to": lambda v: ["seek", max(0.0, float(v)), "absolute"],
 }
 
 
@@ -717,6 +812,9 @@ def api_cmd():
     ok = bool(r and r.get("error") == "success")
     if ok and action == "pause":
         osd_paused(bool(prop("pause")))
+    if ok and action in ("volume", "volume_delta") and prop("volume") is not None:
+        settings["volume"] = prop("volume")
+        save_settings()
     if ok and action in ("volume", "volume_delta", "mute", "unmute"):
         osd_volume()
     return jsonify(ok=ok)
@@ -766,10 +864,11 @@ def api_status():
     c = tgt()
     if c:
         try:
-            return jsonify(c.status())
+            d = c.status()
         except Exception as e:
-            return jsonify(running=False, target=c.id, error=str(e))
-    return jsonify(pi_status())
+            d = dict(running=False, target=c.id, error=str(e))
+        return jsonify({**d, "sleep_at": _sleep.get(c.id)})
+    return jsonify({**pi_status(), "sleep_at": _sleep.get("living")})
 
 
 def pi_status():
@@ -1265,6 +1364,7 @@ if __name__ == "__main__":
         CAST = CastTarget(DATA, resolve, display_title, YTDL_HEIGHTS, SL_DEFAULT)
     cards.start()
     livewatch.start()
+    threading.Thread(target=sleep_loop, daemon=True).start()
     settings.update(load_settings())
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
                        favs=lambda: [(f.get("name") or "")[:28] for f in load_favs()][:5])

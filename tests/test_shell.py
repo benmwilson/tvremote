@@ -200,6 +200,26 @@ class Centering(unittest.TestCase):
         self.assertIn(r"\pos(830,", shell.logo_pieces(100)[0])
 
 
+class Tint(unittest.TestCase):
+    def test_a_site_colour_tints_the_heading_and_the_logo(self):
+        t = shell.screen("loading", "chan", accent="18FC53")
+        self.assertIn("&H18FC53&", t)
+        self.assertNotIn("&HFFB062&", t)
+        self.assertIn("18FC53", "".join(shell.logo_pieces(0, "18FC53")))
+        self.assertNotIn("FFB062", "".join(shell.logo_pieces(0, "18FC53")))
+        self.assertIn("FFB062", "".join(shell.logo_pieces(0)))  # default blue
+
+    def test_errors_keep_their_own_colour(self):
+        self.assertNotIn("18FC53", shell.screen("error", "x", accent="18FC53"))
+
+    def test_the_tint_reaches_the_file(self):
+        s, popen, sent = make_shell([FakeProc()])
+        s.start()
+        s.show("loading", "chan", "FF70A9")
+        f = [c for c in sent if c[0] == "ass-file"][-1][1]
+        self.assertIn("&HFF70A9&", f)
+
+
 class Process(unittest.TestCase):
     def test_start_uses_the_first_output_that_works(self):
         s, popen, sent = make_shell([FakeProc()])

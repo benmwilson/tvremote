@@ -271,17 +271,17 @@ class ShellFlow(unittest.TestCase):
 
     def test_a_new_stream_shows_loading_before_the_old_one_stops(self):
         order = []
-        self.home.show = lambda kind, detail="": order.append("screen:" + kind) or True
+        self.home.show = lambda kind, detail="", accent=None: order.append("screen:" + kind) or True
         with mock.patch.object(server, "stop_player", side_effect=lambda: order.append("stop")),                 mock.patch.object(server.subprocess, "Popen"), mock.patch.object(server, "_watch"),                 mock.patch.object(server, "chat_sync"), mock.patch.object(server, "switch_tv_to_pi"):
             server.start_player("https://kick.com/chan")
         self.assertEqual(order[:2], ["screen:loading", "stop"])
 
     def test_changing_quality_shows_the_quality_screen_first(self):
         order = []
-        self.home.show = lambda kind, detail="": order.append((kind, detail)) or True
+        self.home.show = lambda kind, detail="", accent=None: order.append((kind, detail, accent)) or True
         with mock.patch.object(server, "stop_player", side_effect=lambda: order.append("stop")),                 mock.patch.object(server.subprocess, "Popen"), mock.patch.object(server, "_watch"),                 mock.patch.object(server, "_stall_monitor"), mock.patch.object(server, "chat_sync"),                 mock.patch.object(server, "switch_tv_to_pi"):
             server.start_player("https://kick.com/chan", "720p60", "quality")
-        self.assertEqual(order[:2], [("quality", "chan  ·  720p60"), "stop"])
+        self.assertEqual(order[:2], [("quality", "chan  ·  720p60", "18FC53"), "stop"])  # tinted in Kick green
 
     def test_the_restart_command_asks_for_the_quality_screen(self):
         server.state.update(url="https://kick.com/chan", quality="1080p60,best")
@@ -471,6 +471,7 @@ class ShellFlow(unittest.TestCase):
 
         class C:
             id = "bedroom"
+            state = {}
             def play(s, url, q=None, via=None, cancelled=lambda: False):
                 calls.append(cancelled())
         c = C()
@@ -482,6 +483,60 @@ class ShellFlow(unittest.TestCase):
         for bad in ("//evil.example", "/\\evil.example", "/\\\\evil.example", "https://evil.example", "/ok\r\nSet-Cookie: x=1", "", "evil"):
             self.assertEqual(server.safe_next(bad), "/", repr(bad))
         self.assertEqual(server.safe_next("/?target=bedroom"), "/?target=bedroom")
+
+    def test_seek_to_jumps_to_an_exact_second(self):
+        sent = []
+        with mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}), mock.patch.object(server, "tgt", return_value=None):
+            self.client.post("/api/cmd", json={"action": "seek_to", "value": 125.5})
+        self.assertEqual(sent[0], ["seek", 125.5, "absolute"])
+
+    def test_the_same_link_twice_in_a_moment_starts_once(self):
+        started = []
+        with mock.patch.object(server, "resolve", return_value=("Kick", "streamlink")), mock.patch.object(server, "remember"), mock.patch.object(server, "switch_input"),                 mock.patch.object(server, "start_player", lambda u, q=None, k="loading": (started.append(u), server.state.update(url=u, started=time.time()))):
+            server.state.update(url=None, started=0)
+            server.play_on(None, "https://kick.com/chan", None)
+            server.play_on(None, "https://kick.com/chan", None)  # a double tap
+            server.play_on(None, "https://kick.com/other", None)
+        self.assertEqual(started, ["https://kick.com/chan", "https://kick.com/other"])
+
+    def test_recent_links_are_kept_newest_first_without_repeats(self):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        with mock.patch.object(server, "RECENT_FILE", os.path.join(d, "recents.json")):
+            for u in ("https://kick.com/a", "https://kick.com/b", "https://kick.com/a"):
+                server.remember(u)
+            out = self.client.get("/api/recents").get_json()
+            for i in range(10):
+                server.remember(f"https://kick.com/x{i}")
+            self.assertEqual(len(server.load_recents()), 8)
+        self.assertEqual([r["url"] for r in out], ["https://kick.com/a", "https://kick.com/b"])
+
+    def test_the_sleep_timer_stops_the_stream_and_powers_the_tv_off(self):
+        server._sleep.clear()
+        r = self.client.post("/api/sleep?target=living", json={"minutes": 30}).get_json()
+        self.assertTrue(r["ok"] and 1790 < r["at"] - time.time() < 1810)
+        self.assertEqual(self.client.post("/api/sleep?target=living", json={"minutes": 9999}).status_code, 400)
+        with mock.patch.object(server, "stop_player") as stop, mock.patch.object(server, "screen"), mock.patch.object(server.roku, "key") as key,                 mock.patch.dict(server.ROKU_IPS, {"living": "203.0.113.1"}):
+            server.check_sleep(time.time() + 10)  # not yet
+            stop.assert_not_called()
+            server.check_sleep(time.time() + 1900)
+            stop.assert_called_once()
+            key.assert_called_once_with("203.0.113.1", "PowerOff")
+        self.assertIsNone(self.client.post("/api/sleep?target=living", json={"minutes": 0}).get_json()["at"])
+
+    def test_the_status_carries_the_sleep_time(self):
+        server._sleep["living"] = 12345.0
+        with mock.patch.object(server, "pi_status", return_value={"running": False}):
+            self.assertEqual(self.client.get("/api/status").get_json()["sleep_at"], 12345.0)
+        server._sleep.clear()
+
+    def test_the_volume_you_chose_comes_back_after_a_restart(self):
+        sent = []
+        proc = mock.Mock()
+        proc.poll.side_effect = [None, None, 0]
+        with mock.patch.dict(server.settings, {"volume": 42.0}), mock.patch.object(server, "prop", lambda n: 1), mock.patch.object(server.time, "sleep"),                 mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}), mock.patch.object(server, "screen"),                 mock.patch.dict(server.state, {"proc": None}):
+            server._watch(proc)
+        self.assertIn(["set_property", "volume", 42.0], sent)
 
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]
