@@ -70,6 +70,7 @@ select{min-height:52px;padding:0 10px}
   <div class="row"><input type="range" id="vol" min="0" max="100" step="1" aria-label="Volume">
     <b id="volv" style="flex:0 0 40px;text-align:center;align-self:center">100</b>
     <button id="mute" data-a="mute" style="flex:0 0 72px">🔊</button></div>
+  <div class="row hide" id="chatrow"><button id="chat">Chat</button></div>
   <div class="row"><select id="qual" aria-label="Quality"></select>
     <button id="fav">☆ Favourite</button><button id="stop" style="color:var(--bad)">■ Stop</button></div>
 </div>
@@ -151,6 +152,8 @@ function render() {
   }
   if (!run && st.error) meta.push(st.error);
   $('meta').textContent = meta.join(' · ');
+  $('chatrow').classList.toggle('hide', !(run && st.chat_ok));
+  $('chat').textContent = st.chat ? 'Chat on screen: on' : 'Chat on screen: off';
   $('pp').textContent = st.paused ? '▶ Paused' : '⏸';
   $('seek').classList.toggle('hide', !run || st.live);
   $('mute').textContent = st.muted ? '🔇' : '🔊';
@@ -233,6 +236,7 @@ document.addEventListener('click', e => {
 });
 $('go').onclick = go;
 $('link').onkeydown = e => { if (e.key === 'Enter') go(); };
+$('chat').onclick = () => cmd('chat', st.chat ? 'off' : 'on').then(poll);
 $('stop').onclick = () => cmd('stop').then(poll);
 $('fav').onclick = async () => {
   if (!st.url) return;

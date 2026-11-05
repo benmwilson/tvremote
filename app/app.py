@@ -33,6 +33,7 @@ SL_DEFAULT = "1080p60,best"
 YTDL_HEIGHTS = ("1080", "720", "480")
 
 import hlsproxy
+import chat
 import roku
 
 try:
@@ -180,7 +181,31 @@ def stop_player():
             os.killpg(p.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
+    chat_stop()
     state["proc"] = None
+
+
+_chat = {"obj": None, "pref": True}
+
+
+def chat_send(text):
+    """Draw (or clear) the chat overlay in mpv; True when mpv accepted it."""
+    r = mpv(["osd-overlay", 1, "ass-events", text, 1920, 1080] if text else ["osd-overlay", 1, "none"])
+    return bool(r and r.get("error") == "success")
+
+
+def chat_stop():
+    c, _chat["obj"] = _chat["obj"], None
+    if c:
+        c.stop()
+
+
+def chat_sync():
+    """Match the overlay to what is playing: a live Twitch channel with chat switched on."""
+    chat_stop()
+    ch = chat.channel_of(state["url"] or "") if state["source"] == "Twitch" and state["proc"] else None
+    if ch and _chat["pref"]:
+        _chat["obj"] = chat.TwitchChat(ch, chat_send)
 
 
 def start_player(url, quality=None):
@@ -208,6 +233,7 @@ def start_player(url, quality=None):
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log,
                             stderr=subprocess.STDOUT, start_new_session=True)
     state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time())
+    chat_sync()
     if player == "streamlink":  # warm the metadata cache for the title
         threading.Thread(target=sl_info, args=(url,), daemon=True).start()
     threading.Thread(target=switch_tv_to_pi, daemon=True).start()
@@ -385,6 +411,10 @@ def api_cmd():
         with lock:
             start_player(state["url"], data.get("quality") or state["quality"])
         return jsonify(ok=True)
+    if action == "chat":
+        _chat["pref"] = data.get("value") != "off"
+        chat_sync()
+        return jsonify(ok=True)
     fn = COMMANDS.get(action)
     if not fn:
         return jsonify(ok=False, error="Unknown action"), 400
@@ -429,6 +459,8 @@ def api_status():
             data[key] = prop(name)
         if state["player"] == "streamlink":
             data["title"] = display_title(state["url"])
+        data["chat_ok"] = state["source"] == "Twitch" and bool(chat.channel_of(state["url"] or ""))
+        data["chat"] = bool(_chat["obj"])
         # live = streamlink, or a stream with no duration
         data["live"] = state["player"] == "streamlink" or data["duration"] is None
     else:
