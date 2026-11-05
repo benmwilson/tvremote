@@ -144,7 +144,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .sub.warn{color:var(--warn,#ffb062)}
 #chatcard{margin-top:14px;padding:6px 8px 12px 16px}
-#wallcard{margin-top:14px}#chattabs{flex-wrap:wrap;margin:2px 8px 6px 0}
+#wallopencard{margin-top:14px;padding:8px 16px}#chattabs{flex-wrap:wrap;margin:2px 8px 6px 0}
 #chatcard #chatbox{margin-right:8px}
 .chatrow{display:flex;align-items:center;gap:4px}.chatrow .chathead{flex:1;min-width:0}
 .chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
@@ -308,9 +308,16 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #tvnudge::-webkit-slider-runnable-track{background:var(--line)}#tvnudge::-moz-range-track{background:var(--line)}
 #tvmute.muted{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}
 #tvmute.muted .ic{color:#ff8a8a}
-#tvpower.isoff,#tvpower.isoff .ic{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}#tvpower.isoff .ic{background:none}
+#tvpower.isoff,#tvpower.isoff .ic{color:var(--dim);font-weight:700}#tvpower.isoff .ic{background:none}
 .wseg{display:inline-flex;gap:6px}.wseg button{min-height:44px;min-width:44px;padding:0 14px;font-size:15px}.wseg button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
-#wallcard{padding:18px}.wh{display:flex;align-items:center;gap:12px}.wh b{display:block;font-size:18px}.wh .sub{display:block;margin-top:2px}
+/* a sheet: a popup that slides up from the bottom (a native <dialog>, so focus, Esc and the backdrop come for free) */
+dialog.sheet{position:fixed;inset:auto 0 0 0;margin:0 auto;width:min(100%,560px);max-width:none;max-height:90vh;max-height:90dvh;border:0;border-radius:22px 22px 0 0;background:var(--card);color:var(--fg,#f6f1ee);padding:0;overflow:hidden}
+dialog.sheet[open]{display:flex;flex-direction:column;animation:sheetup .22s ease-out}
+dialog.sheet::backdrop{background:rgba(5,8,14,.62)}
+@keyframes sheetup{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.sheet .sh{display:flex;align-items:center;gap:12px;padding:16px 16px 10px;flex:none}.sheet .sh b{display:block;font-size:18px}.sheet .sh .sub{display:block;margin-top:2px}
+.sheet .sclose{flex:none;width:44px;min-height:44px;padding:0}.sheet .sb{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 16px calc(24px + env(safe-area-inset-bottom))}
+body:has(dialog.sheet[open]){overflow:hidden}
 .wtile{margin-top:12px;padding:12px;border-radius:14px;background:var(--card2,var(--line));min-width:0}.wtile .top{display:flex;align-items:center;gap:10px;min-width:0;min-height:44px}
 .wtile .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.wtile .ctl{display:flex;align-items:center;gap:8px;margin-top:10px}
 .wtile .ctl>*{min-height:44px}.wtile .ctl select{flex:1;min-width:0}.wtile .ctl .snd{flex:none;display:flex;align-items:center;gap:6px;padding:0 14px}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
@@ -554,19 +561,23 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
-<div class="card hide" id="wallcard">
-  <div class="wh"><div class="grow"><b>Multi-view</b><span class="sub" id="wallsub"></span></div>
-    <span class="wseg hide" id="walllayout"><button data-l="grid" aria-label="Grid layout" title="Grid: equal tiles"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg></button><button data-l="focus" aria-label="Focus layout" title="Focus: one big, the rest below"><svg class="ic" aria-hidden="true"><use href="#i-focus"/></svg></button></span></div>
-  <div id="walltiles"></div>
-  <div id="walladdbox">
-    <div class="wlabel">Add a stream</div>
-    <form id="walladd" class="row"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
-    <p class="sub" id="wallhint" style="margin:10px 2px 0">A name is looked up on Kick and Twitch together.</p>
-    <div id="wallpick" class="wallfavs hide" style="margin-top:10px"></div>
-    <div id="wallfavswrap" class="hide"><div class="wlabel">From your favourites</div><div id="wallfavs" class="wallfavs"></div></div>
+<div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg><span class="grow"><b>Multi-view</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chev">&rsaquo;</span></button></div>
+<dialog id="wallcard" class="sheet" aria-labelledby="wallttl">
+  <div class="sh"><div class="grow"><b id="wallttl">Multi-view</b><span class="sub" id="wallsub"></span></div>
+    <span class="wseg hide" id="walllayout"><button data-l="grid" aria-label="Grid layout" title="Grid: equal tiles"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg></button><button data-l="focus" aria-label="Focus layout" title="Focus: one big, the rest below"><svg class="ic" aria-hidden="true"><use href="#i-focus"/></svg></button></span>
+    <button class="sclose" data-close aria-label="Close" autofocus><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb">
+    <div id="walltiles"></div>
+    <div id="walladdbox">
+      <div class="wlabel">Add a stream</div>
+      <form id="walladd" class="row"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
+      <p class="sub" id="wallhint" style="margin:10px 2px 0">A name is looked up on Kick and Twitch together.</p>
+      <div id="wallpick" class="wallfavs hide" style="margin-top:10px"></div>
+      <div id="wallfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="wallfavs" class="wallfavs"></div></div>
+    </div>
+    <button id="wallclear" class="hide" style="margin-top:14px;width:100%">Back to one stream</button>
   </div>
-  <button id="wallclear" class="hide" style="margin-top:14px;width:100%">Back to one stream</button>
-</div>
+</dialog>
 <div id="err" role="status"></div>
 
 <h2 id="tvhead">TV</h2>
@@ -1027,10 +1038,19 @@ $('fav').onclick = async () => {
   loadFavs();
 };
 $('qual').onchange = () => cmd('restart', null, {quality: $('qual').value}).then(() => setTimeout(poll, 1500));
+// One volume request at a time, always the latest value: a drag no longer queues dozens the TV has to catch up on.
+let volBusy = false, volNext = null;
+async function sendVol(v, final) {
+  volNext = v;
+  if (volBusy) return;
+  volBusy = true;
+  while (volNext !== null) { const x = volNext; volNext = null; await cmd('volume', x, final ? {final: true} : undefined); }
+  volBusy = false;
+}
 $('vol').oninput = () => { dragging = true;
   if (st.muted && +$('vol').value > (st.volume || 0)) { st.muted = false; cmd('mute'); } // dragging up while muted unmutes (once)
-  $('volv').textContent = $('vol').value; $('vol').style.setProperty('--p', $('vol').value + '%'); cmd('volume', $('vol').value); };
-$('vol').onchange = () => { dragging = false; };
+  $('volv').textContent = $('vol').value; $('vol').style.setProperty('--p', $('vol').value + '%'); sendVol($('vol').value); };
+$('vol').onchange = () => { dragging = false; sendVol($('vol').value, true); };
 
 // ---- favourites layout: list or tiles ----
 let favView = 'list';
@@ -1464,10 +1484,12 @@ $('sleepsel').onchange = async () => {
 };
 
 // ---- recent links ----
+let recentList = [];
 async function loadRecents() {
   const r = await fetch('/api/recents').then(x => x.json()).catch(() => []);
   const saved = new Set(favList.flatMap(f => (f.links || [{url: f.url}]).map(l => l.url)));
-  const items = (Array.isArray(r) ? r : []).filter(x => !saved.has(x.url)).slice(0, 5);
+  recentList = Array.isArray(r) ? r : [];
+  const items = recentList.filter(x => !saved.has(x.url)).slice(0, 5);
   const box = $('recents');
   box.replaceChildren();
   $('recenthead').classList.toggle('hide', !items.length);
@@ -1600,20 +1622,22 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
 $('chatTog').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem('chatOpen', chatOpen ? '1' : '0'); } catch (e) {} chatShow(); };
 
 // ---- Multi-view (Pi TV only): several streams on the screen at once ----
-const wallApi = async body => { const r = await api('/api/wall', 'POST', body); if (r && r.ok) poll(); return r; };
+// The Pi answers at once with how the wall will look, while the windows restart in the background: show that now.
+const wallApi = async body => { const r = await api('/api/wall', 'POST', body); if (r && r.ok) { if ('wall' in r) { st.wall = r.wall; wallSig = ''; renderWall(); } poll(); } return r; };
 let wallSig = '';
 const WALL_Q = [['', 'Auto quality'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']];
 function renderWall() {
   const cur = targets.find(t => t.id === target) || {};
   const show = cur.kind === 'pi' && !!st.running;
-  $('wallcard').classList.toggle('hide', !show);
-  if (!show) return;
+  $('wallopencard').classList.toggle('hide', !show);
+  if (!show) { if ($('wallcard').open) $('wallcard').close(); return; }
   const w = st.wall;
+  $('wallopensub').textContent = w ? (w.tiles.length + 1) + ' of ' + w.max + ' on screen. Tap to manage' : 'Watch more than one at once';
   $('wallclear').classList.toggle('hide', !w);
   $('walllayout').classList.toggle('hide', !w);
   if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
   $('wallsub').textContent = w ? (w.tiles.length + 1) + ' of ' + w.max + ' on screen' : 'Watch more than one at once';
-  const sig = JSON.stringify([w, st.url, st.title, favList.length]);
+  const sig = JSON.stringify([w, st.url, st.title, favList.map(f => f.live === true), recentList.map(x => x.live === true)]);
   if (sig === wallSig) return;
   wallSig = sig;
   const rows = [{i: 0, name: st.title || st.url || 'Main', source: st.source, quality: w ? w.main_quality : null}, ...(w ? w.tiles : [])];
@@ -1621,6 +1645,7 @@ function renderWall() {
   $('walltiles').replaceChildren(...(w ? rows : []).map(r => {
     const tile = el('div', 'wtile'), top = el('div', 'top'), ctl = el('div', 'ctl');
     top.append(el('span', 'badge ' + r.source, r.source || ''), el('span', 'nm', r.name || r.url));
+    if (r.i && r.running === false && !r.error) top.append(el('span', 'sub', 'Starting\u2026'));
     if (r.i) { const x = el('button'); setBtn(x, 'x', ''); x.setAttribute('aria-label', 'Remove ' + (r.name || 'this stream') + ' from the screen'); x.onclick = () => wallApi({action: 'remove', i: r.i}); top.append(x); }
     const on = w.audio === r.i, sound = el('button', 'snd');
     setBtn(sound, on ? 'volume' : 'mute', on ? 'Sound' : 'Muted');
@@ -1638,9 +1663,13 @@ function renderWall() {
   }));
   const free = !w || w.tiles.length + 1 < w.max;
   $('walladdbox').classList.toggle('hide', !free);
-  const favs = free ? favList.filter(f => !onWall.has(f.url)).slice(0, 8) : [];
+  // suggestions: the favourites that are live now, then the live recents (the live site of a streamer who is on both)
+  const seen = new Set(onWall), sugg = [];
+  for (const f of favList) { const u = f.play_url || f.url; if (f.live === true && !seen.has(u)) { seen.add(u); sugg.push({name: f.name, url: u}); } }
+  for (const x of recentList) { if (x.live === true && !seen.has(x.url)) { seen.add(x.url); sugg.push({name: x.name, url: x.url}); } }
+  const favs = free ? sugg.slice(0, 8) : [];
   $('wallfavswrap').classList.toggle('hide', !favs.length);
-  $('wallfavs').replaceChildren(...favs.map(f => { const b = el('button', null, f.name || f.url); b.onclick = () => busy(b, () => wallApi({action: 'add', url: f.url})); return b; }));
+  $('wallfavs').replaceChildren(...favs.map(f => { const b = el('button', null, f.name || f.url); b.onclick = () => busy(b, () => wallApi({action: 'add', url: f.url})); return b; }));  // f: {name, url}
 }
 $('walladd').onsubmit = async e => {
   e.preventDefault();
@@ -1663,6 +1692,13 @@ $('walladd').onsubmit = async e => {
     return {ok: true};
   });
 };
+// Sheets: any <dialog class="sheet"> closes from its X (data-close) or a tap on the dim area behind it.
+document.addEventListener('click', e => {
+  const x = e.target.closest('[data-close]');
+  if (x) x.closest('dialog').close();
+  else if (e.target.matches('dialog.sheet')) e.target.close();  // the dim area behind it counts as a click on the dialog itself
+});
+$('wallopen').onclick = () => { wallSig = ''; renderWall(); $('wallcard').showModal(); Promise.all([loadFavs(), loadRecents()]).then(renderWall); };
 $('walllayout').onclick = e => { const b = e.target.closest('button[data-l]'); if (b) wallApi({action: 'layout', layout: b.dataset.l}); };
 $('wallclear').onclick = () => busy($('wallclear'), () => wallApi({action: 'clear'}));
 

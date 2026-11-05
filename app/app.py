@@ -788,7 +788,9 @@ def sleep_loop():
 def api_recents():
     if g.user == accounts.GUEST:
         return jsonify([])  # what other people played is not for someone on a guest link
-    return jsonify(load_recents())
+    livewatch.poke()
+    snap = livewatch.snapshot()
+    return jsonify([{**r, "live": snap.get(r.get("url"), {}).get("live")} for r in load_recents()])
 
 
 _start_seq = {}  # per TV: the newest start request. A request that is no longer the newest quits without starting.
@@ -802,6 +804,8 @@ def play_on(c, url, quality, via=None):
     if cur.get("url") == url and time.time() - (cur.get("started") or 0) < 3:
         return  # the same link was started a moment ago (a double tap): leave it be
     remember(url)
+    if not c:
+        wall.clear()  # starting something on the Pi's screen is a single stream; more are added from the Multi-view sheet
     # Wake the TV first, in the background: working out the link can fail (a channel that is offline), and a Chromecast that is
     # powered by its TV is not even on the network until the TV is awake.
     threading.Thread(target=switch_input, args=(tid,), daemon=True).start()
@@ -839,6 +843,9 @@ COMMANDS = {
     "seek": lambda v: ["seek", float(v), "relative"],
     "seek_to": lambda v: ["seek", max(0.0, float(v)), "absolute"],
 }
+
+
+_vol_saved = {"t": 0.0}
 
 
 @app.post("/api/cmd")
@@ -881,7 +888,9 @@ def api_cmd():
         osd_paused(bool(prop("pause")))
     if ok and not on_wall and action in ("volume", "volume_delta") and prop("volume") is not None:
         settings["volume"] = prop("volume")
-        save_settings()
+        if data.get("final") or time.time() - _vol_saved["t"] > 2:  # a drag sends many: write the file when it ends, or every few seconds
+            _vol_saved["t"] = time.time()
+            save_settings()
     if ok and action in ("volume", "volume_delta", "mute", "unmute"):
         osd_volume()
     return jsonify(ok=ok)
@@ -932,6 +941,26 @@ def api_detect():
     return jsonify(answer)
 
 
+_wall_job = threading.Lock()
+
+
+def wall_later(fn, *args):
+    """Run a multi-view change in the background: restarting windows takes seconds, and the phone must not wait for it.
+    Jobs run one at a time, and each reads the wall as it is by then, so a quick second tap is not lost."""
+    def run():
+        with _wall_job:
+            try:
+                fn(*args)
+            except Exception as e:
+                app.logger.warning("Multi-view change failed: %s", e)
+    threading.Thread(target=run, daemon=True).start()
+
+
+def _restart_main_quality(label):
+    with lock:
+        start_player(state["url"], multi.quality_for(resolve(state["url"])[1], label), "quality")
+
+
 @app.post("/api/wall")
 def api_wall():
     """Several streams on the living-room TV: {action: add|remove|layout|audio|swap|quality|clear, url, site, i, layout, quality}."""
@@ -951,29 +980,28 @@ def api_wall():
                 wall.saved_quality = state["quality"]
         if not wall.add(url, state["url"]):
             return jsonify(ok=False, error=f"That one is already on screen, or the screen is full ({multi.MAX_TILES})."), 400
-        wall_relayout()
+        wall_later(wall_relayout)
     elif act == "remove":
         wall.remove(i)
-        wall_relayout()
+        wall_later(wall_relayout)
     elif act == "layout":
         if d.get("layout") not in multi.LAYOUTS:
             return jsonify(ok=False, error="Unknown layout"), 400
         wall.layout = d["layout"]
         if wall.active():
-            wall_relayout()
+            wall_later(wall_relayout)
     elif act == "audio":
         wall.set_audio(i, SOCK)
     elif act == "swap":
         new_main = wall.swap(i, state["url"])
         if not new_main:
             return jsonify(ok=False, error="Nothing to swap"), 400
-        wall_relayout(new_main)
+        wall_later(wall_relayout, new_main)
     elif act == "quality":
         label = d.get("quality") if d.get("quality") in multi.QUALITIES else None  # anything else is Auto
         if i == 0:
             wall.main_quality = label
-            with lock:
-                start_player(state["url"], multi.quality_for(resolve(state["url"])[1], label), "quality")
+            wall_later(_restart_main_quality, label)
         elif 1 <= i <= len(wall.extras):
             wall.extras[i - 1]["quality"] = label
             wall.start_windows()  # only this window differs, so only this one restarts
@@ -982,7 +1010,7 @@ def api_wall():
     elif act == "clear":
         wall.clear()
         if state["url"]:
-            wall_relayout()
+            wall_later(wall_relayout)
     else:
         return jsonify(ok=False, error="Unknown action"), 400
     return jsonify(ok=True, wall=wall.status())
@@ -1249,9 +1277,11 @@ def on_tv_off(tv_id):
     pause anything else, including the Chromecast."""
     try:
         if tv_id == "living":
+            was_wall = wall.active()
+            wall.clear()  # every window ends with the TV: a stale wall would come back around the next stream
             if not pi_playing():
                 return
-            if pi_status().get("live"):
+            if pi_status().get("live") or was_wall:
                 screen("idle")
                 with lock:
                     stop_player()
@@ -1812,6 +1842,7 @@ def streamer_key(url):
 
 def watched_urls():
     urls = [l["url"] or "" for u in [accounts.OWNER] + accounts.names() for f in load_favs(u) for l in fav_links(f)]  # everyone's: one pass serves all
+    urls += [r.get("url") or "" for r in load_recents()]  # recents too: the multi-view suggests the ones that are live
     if state.get("url"):
         urls.append(state["url"])
     return list(dict.fromkeys(u for u in urls if is_channel(u)))

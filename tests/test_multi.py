@@ -114,3 +114,25 @@ class WallScreenTest(unittest.TestCase):
         self.assertTrue(all(f"{n}" in "".join(ev) for n in ("alpha", "beta", "gamma")))
         self.assertNotIn("fscx260", shell.ass_file([(0, 1, "x")], logo=False))  # no big logo behind the windows
         self.assertIn("fscx260", shell.ass_file([(0, 1, "x")]))
+
+
+class StaleWallTest(unittest.TestCase):
+    def test_turning_the_tv_off_and_starting_something_new_does_not_bring_the_old_wall_back(self):
+        import app as server
+        server.wall.extras = [{"url": "https://kick.com/b", "proc": None}]
+        server.wall.layout = "grid"
+        try:
+            with mock.patch.object(server, "pi_playing", return_value=False):
+                server.on_tv_off("living")
+            self.assertFalse(server.wall.active())
+            self.assertIsNone(server.wall.layout)
+            server.wall.extras, server.wall.layout = [{"url": "https://kick.com/b", "proc": None}], "focus"
+            with mock.patch.object(server, "remember"), mock.patch.object(server, "resolve", return_value=("Kick", "streamlink")),                     mock.patch.object(server, "start_player"), mock.patch.object(server, "switch_input"):
+                server.play_on(None, "https://kick.com/omie", None)
+            self.assertFalse(server.wall.active())  # a fresh play is one stream
+        finally:
+            server.wall.clear()
+
+
+if __name__ == "__main__":
+    unittest.main()
