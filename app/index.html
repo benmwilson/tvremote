@@ -552,11 +552,10 @@ function markFavs() {
     if (on) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
   });
 }
-async function playFav(url) {
-  if (favLoading) return;
+async function playFav(url) {  // a new tap replaces the one still loading: the Pi keeps only the newest
   favLoading = {url, t0: Date.now()}; markFavs();
   const r = await play(url);
-  if (!r || !r.ok) { favLoading = null; markFavs(); }
+  if ((!r || !r.ok) && favLoading && favLoading.url === url) { favLoading = null; markFavs(); }
 }
 function checkFavLoading() {
   if (!favLoading) return;

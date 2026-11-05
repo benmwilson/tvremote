@@ -1,6 +1,7 @@
 import os
 import sys
 import tempfile
+import threading
 import time
 import shutil
 import os
@@ -453,6 +454,36 @@ class ShellFlow(unittest.TestCase):
             sp.assert_called_with("https://kick.com/chan", "1080p60,best", "refresh")
             self.client.post("/api/cmd", json={"action": "restart", "quality": "720p60"})
             sp.assert_called_with("https://kick.com/chan", "720p60", "quality")
+
+    def test_an_older_start_gives_up_when_a_newer_tap_arrives(self):
+        started = []
+        gate = threading.Event()
+
+        def slow_resolve(url):
+            if url.endswith("/first"):
+                gate.wait(2)  # the first link is slow to work out
+            return ("Kick", "streamlink")
+        with mock.patch.object(server, "resolve", slow_resolve), mock.patch.object(server, "start_player", lambda u, q=None, k="loading": started.append(u)), \
+                mock.patch.object(server, "switch_input"):
+            t = threading.Thread(target=server.play_on, args=(None, "https://kick.com/first", None))
+            t.start()
+            time.sleep(0.1)
+            server.play_on(None, "https://kick.com/second", None)  # not stuck behind the first
+            gate.set()
+            t.join(3)
+        self.assertEqual(started, ["https://kick.com/second"])
+
+    def test_the_chromecast_is_told_when_it_has_been_replaced(self):
+        calls = []
+
+        class C:
+            id = "bedroom"
+            def play(s, url, q=None, via=None, cancelled=lambda: False):
+                calls.append(cancelled())
+        c = C()
+        with mock.patch.object(server, "switch_input"):
+            server.play_on(c, "https://kick.com/a", None)
+        self.assertEqual(calls, [False])
 
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]

@@ -619,13 +619,22 @@ def switch_input(tid):
         pass  # best effort: playback already started
 
 
+_start_seq = {}  # per TV: the newest start request. A request that is no longer the newest quits without starting.
+
+
 def play_on(c, url, quality, via=None):
-    """Start `url` on the Chromecast target `c`, or on the Pi when c is None."""
+    """Start `url` on the Chromecast target `c`, or on the Pi when c is None. Newest tap wins: an older start that is
+    still working out its link (yt-dlp can take ~20 s) gives up instead of running after the newer one."""
+    tid = c.id if c else "living"
+    seq = _start_seq[tid] = _start_seq.get(tid, 0) + 1
+    newest = lambda: _start_seq.get(tid) == seq
     if c:
-        c.play(url, quality, via)
+        c.play(url, quality, via, cancelled=lambda: not newest())
     else:
+        resolve(url)  # the slow part (cached afterwards), done before taking the player lock so a newer tap is never stuck behind it
         with lock:
-            start_player(url, quality)
+            if newest():
+                start_player(url, quality)
     threading.Thread(target=switch_input, args=(c.id if c else "living",), daemon=True).start()
 
 
