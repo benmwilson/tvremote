@@ -309,7 +309,7 @@ def play_get():
     c = tgt()
     if url:
         try:
-            play_on(c, url, request.args.get("q"))
+            play_on(c, url, request.args.get("q"), request.args.get("via"))
         except Exception as e:  # shown on the remote via /api/status
             if c:
                 c.state["error"] = str(e)
@@ -330,10 +330,10 @@ def switch_input(tid):
         pass  # best effort: playback already started
 
 
-def play_on(c, url, quality):
+def play_on(c, url, quality, via=None):
     """Start `url` on the Chromecast target `c`, or on the Pi when c is None."""
     if c:
-        c.play(url, quality)
+        c.play(url, quality, via)
     else:
         with lock:
             start_player(url, quality)
@@ -348,7 +348,7 @@ def api_play():
     if not url:
         return jsonify(ok=False, error="No link found"), 400
     try:
-        play_on(tgt(), url, data.get("quality"))
+        play_on(tgt(), url, data.get("quality"), data.get("via"))
     except Exception as e:
         return jsonify(ok=False, error=str(e)), 502
     return jsonify(ok=True, url=url)

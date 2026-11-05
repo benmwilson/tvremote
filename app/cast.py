@@ -63,6 +63,7 @@ class CastTarget:
         except (OSError, ValueError):
             pass
         self.name = self.cfg["name"]
+        self.via_mode = os.environ.get("TVREMOTE_CAST_VIA", "direct")  # flip the default once proxy is proven better
         self.lock = threading.RLock()
         self.devices = {}   # uuid -> CastInfo
         self.cast = None
@@ -148,24 +149,48 @@ class CastTarget:
         fmt = f"b[vcodec^=avc1][height<={q}][ext=mp4]/b[ext=mp4][height<={q}]/b[ext=mp4]"
         return run(["yt-dlp", "--no-playlist", "-g", "-f", fmt, url], 45).splitlines()[0], "video/mp4", "BUFFERED"
 
-    def play(self, url, quality=None):
+    def play(self, url, quality=None, via=None):
+        """via: "direct" (Chromecast fetches the stream itself) or "proxy" (the Pi fetches, serves it on the LAN)."""
+        via = via if via in ("direct", "proxy") else self.via_mode
         source, player = self.resolve(url)
         q = self._quality(player, quality)
         cast = self._connect()
         with self.lock:
             self._kill_proxy()
             self.state.update(url=url, source=source, player=player, quality=q, error=None,
-                              started=time.time(), via=None, proxy_tried=False)
+                              started=time.time(), via=None, proxy_tried=False, mode=via)
         if source == "YouTube":
             vid = youtube_id(url) or run(["yt-dlp", "--no-playlist", "--print", "id", url]).splitlines()[0]
             quick_play(cast, "youtube", {"media_id": vid})
             self.state["via"] = "youtube"
             return
+        if via == "proxy" and player == "streamlink":
+            self.state["proxy_tried"] = True
+            return self._start_proxy(url, source, q)
         media, ctype, stype = self._media_url(url, source, player, q)
         if cast.app_id != APP_MEDIA_RECEIVER:  # e.g. the YouTube app is open and would ignore the LOAD
             cast.start_app(APP_MEDIA_RECEIVER)
         cast.media_controller.play_media(media, ctype, title=self.title_fn(url), stream_type=stype)
         self.state["via"] = "direct"
+
+    def _start_proxy(self, url, source, q):
+        """streamlink fetches over the Pi's wired link and serves the stream on the LAN; the Chromecast pulls from the Pi."""
+        self._kill_proxy()
+        log = open("/tmp/cast-proxy.log", "w")
+        cmd = ["streamlink", "--player-external-http", "--player-external-http-port", str(PROXY_PORT)]             + (["--twitch-disable-ads"] if source == "Twitch" else []) + [url, q]
+        self.proxy = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+        for _ in range(40):  # streamlink prints the serve URLs once the stream is open
+            if self.proxy.poll() is not None or "http://" in open("/tmp/cast-proxy.log").read():
+                break
+            time.sleep(0.5)
+        if self.proxy.poll() is not None:
+            raise CastError((open("/tmp/cast-proxy.log").read().strip().splitlines() or ["streamlink failed"])[-1][:200])
+        cast = self._connect()
+        if cast.app_id != APP_MEDIA_RECEIVER:
+            cast.start_app(APP_MEDIA_RECEIVER)
+        cast.media_controller.play_media(f"http://{self._lan_ip(self.device().host)}:{PROXY_PORT}/", "video/mp2t",
+                                         title=self.title_fn(url), stream_type="LIVE")
+        self.state["via"] = "pi-proxy"
 
     def _fallback_proxy(self):
         """Direct URL was refused (CORS/403/token): serve the stream from the Pi instead."""
@@ -173,14 +198,7 @@ class CastTarget:
         if st["proxy_tried"] or st["player"] != "streamlink":
             return
         st["proxy_tried"] = True
-        cmd = ["streamlink", "--player-external-http", "--player-external-http-port", str(PROXY_PORT)] \
-            + (["--twitch-disable-ads"] if st["source"] == "Twitch" else []) + [st["url"], st["quality"]]
-        self.proxy = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(4)  # let streamlink open the stream and start listening
-        d = self.device()
-        self.cast.media_controller.play_media(f"http://{self._lan_ip(d.host)}:{PROXY_PORT}/", "video/mp2t",
-                                              title=self.title_fn(st["url"]), stream_type="LIVE")
-        st["via"] = "pi-proxy"
+        self._start_proxy(st["url"], st["source"], st["quality"])
 
     # ---- controls ----
     def cmd(self, action, value=None, quality=None):
@@ -194,7 +212,7 @@ class CastTarget:
         if action == "restart":
             if not self.state["url"]:
                 return False, "Nothing to restart"
-            self.play(self.state["url"], quality or self.state["quality"])
+            self.play(self.state["url"], quality or self.state["quality"], self.state.get("mode"))
             return True, None
         cast = self._connect()
         mc, rc = cast.media_controller, cast.socket_client.receiver_controller
