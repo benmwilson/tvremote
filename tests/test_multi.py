@@ -131,7 +131,7 @@ class WallScreenTest(unittest.TestCase):
     def test_background_has_a_name_strip_per_stream_and_no_big_logo(self):
         import shell
         ev = shell.wall_screen("grid", [("alpha", "Kick", False), ("beta", "Twitch", False), ("gamma", "Other", False)])
-        self.assertEqual(len(ev), 5)  # two glows and three names
+        self.assertEqual(len(ev), 2 + 3 * 3)  # two glows, and for each stream a panel, its words and its name
         self.assertTrue(all(f"{n}" in "".join(ev) for n in ("alpha", "beta", "gamma")))
         self.assertNotIn("fscx260", shell.ass_file([(0, 1, "x")], logo=False))  # no big logo behind the windows
         self.assertIn("fscx260", shell.ass_file([(0, 1, "x")]))
@@ -167,6 +167,73 @@ class OnlyThisTest(unittest.TestCase):
         self.assertFalse(server.wall.active())
 
 
+class ReconcileTest(unittest.TestCase):
+    """The wall tracks the main stream itself, so quick repeated swaps can never copy one stream into two tiles, and the windows catch up."""
+
+    def setUp(self):
+        import app as server
+        self.server = server
+        server.wall.clear()
+        server.wall.layout = "focus"
+        server.wall.main_url = "https://kick.com/a"
+        live = mock.MagicMock()
+        live.poll.return_value = None
+        server.wall.extras = [{"url": "https://kick.com/b", "proc": live, "hot": True, "wid": "tvr-focus3-2", "started": "https://kick.com/b"},
+                              {"url": "https://kick.com/c", "proc": live, "hot": True, "wid": "tvr-focus3-3", "started": "https://kick.com/c"}]
+        self.state = mock.patch.dict(server.state, {"url": "https://kick.com/a", "proc": live, "hot": True, "wid": "tvr-focus3-1"})
+        self.state.start()
+
+    def tearDown(self):
+        self.state.stop()
+        self.server.wall.extras = []  # fake processes: nothing to kill
+        self.server.wall.clear()
+
+    def streams(self):
+        w = self.server.wall
+        return [w.main_url] + [t["url"] for t in w.extras]
+
+    def test_quick_swaps_only_ever_permute_the_streams(self):
+        w = self.server.wall
+        for i in (1, 2, 1, 2, 2, 1):  # taps that land before the windows have caught up
+            w.swap(i)
+            self.assertCountEqual(self.streams(), ["https://kick.com/a", "https://kick.com/b", "https://kick.com/c"])
+
+    def test_the_windows_are_told_to_load_the_new_streams_in_place_all_at_once(self):
+        server, w = self.server, self.server.wall
+        w.swap(1)
+        w.swap(2)  # a second tap before anything has loaded
+        sent = []
+        with mock.patch.object(server, "stream_url", lambda url, q: "addr:" + url), mock.patch.object(server, "screen"),                 mock.patch.object(server.mpvipc, "send", lambda sock, cmd, timeout=1.0: sent.append((sock, cmd)) or {"error": "success"}):
+            server.reconcile_job()
+        loads = {s: c[1] for s, c in sent if c[0] == "loadfile"}
+        self.assertEqual(len(loads), 3)  # every window changed stream, none restarted
+        self.assertEqual(loads[server.SOCK], "addr:" + w.main_url)
+        self.assertEqual(server.state["url"], w.main_url)
+        self.assertTrue(all(t["started"] == t["url"] for t in w.extras))
+        before = len(sent)
+        with mock.patch.object(server, "stream_url", lambda url, q: "addr:" + url), mock.patch.object(server, "screen"),                 mock.patch.object(server.mpvipc, "send", lambda sock, cmd, timeout=1.0: sent.append((sock, cmd)) or {"error": "success"}):
+            server.reconcile_job()  # a queued second run finds nothing left to do
+        self.assertFalse([c for s, c in sent[before:] if c[0] == "loadfile"])
+
+
+class AddressCacheTest(unittest.TestCase):
+    def test_a_stream_address_is_remembered_so_a_swap_does_not_wait_for_streamlink(self):
+        import app as server
+        server._addr_cache.clear()
+        ran = []
+
+        def fake(cmd, **kw):
+            ran.append(cmd)
+            return mock.Mock(stdout="https://example.com/live.m3u8\n", stderr="", returncode=0)
+        with mock.patch.object(server.subprocess, "run", fake):
+            a = server.stream_url("https://kick.com/a", "480p,worst")
+            b = server.stream_url("https://kick.com/a", "480p,worst")  # remembered
+            server.stream_url("https://kick.com/a", "720p,worst")  # another quality is another address
+        self.assertEqual((a, b), ("https://example.com/live.m3u8",) * 2)
+        self.assertEqual(len(ran), 2)
+        server._addr_cache.clear()
+
+
 class OfflineTest(unittest.TestCase):
     def test_a_window_that_ends_says_why_in_plain_words_and_can_be_retried(self):
         self.assertEqual(multi.friendly("[info] Closing currently open stream..."), "Went offline")
@@ -182,7 +249,8 @@ class OfflineTest(unittest.TestCase):
     def test_the_background_marks_an_ended_streams_slot(self):
         import shell
         ev = shell.wall_screen("grid", [("a", "Kick", False), ("b", "Kick", True)])
-        self.assertEqual(len(ev), 2 + 2 + 2)  # two glows, two names, and a panel with its words for the ended one
+        self.assertEqual(len(ev), 2 + 2 * 3)
+        self.assertIn("Loading", "".join(ev))  # the one that is still starting says so
         self.assertIn("Went offline", "".join(ev))
 
 

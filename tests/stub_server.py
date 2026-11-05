@@ -33,8 +33,9 @@ def wall():
         return None
     others = [("omie", "Twitch", "480"), ("a_rather_long_channel_name", "Kick", None), ("xqc", "Twitch", "720")]
     host = {"Twitch": "https://www.twitch.tv/", "Kick": "https://kick.com/"}
-    return {"layout": STATE["wall_layout"], "sound": [0], "max": 4, "main_quality": None,
-            "tiles": [{"i": i, "url": host[src] + nm, "name": nm, "source": src, "running": True, "error": None, "quality": q}
+    return {"layout": STATE["wall_layout"], "sound": [0], "selected": 0, "busy": False, "max": 4, "main_quality": None,
+            "main": {"i": 0, "url": "https://kick.com/chan", "source": "Kick", "name": "chan", "live": True, "quality": None, "error": None},
+            "tiles": [{"i": i, "url": host[src] + nm, "name": nm, "source": src, "running": True, "error": None, "quality": q, "live": True}
                       for i, (nm, src, q) in enumerate(others[:n - 1], start=1)]}
 
 
@@ -80,6 +81,9 @@ def card(tv):
     now = {"title": TITLE[tv], "source": SOURCE[tv], "live": bool(st.get("live")), "paused": bool(st.get("paused")),
            "starting": bool(st.get("starting")), "position": st.get("position"),
            "stream": "1080p60" if tv == "living" else "1080p"} if busy and not down else None
+    if now and tv == "living" and st.get("wall"):
+        w = st["wall"]
+        now["streams"] = [{"name": t["name"], "url": t["url"], "source": t["source"], "live": t.get("live"), "off": False, "game": "Grand Theft Auto V", "live_for": 3600 + 900 * t["i"], "sound": t["i"] == 0} for t in [w["main"], *w["tiles"]]]
     c = {"id": tv, **INFO[tv], "reachable": not down, "now": now, "health": health(tv), "type": INFO[tv]["kind"],
          "online": not down, "roku": True, "error": st.get("error")}
     if down:

@@ -61,6 +61,9 @@ button:disabled{opacity:.45;cursor:default}
   position:relative;overflow:hidden;min-height:44px}
 .tvcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--tv)}
 .tvcard .ch{display:flex;align-items:center;gap:8px}.tvcard .ch b{font-size:21px;flex:1;font-weight:700}
+.cstreams{margin-top:12px;display:flex;flex-direction:column;gap:10px}.csr{display:flex;align-items:center;gap:10px;text-align:left}.csr .av{width:38px;height:38px;flex:none}.csr.off{opacity:.55}
+.cst{min-width:0;display:flex;flex-direction:column;gap:3px}.cstop{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.cstop b{font-size:15px}.csr .sub{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.csr .snd{margin-left:auto;flex:none;display:flex;color:var(--tv,#6bb2ff)}.csr .snd .ic{width:18px;height:18px}
 .tvcard .now{margin-top:10px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .tvcard .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
 .tvcard.down{opacity:.6}.tvcard.down::before{background:var(--line)}
@@ -329,7 +332,10 @@ body:has(dialog.sheet[open]){overflow:hidden}
 .wtile{margin-top:12px;padding:12px;border-radius:14px;background:var(--card2,var(--line));min-width:0}.wtile .top{display:flex;align-items:center;gap:10px;min-width:0;min-height:44px}
 .wtile .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.wtile .ctl{display:flex;align-items:center;gap:8px;margin-top:10px}
 .wtile .ctl>*{min-height:44px}.wtile .ctl select{flex:1;min-width:0}.wtile .ctl .snd{flex:none;display:flex;align-items:center;gap:6px;padding:0 14px}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
-.wtile .top button{flex:none;width:44px;min-height:44px;padding:0}.wtile .ctl .ib{flex:none;width:44px;padding:0}.pill{flex:none;padding:2px 9px;border-radius:99px;background:var(--tv,#6bb2ff);color:#0b0e14;font-size:11px;font-weight:700}.wtile .top{cursor:pointer}.wtile .acts button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
+.wtile .top button{flex:none;width:44px;min-height:44px;padding:0}.wtile .ctl .ib{flex:none;width:44px;padding:0}@keyframes wspin{to{transform:rotate(360deg)}}
+#wallcard.updating #wallttl::after{content:'';display:inline-block;width:14px;height:14px;margin-left:10px;border:2px solid var(--dim);border-top-color:var(--tv,#6bb2ff);border-radius:50%;animation:wspin .8s linear infinite;vertical-align:-2px}
+#wallcard.updating .acts,#wallcard.updating .wtile .top button,#wallcard.updating .wtile select,#wallcard.updating #walllayout,#wallcard.updating #wallclear{opacity:.45;pointer-events:none}
+.pill{flex:none;padding:2px 9px;border-radius:99px;background:var(--tv,#6bb2ff);color:#0b0e14;font-size:11px;font-weight:700}.wtile .top{cursor:pointer}.wtile .acts button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
 .wtile .err{color:#ff8a8a;font-size:14px;margin-top:10px;display:flex;align-items:center;gap:10px}.wtile .err button{margin-left:auto;min-height:36px;padding:0 14px;background:var(--card);color:var(--fg);font-size:14px}
 .wtile .acts{display:flex;gap:8px;margin-top:8px}.wtile .acts button{flex:1;min-height:40px;font-size:14px;background:var(--card)}
 .stripcap{margin:0 2px 8px;color:var(--dim);font-size:13px;line-height:1.35}.ctlfor{margin:14px 2px 0;color:var(--tv,#6bb2ff);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
@@ -675,8 +681,11 @@ let target = '';  // the TV shown in the One TV view; set by the router
 const TV_COLOURS = ['#62b0ff', '#ff8aa8', '#5ad6b0', '#b3a2ff'];
 // While something plays, the remote takes the site's colour (Kick green, Twitch purple, YouTube red); otherwise the TV's own colour.
 const SRC_COLOURS = {Kick: '#53fc18', Twitch: '#a970ff', YouTube: '#ff3b3b'};
+let accentHold = {c: '', at: 0};
 function accent() {
-  const c = (st.running || st.starting) && SRC_COLOURS[st.source];
+  let c = (st.running || st.starting || st.wall) && SRC_COLOURS[st.source];
+  if (c) accentHold = {c, at: Date.now()};
+  else if (accentHold.c && Date.now() - accentHold.at < 6000 && !st.error && st.url) c = accentHold.c;  // a window restarting for a moment keeps its colour instead of flashing to the TV's
   $('view-tv').style.setProperty('--tv', c || tvColour(target));
 }
 const tvColour = id => TV_COLOURS[Math.max(0, targets.findIndex(t => t.id === id)) % TV_COLOURS.length];
@@ -858,7 +867,7 @@ function render() {
     const note = $('wallnote'), ico = el('span', 'ni');
     ico.innerHTML = ic(sn.length ? 'volume' : 'mute');
     note.replaceChildren(document.createTextNode('Multi-view \u00b7 ' + all.length + ' streams \u00b7 '));
-    if (up) note.append(ico, document.createTextNode(' ' + (sn.length ? sn.map(name).join(', ') : 'Muted')));
+    if (up && !st.wall.busy) note.append(ico, document.createTextNode(' ' + (sn.length ? sn.map(name).join(', ') : 'Muted')));
     else note.append(document.createTextNode('updating'));
     note.append(document.createTextNode(' \u203a'));
   }
@@ -1737,7 +1746,8 @@ function renderWall() {
   $('wallclear').classList.toggle('hide', !w);
   $('walllayout').classList.toggle('hide', !w);
   if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
-  $('wallsub').textContent = w ? rows.length + ' of ' + w.max + ' on screen' : 'Watch more than one at once';
+  $('wallsub').textContent = w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') : 'Watch more than one at once';
+  $('wallcard').classList.toggle('updating', !!(w && w.busy));  // the Pi is changing the windows: a spinner, and the buttons that change them wait
   const sig = JSON.stringify([w, wallReplace, favList.map(f => f.live === true), recentList.map(x => x.live === true)]);
   if (sig === wallSig) return;
   wallSig = sig;
@@ -1871,8 +1881,8 @@ async function dbgTick() {
   fillTable('d-player', {url: s.url, source: s.source, player: s.player, quality: s.quality, pid: d.proc.pid,
     returncode: d.proc.returncode, uptime_s: d.uptime, last_error: d.last_error});
   fillTable('d-mpv', d.mpv); fillTable('d-ver', d.versions);
-  $('d-h-player').textContent = d.wall ? 'Main stream (tile 1) player' : 'Player';
-  $('d-h-mpv').textContent = d.wall ? 'Main stream (tile 1) mpv' : 'mpv';
+  $('d-h-player').textContent = d.wall ? 'Tile 1 player (the big window in Focus)' : 'Player';
+  $('d-h-mpv').textContent = d.wall ? 'Tile 1 mpv' : 'mpv';
   renderDbgWall(d.wall);
   $('d-cmd').textContent = (s.cmd || []).join(' ');
   const log = $('d-log'), stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
@@ -1911,10 +1921,26 @@ function cardEl(c, onTap, extra) {
   const size = c.size ? c.size + '″' : '';
   const sub = [[c.brand, size].filter(Boolean).join(' '), c.model].filter(Boolean).join(' · ');
   const n = c.now;
-  const line = !c.reachable ? "Can't reach this TV" : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.external ? (c.external.paused ? 'Paused on the TV: ' : 'On the TV: ') + c.external.app : c.error ? "Couldn't play: " + c.error : 'Nothing playing';
+  const ms = !!(n && n.streams && n.streams.length > 1);  // several streams on the screen
+  const line = !c.reachable ? "Can't reach this TV" : ms ? 'Multi-view \u00b7 ' + n.streams.length + ' streams' : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.external ? (c.external.paused ? 'Paused on the TV: ' : 'On the TV: ') + c.external.app : c.error ? "Couldn't play: " + c.error : 'Nothing playing';
   b.append(head, el('div', 'sub', [sub, c.connection].filter(Boolean).join(' · ')), el('div', 'now', line));
+  if (c.reachable && ms) {  // one row per stream: who, which site, live or not, what they are playing, and whether it has sound
+    const list = el('div', 'cstreams');
+    n.streams.forEach(x => {
+      const row = el('div', 'csr' + (x.off ? ' off' : '')), txt = el('span', 'cst'), top = el('span', 'cstop');
+      top.append(el('b', null, x.name), el('span', 'badge ' + (x.source || ''), x.source || 'Other'));
+      if (x.off) top.append(el('span', 'badge', 'Offline')); else if (x.live === true) top.append(el('span', 'badge live', 'LIVE'));
+      const sub = x.off ? 'Went offline' : [x.game, x.live_for != null ? 'live for ' + dur(x.live_for) : null].filter(Boolean).join(' \u00b7 ');
+      txt.append(top);
+      if (sub) txt.append(el('span', 'sub', sub));
+      row.append(avatarEl(x.name, x.url), txt);
+      if (x.sound) { const sp = el('span', 'snd'); sp.innerHTML = ic('volume'); sp.setAttribute('aria-label', 'Has sound'); row.append(sp); }
+      list.append(row);
+    });
+    b.append(list);
+  }
   const tags = el('div', 'tags');
-  if (c.reachable && n && !n.starting) {
+  if (c.reachable && n && !n.starting && !ms) {
     tags.append(el('span', 'badge ' + (n.source || ''), n.source || 'Other'));
     if (n.live) tags.append(el('span', 'badge live', 'LIVE'));
     if (n.game) tags.append(el('span', 'sub', n.game));

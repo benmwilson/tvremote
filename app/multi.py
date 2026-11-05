@@ -105,6 +105,7 @@ class Wall:
         self.on_change = lambda: None  # called when a window ends by itself (a stream went offline), so the screen can say so
         self.layout = None
         self.extras = []  # tiles 1..: {"url", "source", "proc", "error"}
+        self.main_url = None  # the stream the main window should play: what the wall says. The window catches up (a swap is changed in place)
         self.selected = 0  # the stream the remote's card controls (title, pause, favourite, quality): not tied to any window's place
         self.sound = {0}  # the tiles with sound on: the main stream only, to start with. Any number can be switched on
         self.main_quality = None  # the main tile's picked label (None = Auto)
@@ -154,7 +155,7 @@ class Wall:
     def clear(self):
         with self.lock:
             self.stop_windows()
-            self.extras, self.layout, self.sound, self.main_quality, self.selected = [], None, {0}, None, 0
+            self.extras, self.layout, self.sound, self.main_quality, self.selected, self.main_url = [], None, {0}, None, 0, None
 
     def _current(self, i, t):
         p = t.get("proc")
@@ -235,7 +236,9 @@ class Wall:
     def add(self, url, main_url):
         """True when added. A link already on the wall (or one too many) is refused."""
         with self.lock:
-            urls = [main_url] + [t["url"] for t in self.extras]
+            if not self.extras or self.main_url is None:
+                self.main_url = main_url  # the wall starts from what is playing now
+            urls = [self.main_url] + [t["url"] for t in self.extras]
             if url in urls or self.count() >= MAX_TILES:
                 return False
             self.extras.append({"url": url, "source": self.resolve(url)[0], "proc": None, "error": None})
@@ -264,19 +267,23 @@ class Wall:
             if 1 <= i <= len(self.extras):
                 self.extras[i - 1].update(error=None, proc=None)
 
-    def swap(self, i, main_url):
-        """Put extra tile i's stream on the big tile. Returns the new main url, or None."""
+    def swap(self, i, main_url=None):
+        """Put extra tile i's stream on the big tile, and the big tile's stream on tile i. Works from the wall's own record of the main stream
+        (not from what the main window is playing right now, which lags), so quick repeated taps can never copy one stream into two tiles.
+        Returns the new main url, or None."""
         with self.lock:
-            if not 1 <= i <= len(self.extras):
+            if self.main_url is None:
+                self.main_url = main_url
+            if not 1 <= i <= len(self.extras) or not self.main_url:
                 return None
             t = self.extras[i - 1]
-            t["url"], new_main = main_url, t["url"]
+            t["url"], self.main_url = self.main_url, t["url"]
             t["quality"], self.main_quality = self.main_quality, t.get("quality")  # a picked quality goes with its stream
             self.selected = i if self.selected == 0 else 0 if self.selected == i else self.selected  # the selection follows the stream
             a, b = 0 in self.sound, i in self.sound  # and so does the sound
             self.sound = (self.sound - {0, i}) | ({i} if a else set()) | ({0} if b else set())
-            t["source"] = self.resolve(main_url)[0]
-            return new_main
+            t["source"] = self.resolve(t["url"])[0]
+            return self.main_url
 
     def status(self):
         if not self.active():

@@ -520,14 +520,47 @@ def _stall_monitor(proc):
             mpv(["osd-overlay", 3, "none", ""])
 
 
-def stream_url(url, q):
+HOT = os.environ.get("TVREMOTE_HOT", "1") != "0"  # change a window's stream in place where it can (set 0 to always restart the window)
+
+
+_addr_cache = {}  # (link, quality) -> (when, address). Remembered a few minutes, so changing a window's stream does not wait for streamlink
+ADDR_TTL = 300
+
+
+def stream_url(url, q, low=False):
     """The stream's own address (what streamlink would fetch), so mpv can play it directly. A window that plays an address can change
-    stream with one command (loadfile) instead of being closed and opened again."""
-    p = subprocess.run(["streamlink", "--stream-url", url, q], capture_output=True, text=True, timeout=30)
+    stream with one command (loadfile) instead of being closed and opened again. low: run at a low priority (warming ahead of time)."""
+    hit = _addr_cache.get((url, q))
+    if hit and time.time() - hit[0] < ADDR_TTL:
+        return hit[1]
+    p = subprocess.run((["nice", "-n", "10"] if low else []) + ["streamlink", "--stream-url", url, q], capture_output=True, text=True, timeout=30)
     out = p.stdout.strip().splitlines()
     if p.returncode or not out:
         raise RuntimeError((p.stderr.strip().splitlines() or ["no stream"])[-1][:200])
+    now = time.time()
+    for k in [k for k, v in _addr_cache.items() if now - v[0] > ADDR_TTL]:
+        del _addr_cache[k]
+    _addr_cache[(url, q)] = (now, out[0])
     return out[0]
+
+
+def warm_addresses():
+    """After the wall changes: work out, quietly, every stream's address at every window size in this layout. A swap then finds each one
+    ready and takes effect at once."""
+    if not (HOT and wall.active()):
+        return
+    rects = multi.tiles(wall.layout, wall.count())
+    urls = [wall.main_url] + [t["url"] for t in wall.extras]
+    wants = {cap("streamlink", r[2]) for r in rects}
+    for u in urls:
+        source, player = resolve(u)
+        if player != "streamlink" or source == "Twitch":
+            continue
+        for q in wants:
+            try:
+                stream_url(u, q, low=True)
+            except Exception:
+                pass
 
 
 def player_cmd(url, quality, sock, extra=(), default_q=None, direct=False):
@@ -559,7 +592,10 @@ def player_cmd(url, quality, sock, extra=(), default_q=None, direct=False):
 
 def start_player(url, quality=None, screen_kind="loading"):
     # before the old stream stops, so a swap never shows the desktop
-    screen(screen_kind, fav_name(url) + ("  \u00b7  " + quality if screen_kind == "quality" and quality else ""), route(url)[0])
+    if wall.active():
+        screen("playing")  # the wall's background: every slot says which stream it is waiting for
+    else:
+        screen(screen_kind, fav_name(url) + ("  \u00b7  " + quality if screen_kind == "quality" and quality else ""), route(url)[0])
     stop_player()
     try:
         os.unlink(SOCK)
@@ -941,7 +977,7 @@ def wall_relayout(main_url=None):
     """Bring every window in line with the wall: only a window whose stream or place changed is restarted (a swap redraws two
     streams; adding or removing one moves them all). With one stream left the main player goes back to the full screen at the
     quality it had."""
-    url = main_url or state["url"]
+    url = main_url or (wall.main_url if wall.active() and wall.main_url else state["url"])
     if wall.active():
         wall.start_windows()  # they work out their stream addresses while the main one does
     with lock:
@@ -985,6 +1021,7 @@ def api_detect():
 
 
 _wall_job = threading.Lock()
+_wall_pending = [0]  # changes queued or running: the phone shows a spinner and holds its buttons until it is 0
 
 
 def wall_later(fn, *args):
@@ -996,49 +1033,74 @@ def wall_later(fn, *args):
                 fn(*args)
             except Exception as e:
                 app.logger.warning("Multi-view change failed: %s", e)
+            finally:
+                _wall_pending[0] -= 1
+        if _wall_pending[0] == 0:
+            warm_addresses()  # quietly, once things have settled
+    _wall_pending[0] += 1
     threading.Thread(target=run, daemon=True).start()
 
 
-def swap_job(new_main, old_main, i):
-    """Swap the streams of the main window and extra window i without closing either: both new stream addresses are worked out first,
-    then both windows are told at the same moment. Falls back to restarting the two windows (the wall already holds the new order)."""
-    t = wall.extras[i - 1] if 1 <= i <= len(wall.extras) else None
-    p = state["proc"]
-    if t and p and p.poll() is None and state.get("hot") and t.get("hot") and (t.get("proc") and t["proc"].poll() is None) and t["url"] == old_main:
-        try:
-            rects = multi.tiles(wall.layout, wall.count())
-            q0 = multi.quality_for("streamlink", wall.main_quality) or cap("streamlink", rects[0][2])  # each stream at its new window's size
-            qi = multi.quality_for("streamlink", t.get("quality")) or cap("streamlink", rects[i][2])
-            urls, errs = {}, []
+def reconcile_job():
+    """Make every window play what the wall says. A window that plays a stream address changes stream in place (loadfile: nothing closes or
+    opens); one that can't is restarted. All the new addresses are worked out first, then the windows are told at the same moment. Queued
+    changes just converge: each run looks at the wall as it is now."""
+    try:
+        if not wall.active():
+            return
+        rects, todo = multi.tiles(wall.layout, wall.count()), {}
+        if wall.main_url and wall.main_url != state["url"]:
+            todo[0] = (wall.main_url, multi.quality_for("streamlink", wall.main_quality) or cap("streamlink", rects[0][2]))
+        for i, t in enumerate(wall.extras, start=1):
+            if t.get("started") != t["url"] or t.get("q_started") != t.get("quality"):
+                todo[i] = (t["url"], multi.quality_for("streamlink", t.get("quality")) or cap("streamlink", rects[i][2]))
 
-            def get(k, u, q):
-                try:
-                    urls[k] = stream_url(u, q)
-                except Exception as e:
-                    errs.append(e)
-            ts = [threading.Thread(target=get, args=(0, new_main, q0)), threading.Thread(target=get, args=(i, old_main, qi))]
-            for x in ts:
-                x.start()
-            for x in ts:
-                x.join()
-            if not errs:
-                socks = {0: SOCK, i: multi._sock(i)}
-                rs = {}
-                go = [threading.Thread(target=lambda k=k: rs.__setitem__(k, mpvipc.send(socks[k], ["loadfile", urls[k], "replace"]))) for k in socks]
-                for x in go:
-                    x.start()  # both at once
-                for x in go:
-                    x.join()
-                if all(r and r.get("error") == "success" for r in rs.values()):
-                    state.update(url=new_main, source=route(new_main)[0], player=resolve(new_main)[1], quality=q0)
-                    t.update(started=t["url"], source=route(old_main)[0], q_started=t.get("quality"))
-                    for k in socks:  # the windows kept their own mute setting: put it with the streams
-                        mpvipc.send(socks[k], ["set_property", "mute", k not in wall.sound])
-                    screen("playing")
-                    return
-        except Exception as e:
-            app.logger.warning("Swapping in place failed (%s): restarting the two windows", e)
-    wall_relayout(new_main)
+        def can(i, url):
+            source, player = resolve(url)
+            if not (HOT and player == "streamlink" and source != "Twitch"):
+                return False
+            if i == 0:
+                p = state["proc"]
+                return bool(p and p.poll() is None and state.get("hot") and state.get("wid") == wall.main_wid())
+            t = wall.extras[i - 1]
+            return bool(t.get("proc") and t["proc"].poll() is None and t.get("hot") and t.get("wid") == multi.window_id(wall.layout, wall.count(), i))
+
+        addrs, hot = {}, [i for i, (u, q) in todo.items() if can(i, u)]
+
+        def get(i):
+            try:
+                addrs[i] = stream_url(*todo[i])
+            except Exception as e:
+                app.logger.warning("No stream address for window %d (%s)", i, e)
+        ts = [threading.Thread(target=get, args=(i,)) for i in hot]
+        for x in ts:
+            x.start()
+        for x in ts:
+            x.join()
+        sent = {}
+        go = [threading.Thread(target=lambda i=i: sent.__setitem__(i, mpvipc.send(wall.sock(i, SOCK), ["loadfile", addrs[i], "replace"], 5))) for i in addrs]
+        for x in go:
+            x.start()  # all at once
+        for x in go:
+            x.join()
+        for i, r in sent.items():
+            if not (r and r.get("error") == "success"):
+                continue
+            url, q = todo[i]
+            if i == 0:
+                state.update(url=url, source=route(url)[0], player=resolve(url)[1], quality=q, started=time.time(), stalls=0, stall_s=0)
+            else:
+                wall.extras[i - 1].update(started=url, q_started=wall.extras[i - 1].get("quality"), source=route(url)[0], error=None)
+        left = [i for i in todo if i not in sent or not (sent[i] and sent[i].get("error") == "success")]
+        if 0 in left:
+            wall_relayout(wall.main_url)  # the main window can't change in place: restart it (a no-op if it already plays that)
+        if any(i for i in left):
+            wall.start_windows()  # restarts only the windows that do not match
+        for k in range(wall.count()):  # the windows kept their own mute setting: put it with the streams
+            mpvipc.send(wall.sock(k, SOCK), ["set_property", "mute", k not in wall.sound])
+        screen("playing")
+    except Exception as e:
+        app.logger.warning("Changing the windows' streams failed: %s", e)
 
 
 def tile_retry():
@@ -1084,11 +1146,9 @@ def api_wall():
     elif act == "sound":  # switch one stream's sound on or off, the others as they are
         wall.set_sound(i, bool(d.get("on")), SOCK)
     elif act == "swap":
-        old_main = state["url"]
-        new_main = wall.swap(i, old_main)
-        if not new_main:
+        if not wall.swap(i, state["url"]):
             return jsonify(ok=False, error="Nothing to swap"), 400
-        wall_later(swap_job, new_main, old_main, i)
+        wall_later(reconcile_job)
     elif act == "select":  # which stream the card controls: nothing on the screen changes
         wall.select(i)
     elif act == "retry":  # a stream that went offline may be back
@@ -1113,7 +1173,7 @@ def api_wall():
             wall_later(_restart_main_quality, label)
         elif 1 <= i <= len(wall.extras):
             wall.extras[i - 1]["quality"] = label
-            wall.start_windows()  # only this window differs, so only this one restarts
+            wall_later(reconcile_job)  # only this window differs: it loads the new quality in place, or restarts alone
         else:
             return jsonify(ok=False, error="No such stream"), 400
     elif act == "clear":
@@ -1476,7 +1536,10 @@ def make_card(tv_id, status):
            "starting": bool(status.get("starting")), "position": status.get("position"),
            "game": livewatch.snapshot().get(status.get("url") or "", {}).get("game"),
            "live_for": livewatch.live_for(status.get("url") or ""),
-           "stream": stream_label(status.get("quality"))} if busy else None
+           "stream": stream_label(status.get("quality")),
+           "streams": [{"name": t["name"], "url": t["url"], "source": t["source"], "live": t.get("live"), "off": bool(t.get("error")),
+                        "game": t.get("game"), "live_for": t.get("live_for"), "sound": t["i"] in status["wall"]["sound"]}
+                       for t in [status["wall"]["main"], *status["wall"]["tiles"]]] if status.get("wall") else None} if busy else None
     return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection,
             "external": None if busy or status.get("error") else external_now(tv_id),  # playing on the TV itself, not through this remote
             "brand": r.get("brand"), "model": r.get("model"), "size": r.get("size"), "tv_name": r.get("name"),
@@ -1904,12 +1967,16 @@ def wall_status():
     """The multi-view as the phone sees it: the wall's own state, plus whether each stream is live (so its tile can say LIVE)."""
     w = wall.status()
     if w:
+        w["busy"] = _wall_pending[0] > 0
         snap = livewatch.snapshot()
         for t in w["tiles"]:
             t["live"] = snap.get(t["url"], {}).get("live")
+            t["game"], t["live_for"] = snap.get(t["url"], {}).get("game"), livewatch.live_for(t["url"])
         # tile 0 is described like the others, so the phone can list every stream the same way
-        w["main"] = {"i": 0, "url": state["url"], "source": state["source"], "name": fav_name(state["url"] or ""),
-                     "live": snap.get(state["url"] or "", {}).get("live"), "quality": w["main_quality"],
+        mu = wall.main_url or state["url"]  # what the wall says the main window plays (the window may still be catching up)
+        w["main"] = {"i": 0, "url": mu, "source": route(mu or "")[0], "name": fav_name(mu or ""),
+                     "live": snap.get(mu or "", {}).get("live"), "quality": w["main_quality"],
+                     "game": snap.get(mu or "", {}).get("game"), "live_for": livewatch.live_for(mu or ""),
                      "error": "Went offline" if state.get("ended") else None}
     return w
 
