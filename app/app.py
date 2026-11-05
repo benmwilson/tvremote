@@ -783,6 +783,9 @@ def play_on(c, url, quality, via=None):
     if cur.get("url") == url and time.time() - (cur.get("started") or 0) < 3:
         return  # the same link was started a moment ago (a double tap): leave it be
     remember(url)
+    # Wake the TV first, in the background: working out the link can fail (a channel that is offline), and a Chromecast that is
+    # powered by its TV is not even on the network until the TV is awake.
+    threading.Thread(target=switch_input, args=(tid,), daemon=True).start()
     seq = _start_seq[tid] = _start_seq.get(tid, 0) + 1
     newest = lambda: _start_seq.get(tid) == seq
     if c:
@@ -792,7 +795,6 @@ def play_on(c, url, quality, via=None):
         with lock:
             if newest():
                 start_player(url, quality)
-    threading.Thread(target=switch_input, args=(c.id if c else "living",), daemon=True).start()
 
 
 @app.post("/api/play")

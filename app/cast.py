@@ -46,7 +46,7 @@ def run(cmd, timeout=30):
         raise CastError(f"{cmd[0]} failed: {e}")
     out = p.stdout.strip()
     if p.returncode or not out:
-        err = (p.stderr.strip().splitlines() or ["no output"])[-1]
+        err = (p.stderr.strip().splitlines() or ["Nothing came back (is it live?)"])[-1]
         raise CastError(re.sub(r"^(ERROR|error):\s*", "", err)[:200])
     return out
 
@@ -115,7 +115,11 @@ class CastTarget:
                 "device": d.friendly_name if d else None, "model": model,
                 "kind": "Google TV" if model and "google tv" in model.lower() else ("Chromecast" if d else None)}
 
-    def _connect(self):
+    def _connect(self, wait=0):
+        # wait: a Chromecast powered by its TV only shows up on the network a little after the TV wakes
+        end = time.time() + wait
+        while wait and not self.device() and time.time() < end:  # not under the lock: discovery needs it to add the device
+            time.sleep(1)
         with self.lock:
             d = self.device()
             if not d:
@@ -233,7 +237,7 @@ class CastTarget:
             vid = youtube_id(url) or run(["yt-dlp", "--no-playlist", "--print", "id", url]).splitlines()[0]
         else:
             media, ctype, stype = self._media_url(url, source, player, q)
-        cast = self._connect()
+        cast = self._connect(wait=45)
         if cancelled():
             return
         hlsproxy.clear()  # any previous relay session ends; _start_proxy sets a new one

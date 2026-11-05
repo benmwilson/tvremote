@@ -23,7 +23,7 @@ def target():
     t.cast = mock.MagicMock(app_id=cast.APP_MEDIA_RECEIVER)
     t.state = {"url": "https://kick.com/4head", "source": "Kick", "player": "streamlink", "quality": "1080p60,best", "error": None,
                "started": 100.0, "via": "direct", "proxy_tried": False, "first_play": 105.0}
-    t._connect = lambda: t.cast
+    t._connect = lambda wait=0: t.cast
     return t
 
 
