@@ -1323,10 +1323,18 @@ def api_tv_wake():
         return jsonify(ok=False, error="Unknown TV."), 400
 
     def go():
-        if ROKU_IPS.get(tid) and INPUTS.get(tid):
+        ip = ROKU_IPS.get(tid)
+        if ip and INPUTS.get(tid):
             switch_input(tid)
-        elif tid == "living":
-            switch_tv_to_pi()  # no Roku address: wake and select over HDMI-CEC
+            return
+        if ip:  # a Roku but no input to pick: just turn it on (this used to do nothing for the bedroom)
+            try:
+                if roku.info(ip).get("power") != "PowerOn":
+                    roku.key(ip, "PowerOn")
+            except (roku.RokuError, OSError) as e:
+                app.logger.warning("Turn on failed for %s (%s): %s", tid, ip, e)
+        if tid == "living":
+            switch_tv_to_pi()  # the Pi's TV is also woken and selected over HDMI-CEC
     threading.Thread(target=go, daemon=True).start()
     return jsonify(ok=True)
 

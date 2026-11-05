@@ -161,6 +161,40 @@ class Endpoints(unittest.TestCase):
             key.assert_called_once_with(LIVING["ip"], "Info")
 
 
+class TurnOn(unittest.TestCase):
+    def setUp(self):
+        for p in (mock.patch.object(accounts, "initialised", lambda: True), mock.patch.object(server, "session_user", lambda tok: accounts.OWNER),
+                  mock.patch.object(server, "CAST", None), mock.patch.object(server, "switch_tv_to_pi"), mock.patch.object(server, "switch_input")):
+            p.start()
+            self.addCleanup(p.stop)
+        self.client = server.app.test_client()
+
+    def wake(self, target, ips, inputs, power="Ready"):
+        with mock.patch.dict(server.ROKU_IPS, ips), mock.patch.dict(server.INPUTS, inputs),                 mock.patch.object(roku, "info", return_value={"power": power}), mock.patch.object(roku, "key") as key:
+            self.assertEqual(self.client.post(f"/api/tv/wake?target={target}").status_code, 200)
+            for t in __import__("threading").enumerate():
+                if t is not __import__("threading").current_thread() and t.daemon:
+                    t.join(2)
+            return key
+
+    def test_a_roku_with_an_input_picks_it(self):
+        self.wake("bedroom", {"bedroom": BEDROOM["ip"]}, {"bedroom": "HDMI1"})
+        server.switch_input.assert_called_once_with("bedroom")
+
+    def test_a_roku_with_no_input_is_still_turned_on(self):  # the bedroom's Turn on used to do nothing here
+        key = self.wake("bedroom", {"bedroom": BEDROOM["ip"]}, {"bedroom": ""})
+        key.assert_called_once_with(BEDROOM["ip"], "PowerOn")
+        server.switch_input.assert_not_called()
+
+    def test_a_tv_that_is_already_on_is_left_alone(self):
+        key = self.wake("bedroom", {"bedroom": BEDROOM["ip"]}, {"bedroom": ""}, power="PowerOn")
+        key.assert_not_called()
+
+    def test_the_living_room_is_also_woken_over_hdmi(self):
+        self.wake("living", {"living": LIVING["ip"]}, {"living": ""})
+        server.switch_tv_to_pi.assert_called_once()
+
+
 class InputSwitchSaysWhyItFailed(unittest.TestCase):
     def test_no_saved_settings_and_a_refused_command_are_both_logged(self):
         with mock.patch.dict(server.ROKU_IPS, {"living": "", "bedroom": ""}), mock.patch.dict(server.INPUTS, {"living": "", "bedroom": ""}):

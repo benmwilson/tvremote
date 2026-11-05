@@ -70,6 +70,8 @@ button:disabled{opacity:.45;cursor:default}
 .hd{width:8px;height:8px;border-radius:50%;flex:none;border:1px solid var(--dim)}
 .hd.smooth{background:var(--ok);border-color:var(--ok);opacity:.6}
 .hd.buffering{background:var(--warn);border-color:var(--warn)}.hd.error{background:var(--bad);border-color:var(--bad)}
+.tvpill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--line);color:var(--dim);flex:none}
+.tvpill.on{background:rgba(123,226,154,.16);color:#7be29a}.tvpill.warn{background:rgba(255,176,98,.16);color:#ffb062}
 .hw{font-size:13px;font-weight:600}.hw.buffering{color:var(--warn)}.hw.error{color:var(--bad)}
 .link{color:var(--dim);font-size:14px;margin:0 4px 14px;overflow-wrap:anywhere}
 /* One TV */
@@ -1559,6 +1561,9 @@ function cardEl(c, onTap, extra) {
   const dot = el('i', 'hd ' + (c.reachable ? (c.health || {}).state || 'idle' : 'idle'));
   dot.setAttribute('aria-hidden', 'true');
   head.append(el('b', null, c.name), dot, el('span', 'hw ' + ((c.health || {}).state || ''), healthWord(c)));
+  // is the TV itself on or off? (from its Roku; a TV with no Roku paired can't say)
+  const power = !c.roku ? null : c.reachable === false ? ['No answer', 'warn'] : c.power === 'PowerOn' ? ['On', 'on'] : c.power ? ['Off', 'off'] : null;
+  if (power) head.append(el('span', 'tvpill ' + power[1], power[0]));
   const size = c.size ? c.size + '″' : '';
   const sub = [[c.brand, size].filter(Boolean).join(' '), c.model].filter(Boolean).join(' · ');
   const n = c.now;
@@ -1572,7 +1577,7 @@ function cardEl(c, onTap, extra) {
     if (n.stream) tags.append(el('span', 'badge', n.stream));
   }
   if (c.reachable && !c.roku) tags.append(el('span', 'sub', 'No TV controls yet: pair its Roku in Settings'));
-  const pw = c.reachable ? [POWER[c.power] || c.power, c.input && c.input !== 'Roku' && !c.external ? c.input : null].filter(Boolean).join(' · ') : '';
+  const pw = c.reachable && c.roku && c.power === 'PowerOn' && c.input && c.input !== 'Roku' && !c.external ? c.input : '';  // what it is showing, only while it is on
   if (pw) tags.append(el('span', 'sub', pw));
   if (tags.childNodes.length) b.append(tags);
   if (extra) b.append(extra);
