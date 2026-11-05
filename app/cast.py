@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pychromecast
 import zeroconf
+from pychromecast.config import APP_MEDIA_RECEIVER, APP_YOUTUBE
 from pychromecast.discovery import CastBrowser, SimpleCastListener
 from pychromecast.quick_play import quick_play
 
