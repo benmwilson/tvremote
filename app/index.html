@@ -137,6 +137,10 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .fav .badge{margin-right:8px}
 #logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .sub.warn{color:var(--warn,#ffb062)}
+.chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
+.chathead .chev{color:var(--dim);transition:transform .15s}.chathead[aria-expanded=true] .chev{transform:rotate(180deg)}
+#chatbox{margin-top:10px;max-height:320px;overflow-y:auto;overscroll-behavior:contain;font-size:15px;line-height:1.35;-webkit-overflow-scrolling:touch}
+#chatbox .m{padding:3px 0;word-break:break-word}#chatbox .m b{margin-right:6px}#chatbox img{height:1.5em;vertical-align:middle;margin:0 1px}
 .sortbtn{margin-left:auto;margin-right:8px;min-height:44px;padding:0 14px;background:none;color:var(--dim);font-size:14px;border-radius:12px}
 .sortbtn[aria-pressed=true]{background:var(--card2,#222a38);color:var(--text,#fff)}
 .fav .mv{position:absolute;right:0;top:0;display:flex}
@@ -183,6 +187,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <symbol id="i-logo" viewBox="0 0 100 100"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8cc8ff"/><stop offset="1" stop-color="#4f8fff"/></linearGradient></defs>
 <rect width="100" height="100" rx="22" fill="#0b0e14"/><rect x="14" y="22" width="72" height="48" rx="12" fill="#131a28" stroke="url(#lg)" stroke-width="6"/>
 <path d="M44 36V56L61 46Z" fill="url(#lg)" stroke="url(#lg)" stroke-width="5" stroke-linejoin="round"/><path d="M38 82H62M50 73V82" stroke="url(#lg)" stroke-width="6" stroke-linecap="round" fill="none"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5.5h14a1.5 1.5 0 011.5 1.5v8a1.5 1.5 0 01-1.5 1.5H11l-4.5 3v-3H5A1.5 1.5 0 013.5 15V7A1.5 1.5 0 015 5.5z"/></symbol>
 <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.6" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5v5h3.6l5 4.2V5.3L7.6 9.5z" fill="currentColor" stroke="none"/><path d="M16 9.2a4.2 4.2 0 010 5.6M18.8 6.6a8 8 0 010 10.8"/></symbol>
 <symbol id="i-volume-low" viewBox="0 0 24 24"><path d="M4 9.5v5h3.6l5 4.2V5.3L7.6 9.5z" fill="currentColor" stroke="none"/><path d="M16 9.5a3.3 3.3 0 010 5"/></symbol>
@@ -257,6 +262,10 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
     <button id="fav"></button>
     <div class="pair"><button id="refresh" aria-label="Refresh the stream" title="Refresh the stream"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
     <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div></div>
+</div>
+<div class="card hide" id="chatcard">
+  <button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span><span class="chev">&#9662;</span></button>
+  <div id="chatbox" class="hide" role="log" aria-live="off"></div>
 </div>
 <div id="err" role="status"></div>
 
@@ -461,6 +470,7 @@ function render() {
   setBtn($('fav'), saved ? 'star-fill' : 'star', saved ? 'Saved' : 'Favourite');
   if (run && st.url !== qualFor) loadQualities();
   checkFavLoading();
+  chatShow();
 }
 
 async function loadQualities() {
@@ -674,6 +684,121 @@ $('shellrow').onclick = async () => {
 };
 
 fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
+
+// ---- chat on the phone (read-only) ----
+// Twitch: the Pi reads the chat and the phone asks it for new messages. Kick: the phone connects itself, as it does for
+// the avatars (kick.com refuses non-browser clients, so the Pi can't). Kick's chat is an unofficial Pusher connection;
+// the app key and event names come from open-source clients (e.g. the kick-api crate) and Kick may change them without notice.
+const KICK_WS = 'wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false';
+let chatOpen = false, chatLast = 0, chatTimer = null, chatKey = '', kickWs = null;
+try { chatOpen = localStorage.getItem('chatOpen') === '1'; } catch (e) {}
+
+// parts: [{t: 'text'} | {img: url, alt: 'name'}]
+function chatRow(name, color, parts) {
+  const row = el('div', 'm'), n = el('b', null, name);
+  if (/^#[0-9a-f]{6}$/i.test(color || '')) n.style.color = color;
+  row.append(n);
+  parts.forEach(p => {
+    if (p.img) { const img = document.createElement('img'); img.alt = p.alt || ''; img.loading = 'lazy'; img.src = p.img; row.append(img); }
+    else if (p.t) row.append(document.createTextNode(p.t));
+  });
+  return row;
+}
+function twitchParts(m) {
+  const chars = [...m.text], parts = [];  // emote positions count characters, not UTF-16 units
+  let at = 0;
+  (m.emotes || []).forEach(e => {
+    if (e.s < at || !/^[\w-]+$/.test(e.id)) return;
+    parts.push({t: chars.slice(at, e.s).join('')},
+      {img: 'https://static-cdn.jtvnw.net/emoticons/v2/' + e.id + '/default/dark/1.0', alt: chars.slice(e.s, e.e + 1).join('')});
+    at = e.e + 1;
+  });
+  parts.push({t: chars.slice(at).join('')});
+  return parts;
+}
+function kickParts(text) {  // emotes arrive inside the text as [emote:12345:name]
+  const parts = [], re = /\[emote:(\d+):([^\]]*)\]/g;
+  let at = 0, m;
+  while ((m = re.exec(text))) {
+    parts.push({t: text.slice(at, m.index)}, {img: 'https://files.kick.com/emotes/' + m[1] + '/fullsize', alt: m[2]});
+    at = re.lastIndex;
+  }
+  parts.push({t: text.slice(at)});
+  return parts;
+}
+function chatAdd(row) {
+  const box = $('chatbox'), stick = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.append(row);
+  while (box.children.length > 150) box.firstChild.remove();
+  if (stick) box.scrollTop = box.scrollHeight;
+}
+
+async function chatPoll() {  // Twitch
+  if (!chatOpen || document.hidden || view() !== 'tv') return;
+  const r = await fetch('/api/chat/feed?target=' + encodeURIComponent(target || 'living') + '&since=' + chatLast).then(x => x.json()).catch(() => null);
+  if (!r) return;
+  if (r.reset) { $('chatbox').replaceChildren(); chatLast = 0; }
+  (r.msgs || []).forEach(m => chatAdd(chatRow(m.name, m.color, twitchParts(m))));
+  chatLast = r.last || chatLast;
+  $('chatsub').textContent = r.ok ? '#' + r.channel : '';
+}
+
+async function kickRoomId(slug) {  // the channel's chat room number, from the phone's own request to kick.com (kept for good)
+  try { const c = localStorage.getItem('kc:' + slug); if (c) return c; } catch (e) {}
+  const j = await (await fetch('https://kick.com/api/v2/channels/' + encodeURIComponent(slug))).json();
+  const id = j && j.chatroom && String(j.chatroom.id);
+  if (!/^\d+$/.test(id || '')) throw new Error('no chat room');
+  try { localStorage.setItem('kc:' + slug, id); } catch (e) {}
+  return id;
+}
+function kickStop() { if (kickWs) { const w = kickWs; kickWs = null; w.onclose = null; try { w.close(); } catch (e) {} } }
+async function kickStart(slug, key) {
+  $('chatsub').textContent = 'connecting\u2026';
+  let id;
+  try { id = await kickRoomId(slug); } catch (e) { if (chatKey === key) $('chatsub').textContent = "couldn't reach kick.com"; return; }
+  let fails = 0;
+  const open = () => {
+    if (chatKey !== key) return;
+    const ws = kickWs = new WebSocket(KICK_WS);
+    ws.onmessage = ev => {
+      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m.event === 'pusher:connection_established') ws.send(JSON.stringify({event: 'pusher:subscribe', data: {auth: '', channel: 'chatrooms.' + id + '.v2'}}));
+      else if (m.event === 'pusher_internal:subscription_succeeded') { fails = 0; $('chatsub').textContent = '#' + slug; }
+      else if (m.event === 'pusher:ping') ws.send(JSON.stringify({event: 'pusher:pong', data: {}}));
+      else if (m.event === 'App\\Events\\ChatMessageEvent') {
+        try {
+          const d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data;
+          chatAdd(chatRow(d.sender.username, (d.sender.identity || {}).color, kickParts(String(d.content || ''))));
+        } catch (e) {}
+      }
+    };
+    ws.onclose = () => {
+      if (kickWs !== ws || chatKey !== key) return;
+      $('chatsub').textContent = ++fails > 3 ? "Kick chat isn't connecting" : 'reconnecting\u2026';
+      setTimeout(open, Math.min(30000, 2000 * fails));
+    };
+  };
+  open();
+}
+
+function chatShow() {  // the card only exists while a Twitch or Kick channel is playing
+  const kick = st.source === 'Kick' ? kickSlug(st.url || '') : null;
+  const on = (st.source === 'Twitch' || !!kick) && (st.running || st.starting);
+  const want = on && chatOpen;
+  $('chatcard').classList.toggle('hide', !on);
+  $('chatbox').classList.toggle('hide', !want);
+  $('chatTog').setAttribute('aria-expanded', String(want));
+  const key = want ? (kick ? 'kick:' + kick : 'twitch:' + (st.url || '')) : '';
+  if (key === chatKey) return;
+  chatKey = key;  // what is showing changed: stop the old feed, clear the box, start the new one
+  if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
+  kickStop();
+  $('chatbox').replaceChildren(); chatLast = 0; $('chatsub').textContent = '';
+  if (!key) return;
+  if (kick) kickStart(kick, key);
+  else { chatPoll(); chatTimer = setInterval(chatPoll, 2000); }
+}
+$('chatTog').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem('chatOpen', chatOpen ? '1' : '0'); } catch (e) {} chatShow(); };
 
 // ---- stats on the TV (Pi TV only) ----
 async function loadStats() {

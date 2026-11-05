@@ -984,6 +984,27 @@ def api_stats_set():
     return jsonify(enabled=settings["stats"])
 
 
+_feed = {"obj": None}
+
+
+@app.get("/api/chat/feed")
+def api_chat_feed():
+    """New chat messages for the phone's chat view (Twitch only). `since` is the last message id the phone has."""
+    c = tgt()
+    url, source = (c.state.get("url"), c.state.get("source")) if c else (state["url"] if pi_playing() else None, state["source"])
+    ch = chat.channel_of(url or "") if source == "Twitch" else None
+    if not ch:
+        return jsonify(ok=False, channel=None, msgs=[], last=0)
+    f = _feed["obj"]
+    if not f or f.channel != ch or f.stopped.is_set():
+        if f:
+            f.stop()
+        f = _feed["obj"] = chat.ChatFeed(ch)
+    last = request.args.get("since", type=int) or 0
+    reset = last > f.n  # the feed was started afresh since the phone last asked
+    return jsonify(ok=True, channel=ch, msgs=f.since(0 if reset else last), last=f.n, reset=reset)
+
+
 @app.get("/api/shell/screenshot")
 def api_shell_screenshot():
     """What the home screen window is drawing right now, as a PNG (for debugging)."""
