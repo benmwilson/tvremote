@@ -1981,6 +1981,12 @@ def api_debug():
         versions=versions(), last_error=last_error(), log=log)
 
 
+def stream_title(url):
+    """A stream's own title (not the channel name): from its details if they are known, else from what the live check saw."""
+    meta = (_qcache.get(url) or (0, 0, {}))[2]
+    return meta.get("title") or livewatch.snapshot().get(url or "", {}).get("title")
+
+
 def wall_status():
     """The multi-view as the phone sees it: the wall's own state, plus whether each stream is live (so its tile can say LIVE)."""
     w = wall.status()
@@ -1990,11 +1996,14 @@ def wall_status():
         for t in w["tiles"]:
             t["live"] = snap.get(t["url"], {}).get("live")
             t["game"], t["live_for"] = snap.get(t["url"], {}).get("game"), livewatch.live_for(t["url"])
+            warm_title(t["url"])  # every stream on the screen gets its title looked up, not only the one being controlled
+            t["title"] = stream_title(t["url"])
         # tile 0 is described like the others, so the phone can list every stream the same way
         mu = wall.main_url or state["url"]  # what the wall says the main window plays (the window may still be catching up)
         w["main"] = {"i": 0, "url": mu, "source": route(mu or "")[0], "name": fav_name(mu or ""),
                      "live": snap.get(mu or "", {}).get("live"), "quality": w["main_quality"],
                      "game": snap.get(mu or "", {}).get("game"), "live_for": livewatch.live_for(mu or ""),
+                     "title": (warm_title(mu), stream_title(mu))[1],
                      "error": "Went offline" if state.get("ended") else None}
     return w
 

@@ -216,6 +216,24 @@ class ReconcileTest(unittest.TestCase):
         self.assertFalse([c for s, c in sent[before:] if c[0] == "loadfile"])
 
 
+class TitlesTest(unittest.TestCase):
+    def test_every_stream_on_the_screen_gets_a_title_and_a_lookup(self):
+        import app as server
+        server.wall.clear()
+        server.wall.layout, server.wall.main_url = "grid", "https://kick.com/a"
+        server.wall.extras = [{"url": "https://kick.com/b", "proc": None}, {"url": "https://www.twitch.tv/c", "proc": None}]
+        facts = {"https://kick.com/a": {"title": "A's stream"}, "https://kick.com/b": {"title": "B's stream"}}
+        warmed = []
+        try:
+            with mock.patch.object(server, "warm_title", warmed.append), mock.patch.object(server.livewatch, "snapshot", lambda: facts),                     mock.patch.dict(server.state, {"url": "https://kick.com/a", "source": "Kick"}):
+                w = server.wall_status()
+        finally:
+            server.wall.clear()
+        self.assertEqual([t["title"] for t in w["tiles"]], ["B's stream", None])  # the one nothing is known about stays empty until the lookup finishes
+        self.assertEqual(w["main"]["title"], "A's stream")
+        self.assertCountEqual(warmed, ["https://kick.com/a", "https://kick.com/b", "https://www.twitch.tv/c"])
+
+
 class ControlledStreamTest(unittest.TestCase):
     """The volume slider and mute button belong to the stream the card controls, not to the first window."""
 
