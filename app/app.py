@@ -1408,7 +1408,8 @@ def kick_done():
             raise ValueError(request.args["error"])
         kick.link_finish(request.args.get("code"), request.args.get("state"))
         return redirect("/?kick=linked", 303)
-    except Exception:  # a bad state, a refused code or a Kick outage: all end the same way for the user
+    except Exception as e:  # a bad state, a refused code or a Kick outage: all end the same way for the user
+        print("Kick link failed:", kick.describe(e), flush=True)
         return redirect("/?kick=failed", 303)
 
 

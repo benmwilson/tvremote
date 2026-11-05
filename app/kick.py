@@ -22,7 +22,19 @@ def enabled():
 
 
 def _open(req, timeout=10):  # one place to stub in tests
+    req.add_header("User-Agent", "tvremote/1.0")  # urllib's default is often blocked by bot filters
     return urlopen(req, timeout=timeout).read()
+
+
+def describe(e):
+    """One line for the log: the error, and the start of Kick's answer when it sent one."""
+    body = ""
+    if hasattr(e, "read"):
+        try:
+            body = " " + e.read(300).decode(errors="replace")
+        except Exception:
+            pass
+    return f"{type(e).__name__}: {e}{body}"
 
 
 def _app_token():
@@ -101,7 +113,8 @@ def check(slug):
         req = Request("https://api.kick.com/public/v1/channels?" + urlencode({"slug": slug}),
                       headers={"Authorization": "Bearer " + _app_token()})
         data = json.loads(_open(req)).get("data") or []
-    except Exception:
+    except Exception as e:
+        print("Kick API:", describe(e), flush=True)
         _token["value"] = None  # an expired or revoked token gets a fresh one next time
         return None
     if not data:
