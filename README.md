@@ -1,7 +1,12 @@
 # tvremote
 
-Play Kick / Twitch / YouTube / any link on the living-room TV from a Raspberry Pi 4, controlled from an iPhone.
-One Docker container: mpv draws on the Pi's Wayland desktop, plays through the host's PipeWire, and uses the Pi's hardware H.264 decoder. A small web remote (port 8765) controls it.
+Play Kick / Twitch / YouTube / any link on your TVs from a Raspberry Pi 4, controlled from an iPhone.
+One Docker container with a small web remote (port 8765). Two kinds of TV:
+
+- **Pi on HDMI** (living room): mpv draws on the Pi's Wayland desktop, plays through the host's PipeWire and uses the Pi's hardware H.264 decoder.
+- **Chromecast** (bedroom): found on the network and cast to. YouTube uses the Chromecast's own YouTube app; Kick, Twitch and other links are resolved on the Pi and cast.
+
+The remote has a TV picker at the top (Living room / Bedroom). Pause, volume, mute, seek, quality, stop and favourites act on the selected TV.
 
 ## Setup (on the Pi)
 
@@ -42,8 +47,13 @@ Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose 
 
 - Set `ROKU_LIVING` / `ROKU_BEDROOM` (TV addresses) in `.env` to get a TV card with power, volume, input and navigation buttons. On each TV: Settings → System → Advanced system settings → Control by mobile apps → Network access → Permissive.
 - Set `INPUT_LIVING` / `INPUT_BEDROOM` (e.g. `HDMI1`) and the TV wakes and switches to that input whenever you play on it.
-- The bedroom target is a Chromecast found by mDNS (name configurable in `/data/targets.json`). Pick the TV at the top of the remote, or add `&target=bedroom` to the Shortcut URL.
+- The bedroom target is a Chromecast found by mDNS (name configurable in `/data/targets.json`). Pick the TV at the top of the remote, or add `&target=bedroom` to the Shortcut URL (a second Shortcut, "Play in Bedroom").
+- `.env` (not committed) holds your TV addresses and inputs. Keep real addresses out of the repo.
+- The Roku remote's own buttons (pause etc.) don't reach the Pi or the Chromecast: the TV doesn't forward them over CEC. The phone is the remote.
 
+### How Kick/Twitch reach the Chromecast
+
+By default the Chromecast fetches the stream itself (`direct`). `&via=proxy` on `/play` (or `TVREMOTE_CAST_VIA=proxy` in the container environment) makes the Pi fetch the HLS segments over its wired link and relay them to the Chromecast (`app/hlsproxy.py`). The relay path is token-guarded and only fetches public http(s) hosts. In testing, both modes buffer only while starting (about 10–17 s) on a strong Wi-Fi link.
 ## Sources
 
 | Source | Player |
@@ -56,9 +66,11 @@ Routing lives in the `SOURCES` table at the top of `app/app.py`; a new streamlin
 
 ## API
 
-`GET /play?u=&q=` · `POST /api/play` · `POST /api/cmd` (pause, mute, volume, volume_delta, seek, stop, restart) · `GET /api/status` · `GET /api/qualities` · `GET /api/search?q=` · `GET/POST/DELETE /api/favourites`
+`GET /play?u=&q=&target=&via=` · `POST /api/play` · `POST /api/cmd` (pause, mute, volume, volume_delta, seek, stop, restart) · `GET /api/status` · `GET /api/qualities` · `GET /api/search?q=` · `GET/POST/DELETE /api/favourites` · `GET /api/targets` · `GET /api/tv` · `GET /api/roku` · `POST /api/roku/key` · `GET /api/debug`
 
-`/api/status` includes `hwdec` (should be `v4l2m2m`) and `drops`.
+Add `?target=bedroom` to the API calls to act on the Chromecast. `/api/status` includes `hwdec` (should be `v4l2m2m` on the Pi) and `drops`. The **Debug** button on the remote opens a drawer with player state, mpv properties, versions, the command line and the log.
+
+Changing the volume from the remote shows a short "Volume N%" message on the Pi's screen.
 
 ## Troubleshooting
 
@@ -71,4 +83,6 @@ Routing lives in the `SOURCES` table at the top of `app/app.py`; a new streamlin
 - **YouTube fails:** yt-dlp needs a JS runtime (deno is in the image). Rebuild to get the latest yt-dlp.
 - **Permission denied on sockets:** the container runs as uid/gid 1000 to match the host user.
 - The TV remote can't control the Pi (the Roku TV forwards no CEC key presses); the phone is the remote.
-- `/play` is a plain GET with no auth, so keep the port on your LAN.
+- **Bedroom missing from the picker or "not found on the network":** the Chromecast must be on the same network as the Pi (no guest network or client isolation). The container uses host networking so mDNS works.
+- **Volume overlay or chat text not showing:** only the Pi's screen can show overlays; the Chromecast can't.
+- `/play` is a plain GET; set `PASSWORD` (above) if the network isn't trusted.
