@@ -370,6 +370,46 @@ class ShellFlow(unittest.TestCase):
         sw.assert_called_once_with("living")
         self.assertEqual(self.client.post("/api/tv/wake?target=nope").status_code, 400)
 
+    def test_tv_off_stops_a_live_pi_stream_and_pauses_a_video(self):
+        sent = []
+        mp = lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}
+        with mock.patch.object(server, "pi_playing", return_value=True), mock.patch.object(server, "mpv", mp), \
+                mock.patch.object(server, "prop", lambda n: False), mock.patch.object(server, "osd_paused"), \
+                mock.patch.object(server, "stop_player") as stop, mock.patch.object(server, "screen") as scr:
+            with mock.patch.object(server, "pi_status", return_value={"live": True}):
+                server.on_tv_off("living")
+            stop.assert_called_once()
+            scr.assert_called_with("idle")
+            stop.reset_mock()
+            with mock.patch.object(server, "pi_status", return_value={"live": False}):
+                server.on_tv_off("living")
+            stop.assert_not_called()
+            self.assertIn(["set_property", "pause", True], sent)
+
+    def test_tv_off_pauses_the_chromecast_once(self):
+        class C:
+            def __init__(s, paused): s.paused, s.calls = paused, []
+            def status(s): return {"running": True, "paused": s.paused}
+            def cmd(s, a, *x): s.calls.append(a)
+        for paused, want in ((False, ["pause"]), (True, [])):
+            c = C(paused)
+            with mock.patch.object(server, "CAST", c):
+                server.on_tv_off("bedroom")
+            self.assertEqual(c.calls, want)
+
+    def test_the_off_key_and_a_standby_change_both_trigger_it(self):
+        with mock.patch.object(server, "on_tv_off") as off, mock.patch.dict(server.ROKU_IPS, {"living": "203.0.113.1"}), \
+                mock.patch.object(server.roku, "key"):
+            self.client.post("/api/roku/key?target=living", json={"key": "PowerOff"})
+            time.sleep(0.1)
+            off.assert_called_once_with("living")
+            off.reset_mock()
+            server._roku["living"] = (0, {"power": "PowerOn"})
+            with mock.patch.object(server.roku, "info", return_value={"power": "Ready"}):
+                server.fetch_roku("living")
+            time.sleep(0.1)
+            off.assert_called_once_with("living")
+
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]
         saved = []

@@ -325,8 +325,13 @@ def _stall_monitor(proc):
             mpv(["show-text", stats_overlay(int(d - drops) if drops is not None else 0, int(d),
                  cache if isinstance(cache, (int, float)) else None, round(fps) if isinstance(fps, (int, float)) else None,
                  state.get("stalls", 0)), 2600])  # a bit longer than the 2 s redraw, so it never blinks off
+            if not stats_up:
+                for k, v in (("osd-font-size", 26), ("osd-border-size", 2), ("osd-margin-x", 28), ("osd-margin-y", 22), ("osd-color", "#C8D0DC")):
+                    mpv(["set_property", k, v])
             stats_up = True
         elif stats_up and not settings.get("stats"):
+            for k, v in (("osd-font-size", 44), ("osd-border-size", 3), ("osd-margin-x", 60), ("osd-margin-y", 50), ("osd-color", "#FFFFFF")):
+                mpv(["set_property", k, v])
             mpv(["show-text", "", 1])
             stats_up = False
         if isinstance(d, (int, float)):
@@ -748,9 +753,35 @@ _roku_busy = set()
 ROKU_TTL = 15    # seconds: TV details change rarely, and every ECP call costs two round trips
 
 
+def on_tv_off(tv_id):
+    """The TV went to standby: stop a live stream on the Pi (a paused live stream falls behind and can't resume cleanly),
+    pause anything else, including the Chromecast."""
+    try:
+        if tv_id == "living":
+            if not pi_playing():
+                return
+            if pi_status().get("live"):
+                with lock:
+                    stop_player()
+                    state.update(url=None, source=None, quality=None)
+                screen("idle")
+            elif prop("pause") is not True:
+                mpv(["set_property", "pause", True])
+                osd_paused(True)
+        elif tv_id == "bedroom" and CAST:
+            st = CAST.status()
+            if st.get("running") and not st.get("paused"):
+                CAST.cmd("pause")
+    except Exception:
+        pass  # best effort: the TV is off either way
+
+
 def fetch_roku(tv_id):
+    was_on = (_roku.get(tv_id, (0, {}))[1] or {}).get("power") == "PowerOn"
     try:
         info = roku.info(ROKU_IPS[tv_id])
+        if was_on and info.get("power") != "PowerOn":  # went to standby (the TV's own remote, or the app)
+            threading.Thread(target=on_tv_off, args=(tv_id,), daemon=True).start()
     except (roku.RokuError, OSError):
         info = _roku.get(tv_id, (0, {}))[1]  # a TV that won't talk ECP keeps its last details
     _roku[tv_id] = (time.time(), info)
@@ -923,6 +954,8 @@ def api_roku_key():
         roku.key(ip, k)
     except roku.RokuError as e:
         return jsonify(ok=False, error=str(e)), 502
+    if k == "PowerOff":
+        threading.Thread(target=on_tv_off, args=(request.args.get("target") or "living",), daemon=True).start()
     return jsonify(ok=True)
 
 
