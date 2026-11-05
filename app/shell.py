@@ -29,7 +29,7 @@ BG = "0b0e14"
 VO_ORDER = tuple(v for v in os.environ.get("TVREMOTE_SHELL_VO", "wlshm,gpu").split(",") if v)  # wlshm: plain software drawing; gpu if it won't open
 # ASS colours are BGR
 TEXT, DIM, ACCENT, BAD, WARN = "F6F1EE", "A9978C", "FFB062", "6B6BFF", "47B5FF"
-HEADS = {"idle": ("Ready", ACCENT), "loading": ("Loading", ACCENT), "quality": ("Switching quality", ACCENT), "error": ("Couldn't play", BAD),
+HEADS = {"idle": ("Ready", ACCENT), "loading": ("Loading", ACCENT), "quality": ("Switching quality", ACCENT), "refresh": ("Refreshing the stream", ACCENT), "error": ("Couldn't play", BAD),
          "offline": ("Not live right now", WARN), "ended": ("Stream ended", DIM)}
 PROPS = ("current-vo", "vo-configured", "fullscreen", "osd-width", "osd-height", "pause", "core-idle", "eof-reached",
          "time-pos", "idle-active", "window-minimized")
@@ -68,7 +68,9 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
         if hint:
             lines.append(r"{\fs34\b0\c&H%s&}%s" % (DIM, esc(hint)))
         return r"{\an5\pos(960,540)\bord0\shad0}" + r"\N".join(lines)
-    if kind in ("loading", "quality"):
+    if kind == "refresh":  # a spinning wheel: four quarter-filled circles in turn
+        head = "◐◓◑◒"[dots % 4] + "  " + head
+    elif kind in ("loading", "quality"):
         n = dots % 4
         head += "." * n + r"\h" * (3 - n)  # hard spaces keep the line the same width
     lines = [r"{\fs110\b1\c&H%s&}TV Remote" % TEXT, r"{\fs60\b0\c&H%s&}%s" % (colour, head)]
@@ -200,9 +202,10 @@ class Shell:
                 out.append((a, a + 1, screen("idle", hint=self.hint, now=base + timedelta(seconds=k))))
             return out
         hint = "Pick something else on your phone" if kind in ("ended", "offline", "error") else ""
-        if kind in ("loading", "quality"):  # the dots move for 90 s, then the last frame stays
-            n = int(90 / self.interval)
-            out = [(pos + k * self.interval, pos + (k + 1) * self.interval, screen(kind, self.detail, hint, k)) for k in range(n)]
+        if kind in ("loading", "quality", "refresh"):  # the dots (or wheel) move for 90 s, then the last frame stays
+            step = 0.25 if kind == "refresh" else self.interval
+            n = int(90 / step)
+            out = [(pos + k * step, pos + (k + 1) * step, screen(kind, self.detail, hint, k)) for k in range(n)]
             out[-1] = (out[-1][0], pos + FOREVER, out[-1][2])
             return out
         return [(pos, pos + FOREVER, screen(kind, self.detail, hint))]

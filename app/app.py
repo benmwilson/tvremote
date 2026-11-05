@@ -616,7 +616,7 @@ def api_cmd():
         if not state["url"]:
             return jsonify(ok=False, error="Nothing to restart"), 400
         with lock:
-            start_player(state["url"], data.get("quality") or state["quality"], "quality")
+            start_player(state["url"], data.get("quality") or state["quality"], "quality" if data.get("quality") else "refresh")
         return jsonify(ok=True)
     if action == "chat":
         _chat["pref"] = data.get("value") != "off"

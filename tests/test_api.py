@@ -426,6 +426,14 @@ class ShellFlow(unittest.TestCase):
             c.get("/logout")
             self.assertEqual(c.get("/api/favourites").status_code, 401)
 
+    def test_refresh_has_its_own_screen_and_quality_keeps_its_own(self):
+        server.state.update(url="https://kick.com/chan", quality="1080p60,best")
+        with mock.patch.object(server, "start_player") as sp:
+            self.client.post("/api/cmd", json={"action": "restart"})
+            sp.assert_called_with("https://kick.com/chan", "1080p60,best", "refresh")
+            self.client.post("/api/cmd", json={"action": "restart", "quality": "720p60"})
+            sp.assert_called_with("https://kick.com/chan", "720p60", "quality")
+
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]
         saved = []

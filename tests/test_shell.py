@@ -158,6 +158,13 @@ class QualitySwap(unittest.TestCase):
         s.show("playing")
 
 
+class Refresh(unittest.TestCase):
+    def test_the_refresh_screen_says_refreshing_with_a_spinning_wheel(self):
+        a, b = shell.screen("refresh", "chan", dots=0), shell.screen("refresh", "chan", dots=1)
+        self.assertIn("Refreshing", a)
+        self.assertNotEqual(a, b)
+
+
 class Process(unittest.TestCase):
     def test_start_uses_the_first_output_that_works(self):
         s, popen, sent = make_shell([FakeProc()])
