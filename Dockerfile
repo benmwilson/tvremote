@@ -9,7 +9,7 @@ COPY docker/raspi.sources /etc/apt/sources.list.d/raspi.sources
 COPY docker/raspi.pref /etc/apt/preferences.d/raspi
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      mpv cec-utils v4l-utils wlr-randr python3 python3-venv pipx procps grim \
+      mpv cec-utils v4l-utils wlr-randr python3 python3-venv pipx procps grim openssl \
       libpipewire-0.3-0 pipewire-bin \
     && rm -rf /var/lib/apt/lists/* \
     && apt-cache policy libavcodec61 \

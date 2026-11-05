@@ -43,6 +43,7 @@ import mpvipc
 import roku
 import shell
 import targets
+import tlscallback
 
 try:
     from cast import CastTarget
@@ -1387,6 +1388,36 @@ def favs_order():
     return jsonify(favs)
 
 
+@app.get("/api/kick")
+def kick_state():
+    return jsonify(can_link=kick.can_link(), name=kick.linked())
+
+
+@app.get("/auth/kick/start")
+def kick_start():
+    if not kick.can_link():
+        return Response("Kick login is not set up (KICK_CLIENT_ID, KICK_CLIENT_SECRET and KICK_REDIRECT in .env).", 404)
+    return redirect(kick.link_url(), 303)
+
+
+@app.get("/auth/kick/done")
+def kick_done():
+    """Where the https listener sends the browser back to, with Kick's one-time code."""
+    try:
+        if request.args.get("error"):
+            raise ValueError(request.args["error"])
+        kick.link_finish(request.args.get("code"), request.args.get("state"))
+        return redirect("/?kick=linked", 303)
+    except Exception:  # a bad state, a refused code or a Kick outage: all end the same way for the user
+        return redirect("/?kick=failed", 303)
+
+
+@app.post("/api/kick/unlink")
+def kick_unlink():
+    kick.unlink()
+    return kick_state()
+
+
 @app.delete("/api/favourites")
 def favs_del():
     url = (request.get_json(silent=True) or {}).get("url")
@@ -1412,5 +1443,10 @@ if __name__ == "__main__":
                        favs=lambda: [(f.get("name") or "")[:28] for f in load_favs()][:5])
     if settings["shell"]:
         threading.Thread(target=HOME.start, daemon=True).start()
+    if kick.can_link():
+        try:
+            threading.Thread(target=tlscallback.make_server(kick.REDIRECT, PORT, DATA).serve_forever, daemon=True).start()
+        except Exception as e:  # no openssl or the port is taken: the rest of the app still runs
+            print("Kick login listener not started:", e, flush=True)
     from waitress import serve
     serve(app, host="0.0.0.0", port=PORT, threads=8)
