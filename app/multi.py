@@ -151,21 +151,26 @@ class Wall:
         p = t.get("proc")
         return bool(p and p.poll() is None and t.get("started") == t["url"] and t.get("q_started") == t.get("quality") and t.get("wid") == window_id(self.layout, self.count(), i))
 
-    def _start(self, i, t):
+    def _command(self, i, t):
+        """(command, source, player) for tile i's window. Slow (asking streamlink for the stream's address): never call it under the lock."""
         source, player = self.resolve(t["url"])
         args, width = window_args(self.layout, self.count(), i)
-        sock = _sock(i)
-        try:
-            os.unlink(sock)
-        except OSError:
-            pass
         extra = args + ([] if i in self.sound else ["--mute=yes"]) + ["--no-terminal"]
         if self.volume() is not None:
             extra.append(f"--volume={float(self.volume()):g}")  # the level the main stream has, so switching a tile on is not a jump
-        cmd, _q = self.build(t["url"], quality_for(player, t.get("quality")) or cap(player, width), sock, extra)
+        cmd, _q = self.build(t["url"], quality_for(player, t.get("quality")) or cap(player, width), _sock(i), extra)
+        return cmd, source, player
+
+    def _launch(self, i, t, cmd, source, player):
+        try:
+            os.unlink(_sock(i))
+        except OSError:
+            pass
         log = open(os.path.join(self.log_dir, f"tvremote-tile{i}.log"), "w")
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        t.update(source=source, proc=proc, error=None, wid=window_id(self.layout, self.count(), i), started=t["url"], q_started=t.get("quality"))
+        # hot: mpv plays the stream's own address, so the window can change stream in place (loadfile) instead of being restarted
+        t.update(source=source, proc=proc, error=None, wid=window_id(self.layout, self.count(), i), started=t["url"], q_started=t.get("quality"),
+                 hot=cmd[0] == "mpv" and player == "streamlink")
         threading.Thread(target=self._watch, args=(i, t, proc), daemon=True).start()
 
     def _watch(self, i, t, proc):
@@ -180,23 +185,32 @@ class Wall:
             t["error"] = re.sub(r"^\[[^\]]*\]\s*(ERROR:\s*)?", "", lines[-1])[:120] if lines else "The player stopped."
 
     def start_windows(self, pause=STAGGER):
-        """(Re)start the extra windows that need it, one every `pause` seconds, in the background. A window that is already playing
-        the right stream in the right place is left alone, so a swap only redraws the two streams that change."""
+        """(Re)start the extra windows that need it, each in its own thread so they all begin together (or `pause` seconds apart). A
+        window that is already playing the right stream in the right place is left alone."""
         with self.lock:
             self._gen += 1
             gen = self._gen
-            wanted = [(i, t) for i, t in enumerate(self.extras, start=1) if not self._current(i, t)]
+            wanted = [t for i, t in enumerate(self.extras, start=1) if not self._current(i, t)]
 
-        def go():
-            for k, (i, t) in enumerate(wanted):
-                if k:
-                    time.sleep(pause)
-                with self.lock:
-                    if gen != self._gen or t not in self.extras:
-                        return
-                    self._kill(t)
-                    self._start(self.extras.index(t) + 1, t)
-        threading.Thread(target=go, daemon=True).start()
+        def one(k, t):
+            if k and pause:
+                time.sleep(pause * k)
+            with self.lock:
+                if gen != self._gen or t not in self.extras:
+                    return
+                self._kill(t)
+                i = self.extras.index(t) + 1
+            try:
+                made = self._command(i, t)  # outside the lock: it can take seconds
+            except Exception as e:
+                t["error"] = str(e)[:120]
+                return
+            with self.lock:
+                if gen != self._gen or t not in self.extras:
+                    return
+                self._launch(self.extras.index(t) + 1, t, *made)
+        for k, t in enumerate(wanted):
+            threading.Thread(target=one, args=(k, t), daemon=True).start()
 
     # ---- sound ----
     def set_sound(self, i, on, main_sock):

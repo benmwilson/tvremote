@@ -85,7 +85,7 @@ def target_for(t):
 lock = threading.Lock()
 state = {"proc": None, "url": None, "quality": None, "source": None, "player": None}
 # Several streams on the Pi's screen at once. Tile 0 is the main player above; the others are started by multi.py.
-wall = multi.Wall(lambda url, q, sock, extra: player_cmd(url, q, sock, extra)[:2], lambda url: resolve(url), lambda url: fav_name(url),
+wall = multi.Wall(lambda url, q, sock, extra: player_cmd(url, q, sock, extra, direct=True)[:2], lambda url: resolve(url), lambda url: fav_name(url),
                   volume=lambda: settings.get("volume"))
 _qcache = {}
 _live_cache = {}
@@ -501,7 +501,17 @@ def _stall_monitor(proc):
             mpv(["osd-overlay", 3, "none", ""])
 
 
-def player_cmd(url, quality, sock, extra=(), default_q=None):
+def stream_url(url, q):
+    """The stream's own address (what streamlink would fetch), so mpv can play it directly. A window that plays an address can change
+    stream with one command (loadfile) instead of being closed and opened again."""
+    p = subprocess.run(["streamlink", "--stream-url", url, q], capture_output=True, text=True, timeout=30)
+    out = p.stdout.strip().splitlines()
+    if p.returncode or not out:
+        raise RuntimeError((p.stderr.strip().splitlines() or ["no stream"])[-1][:200])
+    return out[0]
+
+
+def player_cmd(url, quality, sock, extra=(), default_q=None, direct=False):
     """(command, quality, source, player) for one mpv window. `extra` are more mpv arguments (a window name and size);
     default_q is the quality to use when none was asked for (a small window must not pull a 1080p60 stream)."""
     source, player = resolve(url)
@@ -510,7 +520,12 @@ def player_cmd(url, quality, sock, extra=(), default_q=None):
     if player == "streamlink":
         # quality reaches argv: allow only stream names like "1080p60,best" (no leading "-")
         ok = quality and re.fullmatch(r"[a-z0-9_]+(,[a-z0-9_]+)*", quality) and not quality.isdigit()
-        q = quality if ok else SL_DEFAULT
+        q = quality if ok else (default_q if default_q and re.fullmatch(r"[a-z0-9_]+(,[a-z0-9_]+)*", default_q) else SL_DEFAULT)
+        if direct and source != "Twitch":  # Twitch's ad filter lives inside streamlink's own pipe, so Twitch keeps using it
+            try:
+                return ["mpv", ipc, *extra, stream_url(url, q)], q, source, player
+            except Exception as e:  # offline, or no address: the normal way shows the usual "not live" message
+                app.logger.warning("No direct stream address for %s (%s): playing it through streamlink", url, e)
         cmd = ["streamlink", "--player-verbose", "--player", "mpv", "--player-args", " ".join([ipc, *extra])]
         if source == "Twitch":
             cmd.append("--twitch-disable-ads")
@@ -532,11 +547,12 @@ def start_player(url, quality=None, screen_kind="loading"):
     except FileNotFoundError:
         pass
     win, width = wall.main_args()  # while several streams share the screen, this one is a window of its own
-    cmd, q, source, player = player_cmd(url, quality, SOCK, win, cap(resolve(url)[1], width) if width else None)
+    cmd, q, source, player = player_cmd(url, quality, SOCK, win, cap(resolve(url)[1], width) if width else None, direct=bool(width))
     log = open(LOG_FILE, "w")
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log,
                             stderr=subprocess.STDOUT, start_new_session=True)
-    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time(), stalls=0, stall_s=0, wid=wall.main_wid())
+    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time(), stalls=0, stall_s=0, wid=wall.main_wid(),
+                 hot=cmd[0] == "mpv" and player == "streamlink")
     chat_sync()
     threading.Thread(target=_watch, args=(proc,), daemon=True).start()
     if is_channel(url):
@@ -906,12 +922,13 @@ def wall_relayout(main_url=None):
     streams; adding or removing one moves them all). With one stream left the main player goes back to the full screen at the
     quality it had."""
     url = main_url or state["url"]
+    if wall.active():
+        wall.start_windows()  # they work out their stream addresses while the main one does
     with lock:
         p = state["proc"]
         if url != state["url"] or state.get("wid") != wall.main_wid() or not (p and p.poll() is None):
             start_player(url, multi.quality_for(resolve(url)[1], wall.main_quality) if wall.active() else wall.saved_quality, "refresh")
     if wall.active():
-        wall.start_windows()
         screen("playing")  # the names on the background may have changed
 
 
@@ -961,6 +978,48 @@ def wall_later(fn, *args):
     threading.Thread(target=run, daemon=True).start()
 
 
+def swap_job(new_main, old_main, i):
+    """Swap the streams of the main window and extra window i without closing either: both new stream addresses are worked out first,
+    then both windows are told at the same moment. Falls back to restarting the two windows (the wall already holds the new order)."""
+    t = wall.extras[i - 1] if 1 <= i <= len(wall.extras) else None
+    p = state["proc"]
+    if t and p and p.poll() is None and state.get("hot") and t.get("hot") and (t.get("proc") and t["proc"].poll() is None) and t["url"] == old_main:
+        try:
+            rects = multi.tiles(wall.layout, wall.count())
+            q0 = multi.quality_for("streamlink", wall.main_quality) or cap("streamlink", rects[0][2])  # each stream at its new window's size
+            qi = multi.quality_for("streamlink", t.get("quality")) or cap("streamlink", rects[i][2])
+            urls, errs = {}, []
+
+            def get(k, u, q):
+                try:
+                    urls[k] = stream_url(u, q)
+                except Exception as e:
+                    errs.append(e)
+            ts = [threading.Thread(target=get, args=(0, new_main, q0)), threading.Thread(target=get, args=(i, old_main, qi))]
+            for x in ts:
+                x.start()
+            for x in ts:
+                x.join()
+            if not errs:
+                socks = {0: SOCK, i: multi._sock(i)}
+                rs = {}
+                go = [threading.Thread(target=lambda k=k: rs.__setitem__(k, mpvipc.send(socks[k], ["loadfile", urls[k], "replace"]))) for k in socks]
+                for x in go:
+                    x.start()  # both at once
+                for x in go:
+                    x.join()
+                if all(r and r.get("error") == "success" for r in rs.values()):
+                    state.update(url=new_main, source=route(new_main)[0], player=resolve(new_main)[1], quality=q0)
+                    t.update(started=t["url"], source=route(old_main)[0], q_started=t.get("quality"))
+                    for k in socks:  # the windows kept their own mute setting: put it with the streams
+                        mpvipc.send(socks[k], ["set_property", "mute", k not in wall.sound])
+                    screen("playing")
+                    return
+        except Exception as e:
+            app.logger.warning("Swapping in place failed (%s): restarting the two windows", e)
+    wall_relayout(new_main)
+
+
 def _restart_main_quality(label):
     with lock:
         start_player(state["url"], multi.quality_for(resolve(state["url"])[1], label), "quality")
@@ -999,10 +1058,11 @@ def api_wall():
     elif act == "sound":  # switch one stream's sound on or off, the others as they are
         wall.set_sound(i, bool(d.get("on")), SOCK)
     elif act == "swap":
-        new_main = wall.swap(i, state["url"])
+        old_main = state["url"]
+        new_main = wall.swap(i, old_main)
         if not new_main:
             return jsonify(ok=False, error="Nothing to swap"), 400
-        wall_later(wall_relayout, new_main)
+        wall_later(swap_job, new_main, old_main, i)
     elif act == "only":  # back to a single stream, keeping this one (the main stream is tile 0)
         keep = state["url"] if i == 0 else next(iter(t["url"] for k, t in enumerate(wall.extras, start=1) if k == i), None)
         if not keep:
@@ -1027,7 +1087,7 @@ def api_wall():
             wall_later(wall_relayout)
     else:
         return jsonify(ok=False, error="Unknown action"), 400
-    return jsonify(ok=True, wall=wall.status())
+    return jsonify(ok=True, wall=wall_status())
 
 
 def stop_pi():
@@ -1166,7 +1226,7 @@ def pi_status():
     running = prop("pid") is not None
     data = {"running": running, "url": state["url"], "quality": state["quality"],
             "source": state["source"], "streamlink": state["player"] == "streamlink",
-            "wall": wall.status()}  # also while the main window restarts, or the multi-view would vanish for those seconds
+            "wall": wall_status()}  # also while the main window restarts, or the multi-view would vanish for those seconds
     if running:
         for key, name in PROPS.items():
             data[key] = prop(name)
@@ -1799,6 +1859,16 @@ def api_debug():
         versions=versions(), last_error=last_error(), log=log)
 
 
+def wall_status():
+    """The multi-view as the phone sees it: the wall's own state, plus whether each stream is live (so its tile can say LIVE)."""
+    w = wall.status()
+    if w:
+        snap = livewatch.snapshot()
+        for t in w["tiles"]:
+            t["live"] = snap.get(t["url"], {}).get("live")
+    return w
+
+
 def wall_debug():
     """Every window of the multi-view for the debug view: where it goes, what it plays, what mpv says about it. None when not in use."""
     if not wall.active():
@@ -1887,6 +1957,7 @@ def streamer_key(url):
 
 def watched_urls():
     urls = [l["url"] or "" for u in [accounts.OWNER] + accounts.names() for f in load_favs(u) for l in fav_links(f)]  # everyone's: one pass serves all
+    urls += [t["url"] for t in wall.extras]  # the streams on the multi-view screen, so their tiles can say LIVE
     urls += [r.get("url") or "" for r in load_recents()]  # recents too: the multi-view suggests the ones that are live
     if state.get("url"):
         urls.append(state["url"])
