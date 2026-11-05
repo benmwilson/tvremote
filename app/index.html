@@ -545,7 +545,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 <h2 id="tvhead">TV</h2>
 <p class="sub hide" id="tvnoroku" style="margin:6px 4px 0">No TV controls here yet (power, volume, input). In Settings, run the setup wizard again and pick this TV's Roku.</p>
 <div class="card hide" id="tvctl">
-  <div class="row"><button id="tvpower" data-k="PowerOn" aria-pressed="false" aria-label="Turn the TV on"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg></button></div>
+  <div class="row"><button id="tvpower" data-k="PowerOn" aria-pressed="false" aria-label="Turn the TV on" title="Tap to turn the TV on or off. Hold to change what it shows, without touching the TV." style="-webkit-touch-callout:none;-webkit-user-select:none;user-select:none"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg></button></div>
   <div class="row"><button data-k="VolumeDown" aria-label="TV volume down"><svg class="ic" aria-hidden="true"><use href="#i-volume-low"/></svg>&minus;</button>
     <button id="tvmute" data-k="VolumeMute" aria-label="Mute the TV" aria-pressed="false" title="Tap to mute or unmute. The TV doesn't report its mute state, so this shows what was last pressed here. Hold to correct what it shows." style="-webkit-touch-callout:none;-webkit-user-select:none;user-select:none"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg></button>
     <button data-k="VolumeUp" aria-label="TV volume up"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg>+</button></div>
@@ -593,6 +593,9 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
     <h3>TV mute</h3>
     <p class="sub" id="d-mutehint" style="margin:0 0 4px"></p>
     <div class="dbmute"><button id="muteyes" type="button">TV is muted</button><button id="muteno" type="button">Sound is on</button></div>
+    <h3>TV power</h3>
+    <p class="sub" id="d-powerhint" style="margin:0 0 4px"></p>
+    <div class="dbmute"><button id="pwon" type="button">TV is on</button><button id="pwoff" type="button">TV is off</button></div>
     <h3>Player</h3><table id="d-player"></table>
     <h3>mpv</h3><table id="d-mpv"></table>
     <h3>Versions</h3><table id="d-ver"></table>
@@ -1667,6 +1670,8 @@ $('refreshTvs').onclick = async () => {
 };
 
 // off = a Roku that reports standby / screen off, or one that doesn't answer at all (powered down at the wall)
+const pwOver = {};  // per TV: a hand-set power state for the button {off, base: what the TV reported at the time}
+const shownOff = c => { const o = pwOver[c.id]; if (o && o.base !== tvOff(c)) delete pwOver[c.id]; return pwOver[c.id] ? pwOver[c.id].off : tvOff(c); };
 const tvOff = c => !!c.roku && (c.reachable === false || (!!c.power && c.power !== 'PowerOn'));
 function tvInfo() {  // the TV details in the One TV view come from the same cached card
   const cur = targets.find(t => t.id === target) || {};
@@ -1677,11 +1682,13 @@ function tvInfo() {  // the TV details in the One TV view come from the same cac
   $('tvoffsub').textContent = cur.reachable === false ? "It isn't answering. Check it has power, then tap Turn on."
     : st.running ? 'The stream keeps playing behind the black screen.' : 'Turn it on to watch. Playing something also wakes it.';
   accent();
-  const pb = $('tvpower'), isOff = tvOff(cur);  // one toggle: shows what the TV reports, and a tap does the opposite
+  const pb = $('tvpower'), isOff = shownOff(cur);  // one toggle: shows what the TV reports, and a tap does the opposite
   pb.dataset.k = isOff ? 'PowerOn' : 'PowerOff';
   pb.classList.toggle('isoff', isOff);
   pb.setAttribute('aria-pressed', String(!isOff));
   pb.setAttribute('aria-label', isOff ? 'Turn the TV on' : 'Turn the TV off');
+  $('pwon').setAttribute('aria-pressed', String(!isOff)); $('pwoff').setAttribute('aria-pressed', String(isOff));
+  $('d-powerhint').textContent = 'The button follows what the TV reports. It shows ' + (cur.name || 'this TV') + ' as ' + (isOff ? 'off' : 'on') + (pwOver[cur.id] ? ' (set by hand; it goes back to the TV’s own report when that changes)' : '') + '. Set it here to test. The TV itself is not touched.';
   if (pb.dataset.shown !== String(isOff) + (cur.reachable === false)) {  // redraw only on a change, so the spinner isn't wiped
     pb.dataset.shown = String(isOff) + (cur.reachable === false);
     setBtn(pb, 'power', cur.reachable === false ? 'No answer' : isOff ? 'Off' : 'On');
@@ -1752,6 +1759,7 @@ document.addEventListener('click', async e => {
   if (!b) return;
   const k = b.dataset.k;
   if (b.id === 'tvmute' && muteHeld) { muteHeld = false; return; }  // that was a press-and-hold (a correction), not a tap
+  if (b.id === 'tvpower') { if (pwHeld) { pwHeld = false; return; } delete pwOver[target]; }  // a tap acts on what is shown, then waits for the TV
   const pw = b.id === 'tvpower';  // the power button spins until the TV itself reports the new state (or 30 s)
   const hold = pw ? 0 : k === 'PowerOn' ? 4000 : /^Input/.test(k) ? 2500 : 0;  // the TV takes a moment to wake or change input
   const until = pw ? () => tvOff(targets.find(t => t.id === target) || {}) !== (k === 'PowerOn') : null;
@@ -1764,6 +1772,23 @@ document.addEventListener('click', async e => {
     followTv();
   }
 });
+// Power button: press and hold flips what it shows without touching the TV (same as the mute button; Debug has the same switch).
+let pwHold = null, pwHeld = false;
+const curTv = () => targets.find(t => t.id === target) || {};
+const setPwOver = off => { const c = curTv(); pwOver[c.id] = {off, base: tvOff(c)}; tvInfo(); };
+$('tvpower').addEventListener('pointerdown', () => {
+  pwHeld = false;
+  pwHold = setTimeout(() => {
+    pwHeld = true;
+    setPwOver(!shownOff(curTv()));
+    err('Now showing the TV as ' + (shownOff(curTv()) ? 'off' : 'on') + '. The TV itself was not touched.');
+    setTimeout(() => { if ($('err').textContent.startsWith('Now showing the TV')) err(''); }, 3000);
+  }, 700);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('tvpower').addEventListener(ev, () => clearTimeout(pwHold)));
+$('tvpower').addEventListener('contextmenu', e => e.preventDefault());
+$('pwon').onclick = () => setPwOver(false);
+$('pwoff').onclick = () => setPwOver(true);
 const tvMuted = {};  // per TV: what we last did to it (true = muted); a guess, because the TV can't report it
 // Press and hold the button to flip what it shows without touching the TV: for when someone used the physical remote. Open to everyone,
 // unlike Debug (which has the same correction but is for admins only).
