@@ -33,6 +33,10 @@ Route by URL host. Keep the routing in one table in app.py so new sites are one 
 ```
 app/app.py              Flask + waitress backend (draft exists, review and finish)
 app/index.html          single-file phone-first remote UI
+app/cast.py             Chromecast target (pychromecast: discovery, play, controls, status)
+app/hlsproxy.py         optional Pi-side HLS relay for the Chromecast (token-guarded)
+app/roku.py             Roku ECP control (power, volume, input, keys)
+app/chat.py             Twitch chat overlay drawn on the Pi's screen
 config/mpv.conf         baked into the image at /home/app/.config/mpv/mpv.conf
 docker/entrypoint.sh    set display to 1080p60, register CEC name, start the app
 Dockerfile
@@ -204,6 +208,15 @@ Also: in Safari, open `http://<pi-ip>:8765` → Share → Add to Home Screen ("T
 
 ### Tests (bedroom TV on the Chromecast input)
 Kick, Twitch, YouTube video, YouTube live, direct mp4 to the Chromecast; every control on each; switching targets mid-session doesn't break the other TV; the Chromecast is found again after a Pi reboot and a Chromecast reboot. Tell Ben what to look for on the bedroom TV for each.
+
+## Roadmap: all-in-one system (Ben's direction)
+Goal: anyone can run the container on a Pi and get a remote that finds and controls their TVs. The Pi's own HDMI output is optional.
+- **Targets become a discovered list**, not hard-coded "living"/"bedroom": the Pi's HDMI screen (when a display is present), Chromecasts (mDNS), Roku TVs (SSDP/ECP), maybe AirPlay (both Rokus advertise it). Each target has a user-chosen name, saved in `/data`.
+- **Setup wizard** in the web UI: scan the network, show what was found, name each device, pick the HDMI input to switch to, test it (play a short clip / press a key), save. Roku needs "Control by mobile apps → Permissive" and the wizard should say so and detect the 403.
+- **Headless Pi** (no display): skip the mpv target; Chromecast and Roku targets still work.
+- **No addresses in the repo**: discovery and `/data` config replace the `.env` entries (`ROKU_*`, `INPUT_*`).
+- Before this: settle Kick-on-Chromecast quality (soak-test direct vs relay), finish the per-source bedroom tests, then refactor `tgt()` and the picker around a target registry.
+- Open idea: chat overlay for the Chromecast via DashCast or a custom receiver (the default receiver can't draw over video).
 
 ## Conventions
 - Canadian spelling in UI text (favourites, colour).
