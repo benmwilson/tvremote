@@ -291,6 +291,21 @@ def mpv(cmd, timeout=1.0):
     return mpvipc.send(SOCK, cmd, timeout)
 
 
+def sprop(sock, name):
+    """One property of the mpv on `sock`, or None."""
+    r = mpvipc.send(sock, ["get_property", name])
+    return r.get("data") if r and r.get("error") == "success" else None
+
+
+def sel_info():
+    """(url, source, player, socket) of the stream the remote controls: the main one, or the selected one while several are on the screen."""
+    if wall.active() and wall.selected:
+        t = wall.extras[wall.selected - 1]
+        source, player = resolve(t["url"])
+        return t["url"], t.get("source") or source, player, wall.sock(wall.selected, SOCK)
+    return state["url"], state["source"], state["player"], SOCK
+
+
 def prop(name):
     r = mpv(["get_property", name])
     if r and r.get("error") == "success":
@@ -907,9 +922,10 @@ def api_cmd():
         rs = [mpvipc.send(wall.sock(k, SOCK), cmd) for k in (range(wall.count()) if action.startswith("volume") else sorted(wall.sound))]
         r = rs[0] if rs else {"error": "success"}  # nothing has sound on: nothing to change
     else:
-        r = mpv(cmd)
+        sock = sel_info()[3]
+        r = mpv(cmd) if sock == SOCK else mpvipc.send(sock, cmd)  # pause, seek...: the stream the card shows
     ok = bool(r and r.get("error") == "success")
-    if ok and action == "pause":
+    if ok and action == "pause" and sel_info()[3] == SOCK:
         osd_paused(bool(prop("pause")))
     if ok and action in ("volume", "volume_delta") and prop("volume") is not None:
         settings["volume"] = prop("volume")
@@ -1037,7 +1053,7 @@ def _restart_main_quality(label):
 
 @app.post("/api/wall")
 def api_wall():
-    """Several streams on the living-room TV: {action: add|remove|layout|sound|swap|only|quality|clear, url, site, i, layout, quality}."""
+    """Several streams on the living-room TV: {action: add|remove|layout|sound|select|swap|only|quality|clear, url, site, i, layout, quality}."""
     if tgt():
         return jsonify(ok=False, error="Only the living-room TV can show several streams at once."), 400
     d = request.get_json(silent=True) or {}
@@ -1073,6 +1089,8 @@ def api_wall():
         if not new_main:
             return jsonify(ok=False, error="Nothing to swap"), 400
         wall_later(swap_job, new_main, old_main, i)
+    elif act == "select":  # which stream the card controls: nothing on the screen changes
+        wall.select(i)
     elif act == "retry":  # a stream that went offline may be back
         if i == 0:
             state["wid"] = "retry"  # makes the next change restart the main window
@@ -1239,34 +1257,40 @@ def api_status():
 
 
 def pi_status():
-    """Status of the Pi's own player (mpv); also feeds the living-room card."""
-    running = prop("pid") is not None
-    data = {"running": running, "url": state["url"], "quality": state["quality"],
-            "source": state["source"], "streamlink": state["player"] == "streamlink",
+    """Status of the stream the remote controls (the main player, or the selected one while several are on the screen); also feeds the living-room card."""
+    url, source, player, sock = sel_info()
+    P = prop if sock == SOCK else (lambda n: sprop(sock, n))  # the main player, or the selected window
+    running = P("pid") is not None
+    data = {"running": running, "url": url, "quality": state["quality"] if sock == SOCK else None, "source": source,
+            "streamlink": player == "streamlink",
             "wall": wall_status()}  # also while the main window restarts, or the multi-view would vanish for those seconds
     if running:
         for key, name in PROPS.items():
-            data[key] = prop(name)
-        if state["player"] == "streamlink":
-            data["title"] = display_title(state["url"])
+            data[key] = P(name)
+        if player == "streamlink":
+            data["title"] = display_title(url)
         data["stalls"], data["stall_s"] = state.get("stalls", 0), round(state.get("stall_s", 0))
-        facts = livewatch.snapshot().get(state["url"] or "", {})
-        data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(state["url"] or "")
-        data["chat_ok"] = state["source"] == "Twitch" and bool(chat.channel_of(state["url"] or ""))
+        facts = livewatch.snapshot().get(url or "", {})
+        data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(url or "")
+        data["chat_ok"] = source == "Twitch" and bool(chat.channel_of(url or ""))
         data["chat"] = bool(_chat["obj"])
         if wall.active() and 0 not in wall.sound:  # the main stream is silent: the mute button shows the state of those that are not
             if not wall.sound:
                 data["muted"] = True
             else:
-                r = mpvipc.send(wall.sock(min(wall.sound), SOCK), ["get_property", "mute"])
-                if r and r.get("error") == "success":
-                    data["muted"] = r.get("data")
+                m = sprop(wall.sock(min(wall.sound), SOCK), "mute")
+                if m is not None:
+                    data["muted"] = m
         # live = streamlink, or a stream with no duration
-        data["live"] = state["player"] == "streamlink" or data["duration"] is None
+        data["live"] = player == "streamlink" or data["duration"] is None
     else:
         p = state["proc"]
         data["starting"] = bool(p and p.poll() is None)
-        if state["url"] and not data["starting"]:
+        if wall.active() and wall.selected:  # a window of the multi-view that ended by itself
+            err_ = wall.extras[wall.selected - 1].get("error")
+            if err_:
+                data["error"] = err_
+        elif state["url"] and not data["starting"]:
             data["error"] = describe_error(last_error())
     return data
 
@@ -1883,6 +1907,10 @@ def wall_status():
         snap = livewatch.snapshot()
         for t in w["tiles"]:
             t["live"] = snap.get(t["url"], {}).get("live")
+        # tile 0 is described like the others, so the phone can list every stream the same way
+        w["main"] = {"i": 0, "url": state["url"], "source": state["source"], "name": fav_name(state["url"] or ""),
+                     "live": snap.get(state["url"] or "", {}).get("live"), "quality": w["main_quality"],
+                     "error": "Went offline" if state.get("ended") else None}
     return w
 
 

@@ -105,6 +105,7 @@ class Wall:
         self.on_change = lambda: None  # called when a window ends by itself (a stream went offline), so the screen can say so
         self.layout = None
         self.extras = []  # tiles 1..: {"url", "source", "proc", "error"}
+        self.selected = 0  # the stream the remote's card controls (title, pause, favourite, quality): not tied to any window's place
         self.sound = {0}  # the tiles with sound on: the main stream only, to start with. Any number can be switched on
         self.main_quality = None  # the main tile's picked label (None = Auto)
         self.saved_quality = None  # what the main stream was set to before the wall, put back when it ends
@@ -153,7 +154,7 @@ class Wall:
     def clear(self):
         with self.lock:
             self.stop_windows()
-            self.extras, self.layout, self.sound, self.main_quality = [], None, {0}, None
+            self.extras, self.layout, self.sound, self.main_quality, self.selected = [], None, {0}, None, 0
 
     def _current(self, i, t):
         p = t.get("proc")
@@ -247,8 +248,15 @@ class Wall:
             if 1 <= i <= len(self.extras):
                 self._kill(self.extras.pop(i - 1))
                 self.sound = {k if k < i else k - 1 for k in self.sound if k != i}  # the tiles after it move up one
+                self.selected = 0 if self.selected == i else self.selected - 1 if self.selected > i else self.selected
             if not self.extras:
                 self.layout = None
+
+    def select(self, i):
+        """The card controls tile i from now on. No window changes."""
+        with self.lock:
+            if 0 <= i < self.count():
+                self.selected = i
 
     def retry(self, i):
         """Try an extra window again (its stream may be back): forget the failure, then start_windows() restarts it."""
@@ -264,6 +272,7 @@ class Wall:
             t = self.extras[i - 1]
             t["url"], new_main = main_url, t["url"]
             t["quality"], self.main_quality = self.main_quality, t.get("quality")  # a picked quality goes with its stream
+            self.selected = i if self.selected == 0 else 0 if self.selected == i else self.selected  # the selection follows the stream
             a, b = 0 in self.sound, i in self.sound  # and so does the sound
             self.sound = (self.sound - {0, i}) | ({i} if a else set()) | ({0} if b else set())
             t["source"] = self.resolve(main_url)[0]
@@ -277,4 +286,4 @@ class Wall:
                        "running": bool(t.get("proc") and t["proc"].poll() is None), "error": t.get("error"),
                        "quality": t.get("quality")}
                       for i, t in enumerate(self.extras, start=1)]
-            return {"layout": self.layout, "sound": sorted(self.sound), "tiles": tiles_, "max": MAX_TILES, "main_quality": self.main_quality}
+            return {"layout": self.layout, "sound": sorted(self.sound), "selected": self.selected, "tiles": tiles_, "max": MAX_TILES, "main_quality": self.main_quality}
