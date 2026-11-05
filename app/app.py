@@ -165,7 +165,7 @@ LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta
 form{width:min(340px,86vw);display:grid;gap:14px}h1{margin:0 0 6px;font-size:28px}
 input,button{font:inherit;min-height:52px;border-radius:14px;border:0;padding:0 16px;box-sizing:border-box;width:100%}
 input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em;margin:0}</style></head>
-<body><form method="post" action="/login"><h1>TV Remote</h1>
+<body><form method="post" action="/login"><svg width="72" height="72" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="24" fill="#62b0ff"/><path d="M38 28 74 50 38 72Z" fill="#0b0e14" stroke="#0b0e14" stroke-width="8" stroke-linejoin="round"/></svg><h1>TV Remote</h1>
 <input type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password" autofocus required>
 <input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button></form></body></html>"""
 
@@ -575,6 +575,11 @@ def fav_name(url):
 @app.get("/share")
 def index():
     return send_from_directory(BASE, "index.html", max_age=0)
+
+
+@app.get("/logo.svg")
+def logo():
+    return send_from_directory(BASE, "logo.svg", max_age=86400)
 
 
 @app.get("/manifest.json")

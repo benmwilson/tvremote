@@ -21,6 +21,13 @@ from chat import _esc as esc
 
 SOCK = "/tmp/tvremote-shell.sock"
 LOG = "/tmp/tvremote-shell.log"
+# The logo as ASS drawings (a rounded square, then the play triangle), 100 units wide, shown at 150% above the text
+LOGO = (r"{\an7\pos(885,130)\fscx150\fscy150\bord0\shad0\p1\1c&HFFB062&}"
+        "m 24 0 l 76 0 b 90 0 100 10 100 24 l 100 76 b 100 90 90 100 76 100 l 24 100 b 10 100 0 90 0 76 l 0 24 b 0 10 10 0 24 0"
+        r"{\p0}")
+LOGO_PLAY = (r"{\an7\pos(885,130)\fscx150\fscy150\bord6\shad0\p1\1c&H140E0B&\3c&H140E0B&}"
+             r"m 38 28 l 74 50 l 38 72"
+             r"{\p0}")
 ASS_FILES = ("/tmp/tvremote-shell-a.ass", "/tmp/tvremote-shell-b.ass")  # alternate, so a new one loads before the old goes
 IDLE_SPAN = 300  # seconds of clock written ahead; the file is renewed a little before it runs out
 FOREVER = 3 * 86400  # a still screen stays up for days of video time
@@ -67,7 +74,7 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
                  r"{\fs60\b1\c&H%s&}TV Remote   {\c&H%s&}%s" % (TEXT, colour, head)]
         if hint:
             lines.append(r"{\fs34\b0\c&H%s&}%s" % (DIM, esc(hint)))
-        return r"{\an5\pos(960,540)\bord0\shad0}" + r"\N".join(lines)
+        return r"{\an5\pos(960,620)\bord0\shad0}" + r"\N".join(lines)
     if kind == "refresh":  # a spinning wheel: four quarter-filled circles in turn
         head = "◐◓◑◒"[dots % 4] + "  " + head
     elif kind in ("loading", "quality"):
@@ -78,7 +85,7 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
         lines.append(r"{\fs44\c&H%s&}%s" % (TEXT, esc(detail)))
     if hint:
         lines.append(r"{\fs34\c&H%s&}%s" % (DIM, esc(hint)))
-    return r"{\an5\pos(960,540)\bord0\shad0}" + r"\N".join(lines)
+    return r"{\an5\pos(960,620)\bord0\shad0}" + r"\N".join(lines)
 
 
 def stamp(sec):
@@ -97,7 +104,11 @@ def ass_file(events):
             "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
             "Style: Default,DejaVu Sans,60,&H00F6F1EE,&H00F6F1EE,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n\n"
             "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
-    return head + "".join(f"Dialogue: 0,{stamp(a)},{stamp(b)},Default,,0,0,0,,{t}\n" for a, b, t in events)
+    body = "".join(f"Dialogue: 0,{stamp(a)},{stamp(b)},Default,,0,0,0,,{t}\n" for a, b, t in events)
+    if events:  # the logo is its own pair of events spanning the file, so it never flickers when the text changes
+        span = f"{stamp(min(e[0] for e in events))},{stamp(max(e[1] for e in events))}"
+        body += f"Dialogue: 0,{span},Default,,0,0,0,,{LOGO}\nDialogue: 1,{span},Default,,0,0,0,,{LOGO_PLAY}\n"
+    return head + body
 
 
 def write_file(path, data):
