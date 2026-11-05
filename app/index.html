@@ -231,6 +231,12 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 
 .s-steps{display:flex;gap:6px;justify-content:center;margin:14px 0 6px}.s-steps i{width:34px;height:4px;border-radius:2px;background:var(--line)}.s-steps i.on{background:var(--tv)}
 #view-setup .card{margin-top:10px}.s-err{color:#ff6b6b;min-height:1.2em;margin:0}
+
+#adminarea .card+.card,#adminarea .card+.s-wide,#adminarea .s-wide+.card{margin-top:10px}
+.s-cap{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:600;margin:0 0 6px}
+.s-cap+.s-row{padding-top:6px}
+#view-settings input::placeholder{color:var(--dim);opacity:.9}
+.s-out+.sub{margin-top:8px}
 </style>
 </head>
 <body>
@@ -296,6 +302,15 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <section id="view-setup" class="hide">
   <div class="s-steps" id="setupdots" aria-hidden="true"><i></i><i></i><i></i></div>
   <p class="sub" id="setupcount" style="text-align:center"></p>
+  <div id="setup0" class="card hide">
+    <h2 style="margin:0 0 6px">Who owns this install?</h2>
+    <p class="sub">This install was set up before owners existed. Only the owner can change other admins. To make your account (<b id="claimwho"></b>) the owner, enter the setup code from the Pi's log (<code>docker logs tvremote</code>). Favourites and the Kick link made before accounts existed become yours.</p>
+    <form id="claimform" class="s-form" style="margin-top:12px">
+      <input id="claimcode" placeholder="Setup code" autocapitalize="none" autocomplete="off" aria-label="Setup code">
+      <p class="sub s-err" id="claimerr" role="alert"></p>
+      <button class="go">Make me the owner</button>
+    </form>
+  </div>
   <div id="setup1" class="card hide">
     <h2 style="margin:0 0 6px">Create your admin account</h2>
     <p class="sub" id="setup1text"></p>
@@ -372,7 +387,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
         <option value="1">Access lasts 1 hour</option><option value="24" selected>Access lasts 1 day</option>
         <option value="168">Access lasts 7 days</option><option value="720">Access lasts 30 days</option></select>
       <button class="go" id="invmake">Create a one-time link</button>
-      <div id="invout" class="hide s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button">Copy</button></div>
+      <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. It is shown only now, so copy it before you leave this page.</p>
+        <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button">Copy</button></div></div>
       <p class="sub">A guest can play things and control the TVs. They can't change favourites, link accounts or see settings. Each link works once, and must be opened within 2 days.</p>
     </div>
     <div class="card hide" id="guests"></div>
@@ -963,7 +979,7 @@ function personRow(u) {
   const mine = u.name === me.user || (u.owner && me.owner);
   const canAct = !u.owner && !u.founder && !mine && (me.owner || u.role !== 'admin');
   const facts = [u.favs + (u.favs === 1 ? ' favourite' : ' favourites'), u.last_login ? 'logged in ' + seen(u.last_login) : 'never logged in'].join(' · ');
-  const lastDid = u.last ? u.last.text + ' · ' + ago(u.last.ts) : null;
+  const lastDid = u.last && u.last.text !== 'Logged in' ? u.last.text + ' · ' + ago(u.last.ts) : null;
   const row = mk('div', {class: 's-row'},
     mk('div', {class: 'avatar', 'aria-hidden': 'true'}, u.name.slice(0, 1)),
     mk('div', {class: 'grow'}, mk('b', {}, u.name), ' ', mk('span', {class: 'pill ' + (u.owner || u.founder ? 'owner' : u.role)}, u.owner || u.founder ? 'owner' : u.role),
@@ -1037,7 +1053,7 @@ function renderAccess() {
       mk('div', {class: 'grow'}, mk('b', {}, u.label || 'Guest link'), ' ', mk('span', {class: 'pill'}, u.ended ? 'ended' : 'revoked'),
         mk('span', {class: 'sub'}, 'Opened ' + ago(u.opened) + ' · ' + u.hours + ' h of access'))))];
   $('guests').classList.toggle('hide', !rows.length);
-  $('guests').replaceChildren(...rows);
+  $('guests').replaceChildren(mk('div', {class: 's-cap'}, 'Active and recent links'), ...rows);
 }
 async function loadPeople() {
   const r = await fetch('/api/accounts').then(x => x.json()).catch(() => ({}));
@@ -1078,7 +1094,10 @@ loadAccounts();
 // ---- setup wizard: the admin account first ----
 let setupStep = 1, setupInfo = {}, setupNeeded = false;  // while the wizard is unfinished it is the only page (no Settings, no TVs)
 function renderSetup() {
-  [1, 2, 3].forEach(n => $('setup' + n).classList.toggle('hide', n !== setupStep));
+  const claim = setupStep === 1 && setupInfo.has_admin && setupInfo.needs_owner;
+  [1, 2, 3].forEach(n => $('setup' + n).classList.toggle('hide', n !== setupStep || (n === 1 && claim)));
+  $('setup0').classList.toggle('hide', !claim);
+  if (claim) $('claimwho').textContent = setupInfo.user || '';
   [...$('setupdots').children].forEach((d, i) => d.classList.toggle('on', i < setupStep));
   $('setupcount').textContent = 'Step ' + setupStep + ' of 3';
   if (setupStep === 1) {
@@ -1095,7 +1114,7 @@ function renderSetup() {
 }
 async function openSetup() {
   setupInfo = await fetch('/api/setup').then(r => r.json()).catch(() => ({}));
-  setupStep = setupInfo.has_admin ? 2 : 1;
+  setupStep = setupInfo.has_admin && !setupInfo.needs_owner ? 2 : 1;
   renderSetup();
 }
 $('setupform').onsubmit = async e => {
@@ -1108,6 +1127,15 @@ $('setupform').onsubmit = async e => {
   if (r.ok === false) { $('suerr').textContent = r.error || 'That didn’t work.'; return; }
   setupInfo = {...setupInfo, has_admin: true, created: r.name}; $('supw').value = ''; $('supw2').value = '';
   setupStep = 2; renderSetup(); loadAccounts();
+};
+$('claimform').onsubmit = async e => {
+  e.preventDefault();
+  $('claimerr').textContent = '';
+  const r = await busy($('claimform').querySelector('button'), () => fetch('/api/setup/claim', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({code: $('claimcode').value})}).then(x => x.json()));
+  if (!r) { $('claimerr').textContent = 'Couldn\u2019t reach the Pi.'; return; }
+  if (r.ok === false) { $('claimerr').textContent = r.error || 'That didn\u2019t work.'; return; }
+  setupInfo = {...setupInfo, needs_owner: false}; $('claimcode').value = ''; setupStep = 2; renderSetup(); loadAccounts();
 };
 $('sunext2').onclick = () => { setupStep = 3; renderSetup(); };
 $('sufinish').onclick = async () => {

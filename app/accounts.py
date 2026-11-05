@@ -68,19 +68,16 @@ def founder_name():
     return None
 
 
-def ensure_founder():
-    """There is no .env password to fall back on, so someone must be the owner: if nobody is, the earliest admin becomes it.
-    Returns that account's name when it just happened."""
+def claim_founder(name):
+    """Make `name` (an admin) the owner, if nobody is. Only called after the operator has proved they can read the Pi's log
+    (the setup code), never automatically. True when it happened."""
     with _lock:
         d = _load()
-        if any(u.get("founder") for u in d.values()):
-            return None
-        admins = sorted((u.get("created") or 0, n) for n, u in d.items() if u.get("role") == "admin")
-        if not admins:
-            return None
-        d[admins[0][1]]["founder"] = True
+        if any(u.get("founder") for u in d.values()) or d.get(name, {}).get("role") != "admin":
+            return False
+        d[name]["founder"] = True
         _write(d)
-        return admins[0][1]
+        return True
 
 
 def listing():

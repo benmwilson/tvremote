@@ -88,10 +88,15 @@ def guard():
     if request.path == "/play" and request.headers.get("Sec-Fetch-Site") == "cross-site":
         return Response("Cross-site request blocked", 403)
     if not auth_required():
-        # A fresh install has no login yet, so nothing may change until the setup wizard has made the first admin
-        if (request.method not in ("GET", "HEAD") or request.path == "/play") and request.path != "/api/setup/admin":
-            return Response(json.dumps({"ok": False, "error": "Finish the setup first."}), 403, mimetype="application/json")
-        return None
+        # Nobody can log in until setup has made the first admin, and an upgrade's older data must not be readable meanwhile
+        # either: only the wizard's own page and calls (and the container's health check) work.
+        if ((request.method in ("GET", "HEAD") and (request.path in SETUP_GET or re.fullmatch(r"/icon-\d+\.png", request.path)))
+                or (request.method == "POST" and request.path == "/api/setup/admin")
+                or (request.remote_addr == "127.0.0.1" and request.path == "/api/status")):
+            return None
+        if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):
+            return redirect("/", 303)
+        return Response(json.dumps({"ok": False, "error": "Finish the setup first."}), 403, mimetype="application/json")
     if re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
@@ -122,6 +127,7 @@ def guard():
 
 
 SESSION_DAYS = 180
+SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/setup"}  # what works before the first admin exists
 
 
 # What a one-time-link guest may do: use the TVs and see the pages that show them. Everything else (including any route added
@@ -1898,6 +1904,20 @@ def host_ok():
         return h == "localhost" or "." not in h or h.endswith((".local", ".lan", ".home.arpa", ".localdomain"))
 
 
+def setup_code_error(data):
+    """None when the host, the throttle and the setup code (printed in the container's log) all pass; otherwise the response to send."""
+    ip = request.remote_addr
+    if not host_ok():
+        return jsonify(ok=False, error="Open the remote by its IP address (or a .local name) to set it up."), 403
+    if _throttled(ip, "setup") or len(_recent("setup")) >= 10:  # per address, and 10 wrong guesses from anywhere stop everyone for a while
+        return too_many()
+    if not hmac.compare_digest(str(data.get("code") or "").strip().lower().encode(), SETUP_CODE.encode()):
+        _note_fail(ip, "setup")
+        _fails.setdefault("setup", []).append(time.time())
+        return jsonify(ok=False, error="That setup code isn't right. It is printed in the container's log: docker logs tvremote"), 403
+    return None
+
+
 def adopt_open_data(name):
     """The favourites and Kick link made before accounts existed belong to the owner: give them to the founder (once)."""
     for old, new in ((FAV_FILE, fav_file(name)), (kick._path(accounts.OWNER), kick._path(name))):
@@ -1929,8 +1949,9 @@ def setup_state():
     if not fresh and accounts.role(g.user) != "admin":
         return jsonify(needed=False)
     has_admin = any(u["role"] == "admin" for u in accounts.listing())
-    return jsonify(needed=not setup_done(), done=setup_done(), fresh=fresh, has_admin=has_admin,
-                   user=g.user if not fresh else None, needs_code=fresh)
+    needs_owner = has_admin and not fresh and not accounts.founder_name()  # an install from before owners: an admin has to claim it
+    return jsonify(needed=not setup_done() or needs_owner, done=setup_done(), fresh=fresh, has_admin=has_admin, needs_owner=needs_owner,
+                   user=g.user if not fresh else None, needs_code=fresh or needs_owner)
 
 
 @app.post("/api/setup/admin")
@@ -1940,15 +1961,9 @@ def setup_admin():
     with _setup_lock:
         fresh = not auth_required()
         if fresh:
-            ip = request.remote_addr
-            if not host_ok():
-                return jsonify(ok=False, error="Open the remote by its IP address (or a .local name) to set it up."), 403
-            if _throttled(ip, "setup") or len(_recent("setup")) >= 10:  # per address, and 10 wrong guesses from anywhere stop everyone for a while
-                return too_many()
-            if not hmac.compare_digest(str(data.get("code") or "").strip().lower().encode(), SETUP_CODE.encode()):
-                _note_fail(ip, "setup")
-                _fails.setdefault("setup", []).append(time.time())
-                return jsonify(ok=False, error="That setup code isn't right. It is printed in the container's log: docker logs tvremote"), 403
+            err = setup_code_error(data)
+            if err:
+                return err
         else:
             admin_only()
             if not accounts.is_owner(g.user):
@@ -1965,6 +1980,22 @@ def setup_admin():
         r.set_cookie("tv_auth", new_session(name), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
         activity.note(name, "Set up the admin account")
     return r
+
+
+@app.post("/api/setup/claim")
+def setup_claim():
+    """An install from before owners existed has no owner. An admin who can read the Pi's log (the setup code) claims it explicitly;
+    the favourites and Kick link made before accounts existed then become theirs."""
+    admin_only()
+    if accounts.founder_name():
+        return jsonify(ok=False, error="This install already has an owner."), 400
+    err = setup_code_error(request.get_json(silent=True) or {})
+    if err:
+        return err
+    if not accounts.claim_founder(g.user):
+        return jsonify(ok=False, error="Only an admin can be the owner."), 400
+    adopt_open_data(g.user)
+    return jsonify(ok=True, name=g.user)
 
 
 @app.post("/api/setup/finish")
@@ -2006,10 +2037,9 @@ if __name__ == "__main__":
             threading.Thread(target=tlscallback.make_server(kick.REDIRECT, PORT, DATA).serve_forever, daemon=True).start()
         except Exception as e:  # no openssl or the port is taken: the rest of the app still runs
             print("Kick login listener not started:", e, flush=True)
-    founder = accounts.ensure_founder()  # no .env password any more: somebody has to be the owner
-    if founder:
-        adopt_open_data(founder)
     if not auth_required():
         print(f"FIRST RUN: open the remote and enter this setup code to create the admin account: {SETUP_CODE}", flush=True)
+    elif not accounts.founder_name():
+        print(f"OWNER NEEDED: log in as an admin and enter this setup code in the setup wizard to become the owner: {SETUP_CODE}", flush=True)
     from waitress import serve
     serve(app, host="0.0.0.0", port=PORT, threads=8)

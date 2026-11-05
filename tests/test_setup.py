@@ -40,10 +40,16 @@ class FreshInstall(SetupBase):
         c = server.app.test_client()
         st = c.get("/api/setup").get_json()
         self.assertEqual((st["needed"], st["fresh"], st["has_admin"], st["needs_code"]), (True, True, False, True))
-        self.assertEqual(c.get("/api/favourites").status_code, 200)  # looking is fine
-        for method, path in (("post", "/api/accounts"), ("post", "/api/invites"), ("post", "/api/favourites"), ("post", "/api/cmd"),
-                             ("post", "/api/setup/finish"), ("get", "/play")):
+        for path in ("/", "/api/auth", "/api/setup"):
+            self.assertEqual(c.get(path).status_code, 200, path)  # the wizard's own pages
+        # everything else is shut, reading as well as changing (an upgrade's older data must not be readable meanwhile)
+        for method, path in (("get", "/api/favourites"), ("get", "/api/screen.png"), ("get", "/api/targets"), ("get", "/auth/kick/start"),
+                             ("get", "/play"), ("get", "/api/access"), ("post", "/api/accounts"), ("post", "/api/invites"),
+                             ("post", "/api/favourites"), ("post", "/api/cmd"), ("post", "/api/setup/finish"), ("post", "/api/setup/claim")):
             self.assertEqual(getattr(c, method)(path, json={"name": "evil", "password": "hunter22", "role": "admin"}).status_code, 403, path)
+        self.assertEqual(c.get("/api/status", environ_base={"REMOTE_ADDR": "127.0.0.1"}).status_code, 200)  # the container's health check
+        self.assertEqual(c.get("/api/status", environ_base={"REMOTE_ADDR": "192.168.1.9"}).status_code, 403)
+        self.assertEqual(c.get("/share", headers={"Accept": "text/html"}).status_code, 303)  # a page you can't see yet goes to the wizard
         self.assertFalse(accounts.exists("evil"))  # in particular, no way round the setup code
 
     def test_creating_the_admin_logs_them_in_and_locks_the_door(self):
@@ -169,23 +175,40 @@ class AfterSetup(SetupBase):
         self.assertEqual(owner.post("/api/setup/admin", json={"name": "newone", "password": "secret1"}).status_code, 200)
         self.assertEqual([u["name"] for u in accounts.listing() if u["founder"]], ["boss"])  # only ever one founder
 
-    def test_an_install_from_before_the_env_password_went_away_gets_an_owner_and_keeps_its_favourites(self):
-        # accounts made while the .env password was the owner: ben is an admin but nobody is the founder, and favourites.json is the old owner's
+    def test_an_install_from_before_owners_is_claimed_explicitly_with_the_setup_code(self):
+        # accounts made while the .env password was the owner: two admins, nobody is the founder, and the old owner's files are lying around
         accounts.add("ben", "hunter22", "admin")
         accounts.add("amy", "secret1", "admin")
         with open(os.path.join(self.dir, "favourites.json"), "w") as f:
             json.dump([{"name": "capped", "url": "https://kick.com/capped", "source": "Kick"}], f)
         with open(os.path.join(self.dir, "kick_link.json"), "w") as f:
             json.dump({"name": "bennyhunnid"}, f)
-        founder = accounts.ensure_founder()
-        self.assertEqual(founder, "ben")  # the earliest admin
-        self.assertIsNone(accounts.ensure_founder())  # once only
-        server.adopt_open_data(founder)
-        self.assertEqual([f["name"] for f in server.load_favs("ben")], ["capped"])
+        self.assertFalse(accounts.founder_name())  # nothing is decided on its own
+        amy = server.app.test_client()
+        amy.post("/login", data={"username": "amy", "password": "secret1"})
+        st = amy.get("/api/setup").get_json()
+        self.assertEqual((st["needed"], st["needs_owner"], st["needs_code"]), (True, True, True))
+        self.assertEqual(amy.post("/api/setup/claim", json={}).status_code, 403)  # no code
+        self.assertEqual(amy.post("/api/setup/claim", json={"code": "nope"}).status_code, 403)
+        self.assertFalse(accounts.founder_name())
+        self.assertEqual(amy.post("/api/setup/claim", json={"code": server.SETUP_CODE}).status_code, 200)  # the operator chose amy
+        self.assertEqual(accounts.founder_name(), "amy")
+        self.assertEqual([f["name"] for f in server.load_favs("amy")], ["capped"])  # the old files go to whoever claimed
+        self.assertEqual(kick.linked("amy"), "bennyhunnid")
         self.assertFalse(os.path.exists(os.path.join(self.dir, "favourites.json")))
-        self.assertEqual(kick.linked("ben"), "bennyhunnid")
-        self.assertEqual(server.load_favs("amy"), [])
-        self.assertTrue(accounts.is_owner("ben") and not accounts.is_owner("amy"))
+        ben = server.app.test_client()
+        ben.post("/login", data={"username": "ben", "password": "hunter22"})
+        self.assertEqual(ben.post("/api/setup/claim", json={"code": server.SETUP_CODE}).status_code, 400)  # already owned
+        self.assertTrue(accounts.is_owner("amy") and not accounts.is_owner("ben"))
+        self.assertFalse(amy.get("/api/setup").get_json()["needs_owner"])
+
+    def test_a_plain_user_cannot_claim_the_install(self):
+        accounts.add("ben", "hunter22", "admin")
+        accounts.add("sam", "secret1")
+        sam = server.app.test_client()
+        sam.post("/login", data={"username": "sam", "password": "secret1"})
+        self.assertEqual(sam.post("/api/setup/claim", json={"code": server.SETUP_CODE}).status_code, 403)
+        self.assertFalse(accounts.founder_name())
 
     def test_the_old_style_owner_session_is_not_a_login(self):
         accounts.add("ben", "hunter22", "admin", founder=True)

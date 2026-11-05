@@ -6,6 +6,20 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import chat  # noqa: E402
 import app as server  # noqa: E402
+import accounts  # noqa: E402
+
+
+def setUpModule():
+    """These tests exercise the chat feed, not login: the app counts as set up and every request is the signed-in owner stand-in."""
+    global _patches
+    _patches = [mock.patch.object(accounts, "initialised", lambda: True), mock.patch.object(server, "session_user", lambda tok: accounts.OWNER)]
+    for p in _patches:
+        p.start()
+
+
+def tearDownModule():
+    for p in _patches:
+        p.stop()
 
 LINE = "@color=#FF8000;display-name=Foo;emotes=25:0-4,12-16/1902:6-10 :foo!foo@foo.tmi.twitch.tv PRIVMSG #xqc :Kappa hi Keepo Kappa"
 
