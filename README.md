@@ -73,11 +73,16 @@ Between streams the living-room TV shows the app's own screens instead of the Pi
 
 - **Colours:** while something plays, the remote takes the site's colour: Kick green, Twitch purple, YouTube red.
 - **Refresh** restarts the current stream (the TV shows a Refreshing screen with a wheel). Changing quality shows its own screen. Starting a new source cancels any older one still loading: the newest tap wins.
-- **Favourites** show a picture (Kick, fetched by your phone), a link to the channel, whether it is live, for how long, and the game. Live ones sort first. **Reorder** lets you drag a row by its handle.
+- **Favourites** show a picture (Kick, fetched by your phone), a link to the channel, whether it is live, for how long, and the game. Live ones sort first; offline ones are dimmed. **Reorder** lets you drag a row by its handle.
+- **One favourite per streamer:** saving the same channel name on Kick and on Twitch makes one favourite with a chip per site (a dot marks the site they are live on). Tap the row to watch where they are live, or a chip to pick the site. The "Saved" button unlinks just the site you are watching; the X removes the whole favourite. Matching is by channel name, so two different people with the same name on both sites would be merged.
+- **Recent** shows the last few links you played, with a star to save them.
+- **Seek bar** (videos): drag to any position. Live streams have no seek bar.
+- **Sleep timer:** pick 15, 30, 60 or 90 minutes. When it runs out the app stops playback and sends the Roku a power-off (Roku has no way for an app to set its own sleep timer). Cancel from the same menu.
+- **Stop** cancels a start that is still loading, and the TV goes straight to Ready.
 - **Chat** (read-only): under the player while a Twitch or Kick channel plays. Twitch is read by the Pi and shown as a list; Kick embeds Kick's own popout chat page. The link icon opens the chat on the site.
 - **TV off:** if the TV is in standby or not answering, the player shows "The TV is off" with a Turn on button. Switching the TV off stops a live stream on the Pi and pauses a video or the Chromecast, whether you used the app or the TV's own remote.
 - **Debug drawer:** a "Stats on the TV" switch draws dropped frames, buffer and fps on the TV. It costs frames, so keep it off for normal watching.
-- **Volume** on the TV shows as a block bar for 1.5 s; mute shows "Muted".
+- **Volume** on the TV shows as a block bar for 1.5 s; mute shows "Muted". The Pi remembers the volume you chose across restarts. The TV screens (Loading, Refreshing) take the site's colour too.
 
 ## Sources
 
@@ -91,11 +96,11 @@ Routing lives in the `SOURCES` table at the top of `app/app.py`; a new streamlin
 
 ## API
 
-`GET /play?u=&q=&target=&via=` · `POST /api/play` · `POST /api/cmd` (pause, mute, volume, volume_delta, seek, stop, restart) · `GET /api/status` · `GET /api/qualities` · `GET /api/search?q=` · `GET/POST/DELETE /api/favourites` · `GET /api/targets` · `GET /api/tv` · `GET /api/roku` · `POST /api/roku/key` · `GET /api/debug`
+`GET /play?u=&q=&target=&via=` · `POST /api/play` · `POST /api/cmd` (pause, mute, volume, volume_delta, seek, seek_to, stop, restart) · `GET/POST /api/sleep` · `GET /api/recents` · `GET /api/chat/feed` · `GET /api/status` · `GET /api/qualities` · `GET /api/search?q=` · `GET/POST/DELETE /api/favourites` · `GET /api/targets` · `GET /api/tv` · `GET /api/roku` · `POST /api/roku/key` · `GET /api/debug`
 
 Add `?target=bedroom` to the API calls to act on the Chromecast. `/api/status` includes `hwdec` (should be `v4l2m2m` on the Pi) and `drops`. The **Debug** button on the remote opens a drawer with player state, mpv properties, versions, the command line and the log.
 
-Changing the volume from the remote shows a short "Volume N%" message on the Pi's screen.
+Changing the volume from the remote shows a short volume bar on the Pi's screen.
 
 ## Troubleshooting
 
@@ -109,5 +114,6 @@ Changing the volume from the remote shows a short "Volume N%" message on the Pi'
 - **Permission denied on sockets:** the container runs as uid/gid 1000 to match the host user.
 - The TV remote can't control the Pi (the Roku TV forwards no CEC key presses); the phone is the remote.
 - **Bedroom missing from the picker or "not found on the network":** the Chromecast must be on the same network as the Pi (no guest network or client isolation). The container uses host networking so mDNS works.
-- **Volume overlay or chat text not showing:** only the Pi's screen can show overlays; the Chromecast can't.
+- **Volume bar or stats text not showing:** only the Pi's screen can show them; the Chromecast can't.
+- **"osd-overlay: required argument data not set" in the log:** an old build; update (clearing an overlay needs an empty data argument).
 - `/play` is a plain GET; set `PASSWORD` (above) if the network isn't trusted.
