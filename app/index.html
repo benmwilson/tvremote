@@ -756,15 +756,21 @@ async function kickStart(slug, key) {
   $('chatsub').textContent = 'connecting\u2026';
   let id;
   try { id = await kickRoomId(slug); } catch (e) { if (chatKey === key) $('chatsub').textContent = "couldn't reach kick.com"; return; }
-  let fails = 0;
+  let fails = 0, why = '', opened = false;
   const open = () => {
     if (chatKey !== key) return;
+    opened = false;
     const ws = kickWs = new WebSocket(KICK_WS);
     ws.onmessage = ev => {
       let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
       if (m.event === 'pusher:connection_established') ws.send(JSON.stringify({event: 'pusher:subscribe', data: {auth: '', channel: 'chatrooms.' + id + '.v2'}}));
       else if (m.event === 'pusher_internal:subscription_succeeded') { fails = 0; $('chatsub').textContent = '#' + slug; }
       else if (m.event === 'pusher:ping') ws.send(JSON.stringify({event: 'pusher:pong', data: {}}));
+      else if (m.event === 'pusher:error') {  // say why, so a changed key or channel name is easy to spot
+        let d = m.data; try { if (typeof d === 'string') d = JSON.parse(d); } catch (e) {}
+        why = 'Kick said: ' + ((d && (d.message || d.code)) || 'error');
+        $('chatsub').textContent = why;
+      }
       else if (m.event === 'App\\Events\\ChatMessageEvent') {
         try {
           const d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data;
@@ -772,9 +778,10 @@ async function kickStart(slug, key) {
         } catch (e) {}
       }
     };
-    ws.onclose = () => {
+    ws.onopen = () => { opened = true; };
+    ws.onclose = ev => {
       if (kickWs !== ws || chatKey !== key) return;
-      $('chatsub').textContent = ++fails > 3 ? "Kick chat isn't connecting" : 'reconnecting\u2026';
+      $('chatsub').textContent = (why || (opened ? 'closed (code ' + ev.code + ')' : "couldn't open the connection")) + ' \u00b7 retry ' + (++fails);
       setTimeout(open, Math.min(30000, 2000 * fails));
     };
   };
