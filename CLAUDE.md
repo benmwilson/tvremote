@@ -181,6 +181,30 @@ Also: in Safari, open `http://192.168.1.138:8765` → Share → Add to Home Scre
 ### 5. Done when
 - All tests in step 3 pass, Ben confirms picture and sound on the TV, README matches what was built, everything is pushed.
 
+## Two TVs (targets)
+- Living room: TCL Roku TV, Pi 4 on HDMI → mpv in the container (target type `pi`).
+- Bedroom: Roku TV with a Chromecast plugged in (target type `chromecast`; model unknown, detect Google TV vs older dongle from the mDNS model name).
+
+### Targets
+- `pi` = mpv on the living-room TV. `chromecast` = discovered with pychromecast via mDNS (container is `network_mode: host`).
+- Names: "Living room" (pi) and "Bedroom" (the Chromecast's friendly name; renamable in `/data/targets.json`).
+- UI: TV picker at the top (Living room / Bedroom), remembered in localStorage. All controls and status act on the selected target.
+- `/play` accepts `&target=<living|bedroom>` (default living). The Shortcut can have a second version "Play in Bedroom" that adds `&target=bedroom`. (`&t=` is already the password token.)
+
+### Chromecast playback
+- YouTube (video and live) → the Chromecast's YouTube receiver (pychromecast quick_play "youtube").
+- Kick / Twitch / other → resolve on the Pi (`streamlink --stream-url <url> <quality>` or `yt-dlp -g` with a single progressive H.264+AAC MP4 ≤1080p), then cast via the Default Media Receiver.
+- If the Chromecast can't fetch the URL (CORS / 403 / expiring tokens), fall back to proxying through the Pi: `streamlink --player-external-http` on a fixed port, cast that URL.
+- Pick the quality on the Pi before casting; don't rely on the Chromecast's own switching.
+
+### Controls and status
+- play/pause, seek, volume, mute, stop → MediaController / set_volume / quit_app.
+- Status from media_status in the same `/api/status` shape (title, position, duration, live, paused, volume, error) so the UI doesn't care which target it is.
+- Error text as on the Pi side (e.g. "Chromecast couldn't load the stream").
+
+### Tests (bedroom TV on the Chromecast input)
+Kick, Twitch, YouTube video, YouTube live, direct mp4 to the Chromecast; every control on each; switching targets mid-session doesn't break the other TV; the Chromecast is found again after a Pi reboot and a Chromecast reboot. Tell Ben what to look for on the bedroom TV for each.
+
 ## Conventions
 - Canadian spelling in UI text (favourites, colour).
 - Keep the UI a single dependency-free HTML file, dark, large touch targets, works as an iOS home-screen web app.
