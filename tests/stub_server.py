@@ -82,7 +82,7 @@ class H(BaseHTTPRequestHandler):
             "/api/targets": lambda: [card("living"), card("bedroom")],
             "/api/status": lambda: status(tv),
             "/api/favourites": lambda: [],
-            "/api/qualities": lambda: ["1080p60", "720p60", "480p"],
+            "/api/qualities": lambda: ["1080p60", "720p60", "480p"] if tv == "living" else ["1080", "720", "480"],
             "/api/roku": lambda: {"name": INFO[tv]["tv_name"], "power": "PowerOn", "app": INFO[tv]["input"]},
             "/api/tv": lambda: {"name": "TV One", "power": "on"},
             "/api/debug": lambda: {"state": {}, "proc": {}, "mpv": {"hwdec-current": "v4l2m2m"}, "versions": {}, "log": "stub"},

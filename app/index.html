@@ -58,6 +58,8 @@ select{min-height:52px;padding:0 10px}
 .tvcard .now{margin-top:10px;overflow-wrap:anywhere}
 .tvcard .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
 .tvcard.down{opacity:.65}
+.tvid{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin:2px 4px 12px}.tvid b{font-size:20px}
+.tvid .sub{color:var(--dim);font-size:14px}
 .hd{width:8px;height:8px;border-radius:50%;flex:none;background:transparent;border:1px solid var(--dim)}
 .hd.smooth{background:var(--ok);border-color:var(--ok);opacity:.55}
 .hd.buffering{background:var(--warn);border-color:var(--warn)}.hd.error{background:var(--bad);border-color:var(--bad)}
@@ -72,6 +74,7 @@ select{min-height:52px;padding:0 10px}
 <section id="view-all" class="hide"><div id="cards"></div></section>
 <section id="view-share" class="hide"></section>
 <section id="view-tv" class="hide">
+<div id="tvid" class="tvid"></div>
 <div class="card" id="now">
   <div><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span></div>
   <div id="title">Nothing playing</div>
@@ -343,10 +346,17 @@ function tvInfo() {  // the TV details in the One TV view come from the same cac
   const cur = targets.find(t => t.id === target) || {};
   $('tvctl').classList.toggle('hide', !cur.roku);
   $('tvhead').classList.toggle('hide', !cur.roku);
-  const bits = [cur.tv_name || cur.name, cur.reachable === false ? "can't reach" : POWER[cur.power] || cur.power,
-    cur.input && cur.input !== 'Roku' ? cur.input : null].filter(Boolean);
-  $('tv').textContent = bits.join(' \u00b7 ');
-  $('tvhead').textContent = cur.tv_name || 'TV';
+  const state = cur.reachable === false ? "can't reach" : POWER[cur.power] || cur.power;
+  $('tvhead').textContent = [cur.tv_name || 'TV', state, cur.input && cur.input !== 'Roku' ? cur.input : null].filter(Boolean).join(' \u00b7 ');
+  // which TV am I controlling? (the wrong-TV guard lives here as much as in the picker)
+  const id = $('tvid');
+  id.replaceChildren();
+  if (view() === 'tv' && cur.id) {
+    const size = cur.size ? cur.size + '\u2033' : '';
+    id.append(el('b', null, cur.name),
+      el('span', 'sub', [[cur.brand, size].filter(Boolean).join(' '), cur.model, cur.connection].filter(Boolean).join(' \u00b7 ')));
+    if (healthWord(cur)) id.append(el('span', 'hw ' + cur.health.state, healthWord(cur)));
+  }
 }
 
 async function loadTargets() {
