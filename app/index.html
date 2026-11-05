@@ -144,6 +144,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .sub.warn{color:var(--warn,#ffb062)}
 #chatcard{margin-top:14px;padding:6px 8px 12px 16px}
+#wallcard{margin-top:14px}#walltiles{margin-top:6px}#chattabs{flex-wrap:wrap;margin:2px 8px 6px 0}
 #chatcard #chatbox{margin-right:8px}
 .chatrow{display:flex;align-items:center;gap:4px}.chatrow .chathead{flex:1;min-width:0}
 .chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
@@ -304,6 +305,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .apps .app img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:var(--line)}
 .apps .app span{font-size:12px;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .apps .note{grid-column:1/-1;margin:6px 2px;color:var(--dim);font-size:14px}
+#tvnudge::-webkit-slider-runnable-track{background:var(--line)}#tvnudge::-moz-range-track{background:var(--line)}
 #tvmute.muted{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}
 #tvmute.muted .ic{color:#ff8a8a}
 #tvpower.isoff,#tvpower.isoff .ic{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}#tvpower.isoff .ic{background:none}
@@ -541,6 +543,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 <div class="card hide" id="chatcard">
   <div class="chatrow"><button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span><span class="chev">&#9662;</span></button>
   <a id="chatpop" class="iconlink hide" target="_blank" rel="noopener" aria-label="Open this chat on the streaming site" title="Open the chat on the site (you can type there if you're logged in)"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a></div>
+  <div id="chattabs" class="wseg hide" role="tablist" aria-label="Which stream's chat"></div>
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
@@ -561,6 +564,8 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
   <div class="row"><button data-k="VolumeDown" aria-label="TV volume down"><svg class="ic" aria-hidden="true"><use href="#i-volume-low"/></svg>&minus;</button>
     <button id="tvmute" data-k="VolumeMute" aria-label="Mute the TV" aria-pressed="false" title="Tap to mute or unmute. The TV doesn't report its mute state, so this shows what was last pressed here. Hold to correct what it shows." style="-webkit-touch-callout:none;-webkit-user-select:none;user-select:none"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg></button>
     <button data-k="VolumeUp" aria-label="TV volume up"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg>+</button></div>
+  <div class="row" style="align-items:center;gap:12px"><input id="tvnudge" type="range" min="-10" max="10" step="1" value="0" aria-label="Nudge the TV volume: drag right for louder or left for quieter, let go to apply"><span id="tvnudgev" class="sub" style="flex:none;min-width:34px;text-align:right"></span></div>
+  <p class="sub" style="margin:-4px 2px 4px">The TV can't say what its volume is, so this nudges it: drag right for louder or left for quieter, then let go.</p>
   <div class="row"><button data-k="InputHDMI1"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>1</button>
     <button data-k="InputHDMI2"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>2</button>
     <button data-k="InputHDMI3"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>3</button></div>
@@ -1518,7 +1523,7 @@ function chatAdd(row) {
 
 async function chatPoll() {  // Twitch
   if (!chatOpen || document.hidden || view() !== 'tv') return;
-  const r = await fetch('/api/chat/feed?target=' + encodeURIComponent(target || 'living') + '&since=' + chatLast).then(x => x.json()).catch(() => null);
+  const r = await fetch('/api/chat/feed?target=' + encodeURIComponent(target || 'living') + '&i=' + chatTab + '&since=' + chatLast).then(x => x.json()).catch(() => null);
   if (!r) return;
   if (r.reset) { $('chatbox').replaceChildren(); chatLast = 0; }
   (r.msgs || []).forEach(m => chatAdd(chatRow(m.name, m.color, twitchParts(m))));
@@ -1537,13 +1542,33 @@ function kickEmbed(slug) {  // Kick's own chat page (the one its OBS chat dock u
 // Our own Kick send box is off for now (to be rethought): Kick's embedded chat, with its own username/password login, does the typing.
 const KICK_OWN_SEND = false;
 
-function chatShow() {  // the card only exists while a Twitch or Kick channel is playing
-  const kick = st.source === 'Kick' ? kickSlug(st.url || '') : null;
-  const on = (st.source === 'Twitch' || !!kick) && (st.running || st.starting);
-  const want = on && chatOpen;
+let chatTab = 0;
+function chatTiles() {  // the streams that can have a chat: the main one, and the others on the multi-view screen
+  const others = st.wall ? st.wall.tiles : [];
+  return [{i: 0, url: st.url || '', source: st.source}, ...others].map(t => {
+    let tw = '';
+    if (t.source === 'Twitch') { try { tw = new URL(t.url).pathname.split('/').filter(Boolean)[0] || ''; } catch (e) {} tw = /^\w{3,25}$/.test(tw) ? tw : ''; }
+    return {...t, tw, kick: t.source === 'Kick' ? kickSlug(t.url || '') : null};
+  }).filter(t => t.kick || t.tw);
+}
+
+function chatShow() {  // the card only exists while a Twitch or Kick channel is playing; with several streams it has a tab for each
+  const tabs = chatTiles(), on = !!tabs.length && !!(st.running || st.starting), want = on && chatOpen;
+  if (!tabs.some(t => t.i === chatTab)) chatTab = tabs.length ? tabs[0].i : 0;
+  const cur = tabs.find(t => t.i === chatTab) || {}, kick = cur.kick || null, tw = cur.tw || '';
   $('chatcard').classList.toggle('hide', !on);
-  let tw = ''; try { tw = st.source === 'Twitch' ? new URL(st.url).pathname.split('/').filter(Boolean)[0] || '' : ''; } catch (e) {}
-  const pop = kick ? 'https://kick.com/popout/' + encodeURIComponent(kick) + '/chat' : /^\w{3,25}$/.test(tw) ? 'https://www.twitch.tv/popout/' + tw + '/chat' : '';
+  const bar = $('chattabs'), sig = tabs.map(t => t.i + ':' + (t.kick || t.tw)).join('|') + '@' + chatTab;
+  bar.classList.toggle('hide', tabs.length < 2);
+  if (bar.dataset.sig !== sig) {
+    bar.dataset.sig = sig;
+    bar.replaceChildren(...tabs.map(t => {
+      const b = el('button', null, t.kick || t.tw);
+      b.setAttribute('role', 'tab'); b.setAttribute('aria-pressed', String(t.i === chatTab));
+      b.onclick = () => { chatTab = t.i; chatShow(); };
+      return b;
+    }));
+  }
+  const pop = kick ? 'https://kick.com/popout/' + encodeURIComponent(kick) + '/chat' : tw ? 'https://www.twitch.tv/popout/' + tw + '/chat' : '';
   $('chatpop').classList.toggle('hide', !pop);
   if (pop) $('chatpop').href = pop;
   $('chatbox').classList.toggle('hide', !want);
@@ -1552,7 +1577,7 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   $('chatbox').classList.toggle('crop', canSend);
   if (canSend) $('kicktext').placeholder = 'Chat as ' + kickInfo.name;
   $('chatTog').setAttribute('aria-expanded', String(want));
-  const key = want ? (kick ? 'kick:' + kick : 'twitch:' + (st.url || '')) : '';
+  const key = want ? (kick ? 'kick:' + kick : 'twitch:' + (cur.url || '')) : '';
   if (key === chatKey) return;
   chatKey = key;  // what is showing changed: stop the old feed, clear the box, start the new one
   if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
@@ -1850,6 +1875,15 @@ $('tvpower').addEventListener('pointerdown', () => {
 $('tvpower').addEventListener('contextmenu', e => e.preventDefault());
 $('pwon').onclick = () => setPwOver(false);
 $('pwoff').onclick = () => setPwOver(true);
+// Volume nudge: a Roku has no way to set a level, only up and down. Drag from the middle, let go, and it presses that many times.
+$('tvnudge').oninput = () => { const v = +$('tvnudge').value; $('tvnudgev').textContent = v ? (v > 0 ? '+' : '\u2212') + Math.abs(v) : ''; };
+$('tvnudge').onchange = async () => {
+  const v = +$('tvnudge').value;
+  $('tvnudge').value = 0; $('tvnudgev').textContent = '';  // springs back to the middle
+  if (!v) return;
+  const r = await api('/api/roku/key', 'POST', {key: v > 0 ? 'VolumeUp' : 'VolumeDown', count: Math.abs(v)});
+  if (r && r.ok) { tvMuted[target] = false; renderTvMute(); }  // changing the volume unmutes a Roku TV
+};
 const tvMuted = {};  // per TV: what we last did to it (true = muted); a guess, because the TV can't report it
 // Press and hold the button to flip what it shows without touching the TV: for when someone used the physical remote. Open to everyone,
 // unlike Debug (which has the same correction but is for admins only).

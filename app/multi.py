@@ -96,6 +96,10 @@ class Wall:
         """(mpv args, width) for the main player's window while the wall is up, else ([], None)."""
         return window_args(self.layout, self.count(), 0) if self.active() else ([], None)
 
+    def main_wid(self):
+        """The window name the main player should have right now (None when it is full screen)."""
+        return window_id(self.layout, self.count(), 0) if self.active() else None
+
     def sock(self, i, main_sock):
         return main_sock if i == 0 else _sock(i)
 
@@ -123,6 +127,10 @@ class Wall:
             self.stop_windows()
             self.extras, self.layout, self.audio = [], None, 0
 
+    def _current(self, i, t):
+        p = t.get("proc")
+        return bool(p and p.poll() is None and t.get("started") == t["url"] and t.get("wid") == window_id(self.layout, self.count(), i))
+
     def _start(self, i, t):
         source, player = self.resolve(t["url"])
         args, width = window_args(self.layout, self.count(), i)
@@ -135,7 +143,7 @@ class Wall:
         cmd, _q = self.build(t["url"], cap(player, width), sock, extra)
         log = open(os.path.join(self.log_dir, f"tvremote-tile{i}.log"), "w")
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        t.update(source=source, proc=proc, error=None)
+        t.update(source=source, proc=proc, error=None, wid=window_id(self.layout, self.count(), i), started=t["url"])
         threading.Thread(target=self._watch, args=(i, t, proc), daemon=True).start()
 
     def _watch(self, i, t, proc):
@@ -150,10 +158,12 @@ class Wall:
             t["error"] = re.sub(r"^\[[^\]]*\]\s*(ERROR:\s*)?", "", lines[-1])[:120] if lines else "The player stopped."
 
     def start_windows(self, pause=STAGGER):
-        """Start every extra window, one every `pause` seconds, in the background (after the main player is up)."""
+        """(Re)start the extra windows that need it, one every `pause` seconds, in the background. A window that is already playing
+        the right stream in the right place is left alone, so a swap only redraws the two streams that change."""
         with self.lock:
             self._gen += 1
-            gen, wanted = self._gen, list(enumerate(self.extras, start=1))
+            gen = self._gen
+            wanted = [(i, t) for i, t in enumerate(self.extras, start=1) if not self._current(i, t)]
 
         def go():
             for k, (i, t) in enumerate(wanted):
@@ -162,6 +172,7 @@ class Wall:
                 with self.lock:
                     if gen != self._gen or t not in self.extras:
                         return
+                    self._kill(t)
                     self._start(self.extras.index(t) + 1, t)
         threading.Thread(target=go, daemon=True).start()
 

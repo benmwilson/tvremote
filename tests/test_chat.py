@@ -58,7 +58,7 @@ class Feed(unittest.TestCase):
 class Endpoint(unittest.TestCase):
     def setUp(self):
         self.client = server.app.test_client()
-        server._feed["obj"] = None
+        server._feeds.clear()
 
     def test_nothing_playing_or_not_twitch_gives_an_empty_answer(self):
         with mock.patch.dict(server.state, {"url": "https://kick.com/xqc", "source": "Kick"}), mock.patch.object(server, "pi_playing", return_value=True):
@@ -75,7 +75,7 @@ class Endpoint(unittest.TestCase):
         with mock.patch.dict(server.state, {"url": "https://www.twitch.tv/xqc", "source": "Twitch"}), mock.patch.object(server, "pi_playing", return_value=True), \
                 mock.patch.object(server.chat, "ChatFeed", F):
             r = self.client.get("/api/chat/feed").get_json()
-            server._feed["obj"].on_line(LINE)
+            server._feeds["xqc"].on_line(LINE)
             r2 = self.client.get("/api/chat/feed?since=0").get_json()
             r3 = self.client.get("/api/chat/feed?since=999").get_json()  # the phone is ahead of a restarted feed
         self.assertTrue(r["ok"])
@@ -83,6 +83,24 @@ class Endpoint(unittest.TestCase):
         self.assertEqual(len(r2["msgs"]), 1)
         self.assertTrue(r3["reset"])
         self.assertEqual(made, ["xqc"])  # one feed, reused
+
+    def test_each_stream_on_the_multi_view_screen_has_its_own_feed(self):
+        made = []
+
+        class F(chat.ChatFeed):
+            def __init__(s, ch, autostart=True):
+                super().__init__(ch, autostart=False)
+                made.append(ch)
+        server.wall.extras = [{"url": "https://www.twitch.tv/other", "proc": None}]
+        try:
+            with mock.patch.dict(server.state, {"url": "https://www.twitch.tv/xqc", "source": "Twitch"}), mock.patch.object(server, "pi_playing", return_value=True),                     mock.patch.object(server.chat, "ChatFeed", F):
+                a = self.client.get("/api/chat/feed?i=0").get_json()
+                b = self.client.get("/api/chat/feed?i=1").get_json()
+                none = self.client.get("/api/chat/feed?i=2").get_json()
+        finally:
+            server.wall.extras = []
+        self.assertEqual((a["channel"], b["channel"], none["ok"]), ("xqc", "other", False))
+        self.assertEqual(made, ["xqc", "other"])
 
 
 if __name__ == "__main__":

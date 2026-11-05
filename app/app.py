@@ -535,7 +535,7 @@ def start_player(url, quality=None, screen_kind="loading"):
     log = open(LOG_FILE, "w")
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log,
                             stderr=subprocess.STDOUT, start_new_session=True)
-    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time(), stalls=0, stall_s=0)
+    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time(), stalls=0, stall_s=0, wid=wall.main_wid())
     chat_sync()
     threading.Thread(target=_watch, args=(proc,), daemon=True).start()
     if is_channel(url):
@@ -888,14 +888,17 @@ def api_cmd():
 
 
 def wall_relayout(main_url=None):
-    """Restart every window for the current layout, all at the same moment so the streams join in step. With one stream left
-    (or none added) the main player goes back to the full screen at the quality it had."""
+    """Bring every window in line with the wall: only a window whose stream or place changed is restarted (a swap redraws two
+    streams; adding or removing one moves them all). With one stream left the main player goes back to the full screen at the
+    quality it had."""
     url = main_url or state["url"]
     with lock:
-        wall.stop_windows()
-        start_player(url, None if wall.active() else wall.saved_quality, "refresh")
+        p = state["proc"]
+        if url != state["url"] or state.get("wid") != wall.main_wid() or not (p and p.poll() is None):
+            start_player(url, None if wall.active() else wall.saved_quality, "refresh")
     if wall.active():
         wall.start_windows()
+        screen("playing")  # the names on the background may have changed
 
 
 @app.post("/api/wall")
@@ -1345,22 +1348,29 @@ def api_stats_set():
     return jsonify(enabled=settings["stats"])
 
 
-_feed = {"obj": None}
+_feeds = {}  # Twitch channel -> its chat feed: with several streams on the Pi's screen there is one per stream
 
 
 @app.get("/api/chat/feed")
 def api_chat_feed():
-    """New chat messages for the phone's chat view (Twitch only). `since` is the last message id the phone has."""
+    """New chat messages for the phone's chat view (Twitch only). `since` is the last message id the phone has; `i` is the tile
+    on the Pi's multi-view screen (0 = the main stream)."""
     c = tgt()
-    url, source = (c.state.get("url"), c.state.get("source")) if c else (state["url"] if pi_playing() else None, state["source"])
+    if c:
+        url, source = c.state.get("url"), c.state.get("source")
+    else:
+        i = request.args.get("i", type=int) or 0
+        url = state["url"] if i == 0 else next(iter(t["url"] for k, t in enumerate(wall.extras, start=1) if k == i), None)
+        url = url if pi_playing() else None
+        source = state["source"] if i == 0 else route(url or "")[0]
     ch = chat.channel_of(url or "") if source == "Twitch" else None
     if not ch:
         return jsonify(ok=False, channel=None, msgs=[], last=0)
-    f = _feed["obj"]
-    if not f or f.channel != ch or f.stopped.is_set():
-        if f:
-            f.stop()
-        f = _feed["obj"] = chat.ChatFeed(ch)
+    for k in [k for k, f in _feeds.items() if f.stopped.is_set()]:
+        del _feeds[k]  # a feed stops itself when nobody has asked for a minute
+    f = _feeds.get(ch)
+    if not f:
+        f = _feeds[ch] = chat.ChatFeed(ch)
     last = request.args.get("since", type=int) or 0
     reset = last > f.n  # the feed was started afresh since the phone last asked
     return jsonify(ok=True, channel=ch, msgs=f.since(0 if reset else last), last=f.n, reset=reset)
@@ -1533,11 +1543,16 @@ def api_roku_key():
     ip = roku_ip()
     if not ip:
         return jsonify(ok=False, error="No Roku configured for this TV"), 404
-    k = (request.get_json(silent=True) or {}).get("key")
+    body = request.get_json(silent=True) or {}
+    k = body.get("key")
     if k not in roku.KEYS:
         return jsonify(ok=False, error="Unknown key"), 400
+    n = body.get("count") if k in ("VolumeUp", "VolumeDown") and isinstance(body.get("count"), int) else 1  # the volume slider presses it a few times
     try:
-        roku.key(ip, k)
+        for press in range(max(1, min(n, 15))):
+            if press:
+                time.sleep(0.1)
+            roku.key(ip, k)
     except roku.RokuError as e:
         return jsonify(ok=False, error=str(e)), 502
     tid = request.args.get("target") or "living"
