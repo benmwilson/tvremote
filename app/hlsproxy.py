@@ -1,11 +1,14 @@
 """HLS relay for the Chromecast: the Pi (wired) fetches the live segments and keeps the latest few in memory,
 then serves a playlist pointing at itself, so the Chromecast only does plain HTTP on the LAN.
 shortcut: media playlists only (no EXT-X-MAP/KEY rewriting, no master playlist), upgrade if a source needs them."""
+import ipaddress
+import socket
 import threading
 import urllib.request
 from collections import OrderedDict
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urljoin, urlparse
 
+MAX_BYTES = 30_000_000  # per playlist/segment
 MAX_CACHED = 14  # ~1 minute of 4s segments, about 40 MB at 1080p60
 _lock = threading.Lock()
 _up = {"url": None}
@@ -19,10 +22,37 @@ class _Seg:
         self.data = None
 
 
+ALLOW_PRIVATE = False  # only the self-check below turns this on
+
+
+def _check(url):
+    """Playlists are untrusted: only public http(s) hosts (no file://, loopback, LAN or link-local addresses).
+    shortcut: DNS can change between this check and the fetch (rebinding); pin the resolved IP if that matters."""
+    p = urlparse(url)
+    if p.scheme not in ("http", "https") or not p.hostname:
+        raise ValueError("unsupported URL")
+    if not ALLOW_PRIVATE:
+        for info in socket.getaddrinfo(p.hostname, p.port or (443 if p.scheme == "https" else 80)):
+            if not ipaddress.ip_address(info[4][0]).is_global:
+                raise ValueError("non-public address")
+
+
+class _Redirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _check(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_open = urllib.request.build_opener(_Redirect).open
+
+
 def _get(url, timeout=15):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
+    _check(url)
+    with _open(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=timeout) as r:
+        data = r.read(MAX_BYTES + 1)
+    if len(data) > MAX_BYTES:
+        raise ValueError("response too large")
+    return data
 
 
 def set_upstream(url):
@@ -63,6 +93,10 @@ def playlist():
     for line in _get(base).decode(errors="replace").splitlines():
         if line and not line.startswith("#"):
             u = urljoin(base, line)
+            try:
+                _check(u)
+            except ValueError:
+                continue  # drop segments we refuse to fetch
             with _lock:
                 _allowed.add(u)
             _fetch(u)
@@ -96,6 +130,7 @@ if __name__ == "__main__":  # self-check against a local fake upstream
         def log_message(*a): pass
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 8798), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    ALLOW_PRIVATE = True
     set_upstream("http://127.0.0.1:8798/p.m3u8")
     pl = playlist()
     segs = re.findall(r"seg\?u=(\S+)", pl)
@@ -103,4 +138,11 @@ if __name__ == "__main__":  # self-check against a local fake upstream
     from urllib.parse import unquote
     assert segment(unquote(segs[0])) == b"\x47/s1.ts"
     assert segment("http://evil.example/x") is None               # not in the playlist -> refused
+    ALLOW_PRIVATE = False
+    for bad in ("file:///etc/passwd", "ftp://example.com/x", "http://127.0.0.1/x", "http://192.168.1.1/x", "http://169.254.169.254/x"):
+        try:
+            _check(bad); raise SystemExit("allowed: " + bad)
+        except ValueError:
+            pass
+    _check("https://example.com/x")
     print("hlsproxy ok")

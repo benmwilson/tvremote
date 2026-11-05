@@ -66,7 +66,7 @@ def guard():
         return Response("Cross-site request blocked", 403)
     if request.path == "/play" and request.headers.get("Sec-Fetch-Site") == "cross-site" and not token_ok:
         return Response("Cross-site request blocked", 403)
-    if not PASSWORD or request.path.startswith("/cast/"):
+    if not PASSWORD or request.path in ("/cast/live.m3u8", "/cast/seg"):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
@@ -470,9 +470,17 @@ ROKU_IPS = {"living": os.environ.get("TVREMOTE_ROKU_LIVING", ""),
             "bedroom": os.environ.get("TVREMOTE_ROKU_BEDROOM", "")}
 
 
+def from_chromecast():
+    """/cast/ is unauthenticated (the Chromecast can't send a password), so only the Chromecast itself may use it."""
+    d = CAST.device() if CAST else None
+    return bool(d) and request.remote_addr == d.host
+
+
 @app.get("/cast/live.m3u8")
 def cast_playlist():
     """Relay playlist for the Chromecast (see hlsproxy.py). Unauthenticated: the Chromecast can't send a password."""
+    if not from_chromecast():
+        abort(403)
     try:
         body = hlsproxy.playlist()
     except Exception:
@@ -483,6 +491,8 @@ def cast_playlist():
 
 @app.get("/cast/seg")
 def cast_segment():
+    if not from_chromecast():
+        abort(403)
     data = hlsproxy.segment(request.args.get("u", ""))
     if not data:
         abort(404)
