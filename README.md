@@ -64,8 +64,9 @@ By default the Chromecast fetches the stream itself (`direct`). `&via=proxy` on 
 
 Between streams the living-room TV shows the app's own screens instead of the Pi desktop: **Ready** (with the address of the remote), an animated **Loading**, **Not live right now** when a channel is offline, **Stream ended**, and **Couldn't play** with the reason. It is a fullscreen window kept behind the streams; while a stream plays it is paused and draws nothing.
 
-- **Turn it off or on** from the living-room TV's remote: the "Home screen on this TV" switch. Off shows the Pi desktop again. The app and the remote keep running either way. Turning it on restarts anything playing, so the stream window opens on top.
-- Starts off with `TVREMOTE_SHELL=0` in the container environment; the switch's setting is saved in `/data/settings.json`.
+- **Turn it off or on** from the remote: open the living-room TV, tap **Debug** at the bottom, and use the "Home screen on the TV" switch. Off shows the Pi desktop again (the window is closed, not hidden). The app and the remote keep running either way. Turning it on restarts anything playing, so the stream window opens on top.
+- **Keep it off from the start:** `HOME_SCREEN=0` in `~/tvremote/.env`, then `docker compose up -d`. Otherwise the switch's setting is saved in `/data/settings.json` and survives restarts.
+- **Stop the whole app** (nothing at all on the Pi's screen): `docker stop tvremote`. It stays stopped, even after a reboot, until you run `docker start tvremote`. While a stream is playing the stream window is always on top, with the home screen on or off.
 - Playing no longer re-selects an input the TV is already on (that relaunched the input and flashed the screen): the app asks the Roku what it is showing first. This needs `ROKU_LIVING` and `INPUT_LIVING` set.
 - The screens are written as a subtitle file timed ahead (one event per second for the clock, whose colon blinks), so nothing redraws; redrawing flashed the whole screen, and osd-overlay text never stayed on that window. The logo and text are centred as one group. If the home screen won't open: `docker exec tvremote cat /tmp/tvremote-shell.log`. It tries a plain software window first (`wlshm`), then `gpu`; on this Pi `SHELL_VO=gpu,wlshm` in `.env` is what is used. The Debug drawer shows nothing about it yet.
 
