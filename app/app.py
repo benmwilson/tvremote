@@ -392,7 +392,17 @@ def api_cmd():
     except (TypeError, ValueError):
         return jsonify(ok=False, error="Bad value"), 400
     r = mpv(cmd)
-    return jsonify(ok=bool(r and r.get("error") == "success"))
+    ok = bool(r and r.get("error") == "success")
+    if ok and action in ("volume", "volume_delta", "mute", "unmute"):
+        osd_volume()
+    return jsonify(ok=ok)
+
+
+def osd_volume():
+    """Draw a TV-style volume message on the stream (mpv OSD)."""
+    vol, muted = prop("volume"), prop("mute")
+    if vol is not None:
+        mpv(["show-text", "Muted" if muted else f"Volume {round(vol)}%", 1500])
 
 
 PROPS = {
