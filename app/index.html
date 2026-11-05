@@ -302,6 +302,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2v13.6a.9.9 0 001.4.8l10.2-6.8a.9.9 0 000-1.6L9.4 4.4A.9.9 0 008 5.2z" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor" stroke="none"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-swap" viewBox="0 0 24 24"><path d="M5 8h13l-3.5-3.5M19 16H6l3.5 3.5"/></symbol>
 <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.6-5.9M20 4v5h-5"/></symbol>
 <symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4.5H6.5A1.5 1.5 0 005 6v12a1.5 1.5 0 001.5 1.5H10M15 8l4 4-4 4M19 12H9.5"/></symbol>
 <symbol id="i-logo" viewBox="0 0 100 100"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8cc8ff"/><stop offset="1" stop-color="#4f8fff"/></linearGradient></defs>
@@ -511,7 +512,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <div class="row3" id="ctlrow"><select id="qual" aria-label="Quality"></select>
     <button id="fav"></button>
     <div class="pair"><button id="refresh" aria-label="Refresh the stream" title="Refresh the stream"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
-    <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div></div>
+    <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div>
+    <button id="move" class="hide" style="grid-column:1/-1"><svg class="ic" aria-hidden="true"><use href="#i-swap"/></svg><span id="movelabel">Move to the other TV</span></button></div>
   <div class="extras hide" id="extras">
     <div class="sleeprow"><select id="sleepsel" aria-label="Sleep timer"><option value="">Sleep timer: off</option><option value="15">Stop in 15 min</option><option value="30">Stop in 30 min</option><option value="60">Stop in 1 hour</option><option value="90">Stop in 90 min</option><option value="0">Cancel timer</option></select></div>
   </div>
@@ -722,6 +724,9 @@ function render() {
   $('qual').classList.toggle('hide', !up || !$('qual').options.length);  // starting: only Stop
   $('ctlrow').classList.toggle('single', !up && starting);  // starting: just Stop, so you can cancel
   $('fav').classList.toggle('hide', !up);
+  const to = otherTv();  // shortcut: with two TVs there is one "other"; more TVs would need a picker here
+  $('move').classList.toggle('hide', !up || !to || !st.url);
+  if (to) $('movelabel').textContent = 'Move to ' + to.name;
   $('pp').classList.toggle('paused', !!st.paused);
   setBtn($('pp'), st.paused ? 'play' : 'pause', st.paused ? 'Paused' : '');
   $('seek').classList.toggle('hide', !run || st.live);
@@ -848,7 +853,7 @@ function drawFavs() {
 let favLoading = null;  // {url, t0}
 let favNote = null;  // {url, text, until}: why the last tapped favourite didn't start
 function markFavs() {
-  document.querySelectorAll('#favs .fav').forEach(b => {
+  document.querySelectorAll('#favs .fav, #recents .fav').forEach(b => {  // recents get the same spinner and error note
     const n = b.querySelector('.note');
     if (n) n.textContent = favNote && (b.dataset.urls || b.dataset.url).split(' ').includes(favNote.url) && Date.now() < favNote.until ? favNote.text : '';
     const on = !!favLoading && (b.dataset.urls || b.dataset.url).split(' ').includes(favLoading.url);
@@ -923,6 +928,21 @@ $('tvwake').onclick = async () => {
   if (r && r.ok) { loadTargets(); setTimeout(loadTargets, 4000); setTimeout(loadTargets, 8000); }
 };
 $('refresh').onclick = () => busy($('refresh'), () => cmd('restart')).then(() => setTimeout(poll, 1500));
+const otherTv = () => (targets || []).find(t => t.id !== target && t.reachable);
+$('move').onclick = () => {
+  const to = otherTv(), url = st.url;
+  if (!to || !url) return;
+  return busy($('move'), async () => {
+    // start it on the other TV first: if that fails, what is playing here is left alone
+    let r = null;
+    try { r = await (await fetch('/api/play?target=' + encodeURIComponent(to.id), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url})})).json(); } catch (e) {}
+    if (!r || r.ok === false) { err((r && r.error) || 'Couldn’t start it on ' + to.name + '. It is still playing here.'); return null; }
+    await cmd('stop');
+    favLoading = null; markFavs();
+    location.hash = '#/tv/' + encodeURIComponent(to.id);  // follow it to the other TV's remote
+    return r;
+  }, 800);
+};
 $('stop').onclick = () => { favLoading = null; markFavs(); return busy($('stop'), () => cmd('stop')).then(poll); };  // stopping also ends a favourite's loading spinner
 $('fav').onclick = async () => {
   if (!st.url) return;
@@ -1374,15 +1394,17 @@ async function loadRecents() {
   $('recenthead').classList.toggle('hide', !items.length);
   items.forEach(it => {
     const b = el('div', 'fav'), head = el('div', 'fhead');
-    b.setAttribute('role', 'button'); b.tabIndex = 0;
+    b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url;
     head.append(avatarEl(it.name, it.url), el('b', null, it.name));
     const x = el('button', 'x'); x.innerHTML = ic('star'); x.setAttribute('aria-label', 'Save ' + it.name + ' to favourites');
     x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'POST', {url: it.url, name: it.name}); await loadFavs(); };
-    b.onclick = () => play(it.url);
-    b.onkeydown = e => { if (e.key === 'Enter') play(it.url); };
-    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), x);
+    b.onclick = () => playFav(it.url);
+    b.onkeydown = e => { if (e.key === 'Enter') playFav(it.url); };
+    const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
+    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, x);
     box.append(b);
   });
+  markFavs();  // a list redrawn while a tap is still loading keeps its spinner
 }
 
 // ---- chat on the phone (read-only) ----
