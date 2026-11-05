@@ -156,7 +156,7 @@ def drop_session(tok):
 
 
 def safe_next(n):
-    """Where to go after login: only a plain path on this site. Browsers read "/\x" as "//x", so backslashes and
+    """Where to go after login: only a plain path on this site. Browsers treat a backslash like a slash, so backslashes and
     control characters are out too."""
     if not n or not n.startswith("/") or n.startswith("//") or "\\" in n or any(ord(c) < 32 for c in n):
         return "/"
