@@ -32,6 +32,7 @@ SOURCES = [
 SL_DEFAULT = "1080p60,best"
 YTDL_HEIGHTS = ("1080", "720", "480")
 
+import hlsproxy
 import roku
 
 try:
@@ -65,7 +66,7 @@ def guard():
         return Response("Cross-site request blocked", 403)
     if request.path == "/play" and request.headers.get("Sec-Fetch-Site") == "cross-site" and not token_ok:
         return Response("Cross-site request blocked", 403)
-    if not PASSWORD:
+    if not PASSWORD or request.path.startswith("/cast/"):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
@@ -467,6 +468,25 @@ def api_qualities():
 
 ROKU_IPS = {"living": os.environ.get("TVREMOTE_ROKU_LIVING", ""),
             "bedroom": os.environ.get("TVREMOTE_ROKU_BEDROOM", "")}
+
+
+@app.get("/cast/live.m3u8")
+def cast_playlist():
+    """Relay playlist for the Chromecast (see hlsproxy.py). Unauthenticated: the Chromecast can't send a password."""
+    try:
+        body = hlsproxy.playlist()
+    except Exception:
+        return Response("upstream unavailable", 502)
+    return Response(body, mimetype="application/x-mpegURL",
+                    headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"})
+
+
+@app.get("/cast/seg")
+def cast_segment():
+    data = hlsproxy.segment(request.args.get("u", ""))
+    if not data:
+        abort(404)
+    return Response(data, mimetype="video/mp2t", headers={"Access-Control-Allow-Origin": "*"})
 
 
 @app.get("/api/targets")

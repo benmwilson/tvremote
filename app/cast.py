@@ -11,13 +11,13 @@ import threading
 import time
 from urllib.parse import parse_qs, urlparse
 
+import hlsproxy
 import pychromecast
 import zeroconf
 from pychromecast.config import APP_MEDIA_RECEIVER, APP_YOUTUBE
 from pychromecast.discovery import CastBrowser, SimpleCastListener
 from pychromecast.quick_play import quick_play
 
-PROXY_PORT = 8766
 DEFAULT_CFG = {"name": "Bedroom", "device": None}  # device = Chromecast friendly name; None = first one found
 
 
@@ -67,7 +67,7 @@ class CastTarget:
         self.lock = threading.RLock()
         self.devices = {}   # uuid -> CastInfo
         self.cast = None
-        self.proxy = None   # streamlink --player-external-http subprocess
+        self.port = os.environ.get("TVREMOTE_PORT", "8765")
         self.state = {"url": None, "source": None, "player": None, "quality": None, "error": None,
                       "started": None, "via": None, "proxy_tried": False}
         self.zc = zeroconf.Zeroconf()
@@ -126,11 +126,6 @@ class CastTarget:
             return self.cast
 
     # ---- playback ----
-    def _kill_proxy(self):
-        if self.proxy and self.proxy.poll() is None:
-            self.proxy.terminate()
-        self.proxy = None
-
     def _lan_ip(self, host):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect((host, 9))
@@ -156,7 +151,6 @@ class CastTarget:
         q = self._quality(player, quality)
         cast = self._connect()
         with self.lock:
-            self._kill_proxy()
             self.state.update(url=url, source=source, player=player, quality=q, error=None,
                               started=time.time(), via=None, proxy_tried=False, mode=via)
         if source == "YouTube":
@@ -174,22 +168,14 @@ class CastTarget:
         self.state["via"] = "direct"
 
     def _start_proxy(self, url, source, q):
-        """streamlink fetches over the Pi's wired link and serves the stream on the LAN; the Chromecast pulls from the Pi."""
-        self._kill_proxy()
-        log = open("/tmp/cast-proxy.log", "w")
-        cmd = ["streamlink", "--player-external-http", "--player-external-http-port", str(PROXY_PORT)]             + (["--twitch-disable-ads"] if source == "Twitch" else []) + [url, q]
-        self.proxy = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
-        for _ in range(40):  # streamlink prints the serve URLs once the stream is open
-            if self.proxy.poll() is not None or "http://" in open("/tmp/cast-proxy.log").read():
-                break
-            time.sleep(0.5)
-        if self.proxy.poll() is not None:
-            raise CastError((open("/tmp/cast-proxy.log").read().strip().splitlines() or ["streamlink failed"])[-1][:200])
+        """The Pi fetches the HLS segments (wired) and relays them; the Chromecast only talks plain HTTP to the Pi."""
+        media = self._media_url(url, source, "streamlink", q)[0]
+        hlsproxy.set_upstream(media)
         cast = self._connect()
         if cast.app_id != APP_MEDIA_RECEIVER:
             cast.start_app(APP_MEDIA_RECEIVER)
-        cast.media_controller.play_media(f"http://{self._lan_ip(self.device().host)}:{PROXY_PORT}/", "video/mp2t",
-                                         title=self.title_fn(url), stream_type="LIVE")
+        cast.media_controller.play_media(f"http://{self._lan_ip(self.device().host)}:{self.port}/cast/live.m3u8",
+                                         "application/x-mpegURL", title=self.title_fn(url), stream_type="LIVE")
         self.state["via"] = "pi-proxy"
 
     def _fallback_proxy(self):
@@ -204,7 +190,6 @@ class CastTarget:
     def cmd(self, action, value=None, quality=None):
         """Returns (ok, error)."""
         if action == "stop":
-            self._kill_proxy()
             if self.cast:
                 self.cast.quit_app()
             self.state["url"] = None
@@ -273,8 +258,7 @@ class CastTarget:
         c, st = self.cast, dict(self.state)
         ms = c.media_controller.status if c else None
         media = {k: v for k, v in vars(ms).items() if not isinstance(v, (dict, list))} if ms else None
-        return {"state": st, "proc": {"pid": self.proxy.pid if self.proxy else None,
-                                      "returncode": self.proxy.poll() if self.proxy else None},
+        return {"state": st, "proc": {"pid": None, "returncode": None},
                 "uptime": round(time.time() - st["started"]) if st["started"] else None,
                 "mpv": media, "versions": {"pychromecast": getattr(pychromecast, "__version__", "?"),
                                            **{k: v for k, v in self.info().items() if k in ("device", "model", "kind")}},
