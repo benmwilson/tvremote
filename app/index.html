@@ -135,6 +135,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .fav .fhead b{margin:0;padding:0;min-width:0;flex:1}
 .fav>.iconlink{position:absolute;right:0;bottom:0}
 .fav .badge{margin-right:8px}
+#gear{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px;transition:background .15s,color .15s}
+#gear[aria-pressed=true]{color:var(--fg);background:var(--line)}
 #logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .sub.warn{color:var(--warn,#ffb062)}
 #chatcard{margin-top:14px;padding:6px 8px 12px 16px}
@@ -193,6 +195,28 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 #err{color:var(--bad);min-height:1em;margin:10px 4px 0;font-size:14px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}
   button.busy::after{animation:none;border-top-color:var(--line);border-right-color:var(--tv,var(--fg))}}
+
+#view-settings .shead{margin:24px 4px 8px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);display:flex;align-items:center;gap:8px;font-weight:600}
+#view-settings .card{margin-top:0}#view-settings>.card+.card,#view-settings .card+.s-wide,#view-settings .s-wide+.card{margin-top:10px}
+.s-prof{display:flex;align-items:center;gap:14px;margin-top:6px}.s-prof b{font-size:19px}
+.s-prof .sub,.s-row .sub{display:block;margin-top:2px}
+.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:18px;background:var(--line);color:var(--fg);flex:0 0 auto;text-transform:uppercase}
+.pill{font-size:12px;padding:2px 9px;border-radius:99px;background:var(--line);color:var(--dim);font-weight:600;vertical-align:middle;letter-spacing:0;text-transform:none}
+.pill.admin,.pill.owner{background:rgba(98,176,255,.18);color:#8cc4ff}.pill.guest{background:rgba(255,176,98,.18);color:#ffb062}
+.s-link{color:var(--dim);padding:12px 6px;font-size:15px}
+.s-row{display:flex;align-items:center;gap:12px;padding:12px 0}.s-row~.s-row,#kickrow:not(.hide)+.s-row{border-top:1px solid var(--line)}.s-row:first-child{padding-top:2px}.s-row:last-child{padding-bottom:2px}#kickrow:not(.hide)+.s-row{margin-top:10px}
+.s-more{width:44px;height:44px;flex:0 0 auto;background:none;color:var(--dim);font-size:22px;padding:0}
+.s-actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 0 12px 56px}.s-actions button{flex:1 1 auto;min-height:44px;padding:0 14px}
+.s-actions form{display:flex;gap:8px;flex:1 1 100%}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
+.s-danger{color:#ff6b6b}
+.s-wide{display:block;width:100%;min-height:52px;margin-top:10px}
+.s-form{display:grid;gap:10px}.s-form input,.s-form select{font-size:16px;min-height:52px;width:100%;box-sizing:border-box}
+.s-check{display:flex;gap:10px;align-items:center;min-height:44px}.s-check input{width:22px;height:22px;min-height:0;flex:0 0 auto}
+.s-line{display:flex;align-items:center;width:100%;min-height:44px;background:none;color:inherit;text-align:left;padding:0;gap:10px}.s-line b{flex:1}
+.s-line[aria-expanded=true] .chev{transform:rotate(180deg)}.s-line .chev{color:var(--dim);transition:transform .15s}
+.s-out{display:flex;gap:8px}.s-out input{flex:1;min-width:0}.s-out button{flex:0 0 auto;padding:0 18px}
+.s-note{margin:8px 6px 0}.s-empty{color:var(--dim);margin:0;padding:4px 0}
+.s-ok{color:#7be29a;margin:0;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -237,7 +261,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <button id="back" class="hide" aria-label="Back to all TVs"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg>All TVs</button>
   <svg class="logo" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true"><use href="#i-logo"/></svg>
   <h1>TV Remote</h1><span class="grow"></span>
-  <a id="gear" href="#/settings" aria-label="Settings" title="Settings" style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim)"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg></a>
+  <a id="gear" href="#/settings" role="button" aria-pressed="false" aria-label="Settings" title="Settings"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg></a>
   <a id="logout" class="hide" href="/logout" aria-label="Log out" title="Log out"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg></a><span id="dot" role="img" aria-label="Connection to the Pi"></span>
 </header>
 
@@ -254,21 +278,60 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 </section>
 
 <section id="view-settings" class="hide">
-  <h2 style="margin-top:6px">Settings</h2>
-  <div class="card"><b>Your account</b><p class="sub" id="acctsub">&hellip;</p></div>
-  <div class="card"><b>Linked platforms</b><p class="sub">Link your own accounts to chat and see your data. Each TV Remote account has its own links.</p>
-    <button id="kickrow" class="tvrow hide" style="margin:6px 0 0">
-  <div class="grow"><b>Kick account</b><span class="sub" id="kicksub"></span></div></button>
+  <div class="card s-prof">
+    <div class="avatar" id="sav" aria-hidden="true">?</div>
+    <div class="grow"><b id="sname">&hellip;</b> <span class="pill" id="srole"></span><span class="sub" id="acctsub"></span></div>
+    <a class="s-link" id="signout" href="/logout">Sign out</a>
   </div>
-  <div class="card hide" id="adminbox"><b>Admin</b>
-    <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:10px 0 6px">
+  <div class="card hide" id="pwcard">
+    <button class="s-line" id="pwopen" aria-expanded="false"><b>Change password</b><span class="chev">&#9662;</span></button>
+    <form id="pwform" class="hide s-form">
+      <input id="pwcur" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password">
+      <input id="pwnew" type="password" placeholder="New password (6+ characters)" autocomplete="new-password" aria-label="New password">
+      <p class="sub">You'll be signed out everywhere and log in again with the new one.</p>
+      <button class="go">Change password</button>
+    </form>
+  </div>
+
+  <div id="platforms">
+    <h3 class="shead">Linked platforms</h3>
+    <div class="card">
+    <button id="kickrow" class="tvrow hide" style="margin:0">
+  <div class="grow"><b>Kick account</b><span class="sub" id="kicksub"></span></div></button>
+      <div class="s-row"><div class="avatar" aria-hidden="true">T</div><div class="grow"><b>Twitch</b><span class="sub">Not available yet.</span></div></div>
+    </div>
+  </div>
+
+  <div id="adminarea" class="hide">
+    <h3 class="shead">People</h3>
+    <div class="card" id="people"></div>
+    <button id="addperson" class="s-wide" aria-expanded="false">Add a person</button>
+    <form id="acctadd" class="card s-form hide">
+      <input id="acctname" placeholder="Name (letters, digits, - or _)" autocapitalize="none" autocomplete="off" aria-label="New account name">
+      <input id="acctpw" type="password" placeholder="Password (6+ characters)" autocomplete="new-password" aria-label="New account password">
+      <label class="s-check"><input id="acctadmin" type="checkbox"> Make this person an admin</label>
+      <button class="go">Create account</button>
+    </form>
+
+    <h3 class="shead">Access requests <span class="pill hide" id="reqcount"></span></h3>
+    <div class="card" id="requests"></div>
+    <p class="sub s-note">People who aren't logged in can ask for access from the login page. You'll see them here.</p>
+
+    <h3 class="shead">Guest links</h3>
+    <div class="card s-form" id="inviteform">
+      <input id="invlabel" placeholder="Who is it for? (optional)" maxlength="30" aria-label="Who the guest link is for">
+      <select id="invhours" aria-label="How long access lasts" style="font-size:16px;min-height:52px">
+        <option value="1">Access lasts 1 hour</option><option value="24" selected>Access lasts 1 day</option>
+        <option value="168">Access lasts 7 days</option><option value="720">Access lasts 30 days</option></select>
+      <button class="go" id="invmake">Create a one-time link</button>
+      <div id="invout" class="hide s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button">Copy</button></div>
+      <p class="sub">A guest can play things and control the TVs. They can't change favourites, link accounts or see settings. Each link works once, and must be opened within 2 days.</p>
+    </div>
+    <div class="card hide" id="guests"></div>
+
+    <h3 class="shead" id="tvhead">TV</h3>
+    <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:0">
   <div class="grow"><b>Home screen on the TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
-    <h3>Accounts</h3>
-    <p class="sub">The owner (the password in .env) is always an admin. Admins can add and remove accounts, change roles and open Debug.</p>
-    <div id="acctlist"></div>
-    <form id="acctadd" class="row" style="flex-wrap:wrap"><input id="acctname" placeholder="New name" autocapitalize="none" autocomplete="off" aria-label="New account name"><input id="acctpw" type="password" placeholder="Password (6+)" autocomplete="new-password" aria-label="New account password">
-      <label style="flex:1 0 100%;display:flex;gap:8px;align-items:center;min-height:44px"><input id="acctadmin" type="checkbox" style="flex:0 0 auto;width:22px;height:22px"> Make this account an admin</label>
-      <button style="flex:1 0 100%">Add account</button></form>
   </div>
 </section>
 
@@ -376,7 +439,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 
 <script>
 const $ = id => document.getElementById(id);
-let site = 'kick', st = {}, dragging = false, qualFor = null, qualAt = 0, qualTries = 0, favList = [], targets = [];
+let lastRun = null, site = 'kick', st = {}, dragging = false, qualFor = null, qualAt = 0, qualTries = 0, favList = [], targets = [];
 let target = '';  // the TV shown in the One TV view; set by the router
 const TV_COLOURS = ['#62b0ff', '#ff8aa8', '#5ad6b0', '#b3a2ff'];
 // While something plays, the remote takes the site's colour (Kick green, Twitch purple, YouTube red); otherwise the TV's own colour.
@@ -548,7 +611,13 @@ async function loadQualities() {
 async function poll() {
   if (view() !== 'tv') return;
   const s = await api('/api/status');
-  if (s) { st = s; render(); }
+  if (s) {
+    // The same stream reloading (a quality switch, Refresh) briefly reports "starting": keep showing the controls meanwhile,
+    // instead of dropping the whole card back to Stop only. A different stream, or an error, shows as itself.
+    if (s.running) lastRun = {...s, at: Date.now()};
+    else if (s.starting && !s.error && lastRun && lastRun.url === s.url && Date.now() - lastRun.at < 45000) { Object.assign(s, lastRun, {running: true, starting: false, buffering: true, error: null}); delete s.at; }
+    st = s; render();
+  }
 }
 
 // A streamer on more than one site gets a chip for each; tap a chip to watch there. A dot marks the sites they're live on.
@@ -756,7 +825,8 @@ function renderShell() {
 async function loadShell() {
   const cur = targets.find(t => t.id === target) || {};
   const pi = targets.some(t => t.kind === 'pi');
-  $('shellrow').classList.toggle('hide', !pi);  // now on the Settings page, so it no longer depends on the TV you opened
+  $('shellrow').classList.toggle('hide', !pi);
+  $('tvhead').classList.toggle('hide', !pi);  // now on the Settings page, so it no longer depends on the TV you opened
   $('homebox').classList.toggle('hide', !pi);
   loadStats();
   if (!pi) return;
@@ -800,35 +870,147 @@ $('kicksend').onsubmit = async e => {
 $('kickfull').onclick = () => { const k = kickSlug(st.url || ''); if (k) window.open('https://kick.com/popout/' + encodeURIComponent(k) + '/chat', '_blank', 'noopener'); };
 fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {});
 
-// ---- accounts (the owner adds people; each has their own favourites and Kick link) ----
-async function loadAccounts() {
-  const me = await fetch('/api/auth').then(r => r.json()).catch(() => ({}));
-  $('acctsub').textContent = me.required ? 'Signed in as ' + (me.owner ? 'the owner' : me.user) + ' (' + (me.admin ? 'admin' : 'user') + ')'
-    : 'No password is set, so everyone is the owner.';
-  $('adminbox').classList.toggle('hide', !me.admin);
-  $('dbgrow').classList.toggle('hide', !me.admin);
-  const list = me.admin ? await fetch('/api/accounts').then(r => r.json()).catch(() => ({})) : {};
-  $('acctlist').replaceChildren(...(list.users || []).map(u => {
-    const row = document.createElement('div'), n = document.createElement('span'), role = document.createElement('select'), b = document.createElement('button');
-    row.className = 'row'; row.style.alignItems = 'center'; row.style.marginBottom = '6px';
-    n.textContent = u.name;
-    ['user', 'admin'].forEach(r => { const o = document.createElement('option'); o.value = o.textContent = r; role.appendChild(o); });
-    role.value = u.role; role.setAttribute('aria-label', 'Role of ' + u.name); role.style.flex = '0 0 auto';
-    role.onchange = async () => { await api('/api/accounts', 'PATCH', {name: u.name, role: role.value}); loadAccounts(); };
-    b.textContent = 'Remove'; b.style.flex = '0 0 auto'; b.style.padding = '0 14px';
-    b.onclick = async () => {
-      if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Tap again: deletes their favourites'; return; }
-      await api('/api/accounts', 'DELETE', {name: u.name}); loadAccounts();
-    };
-    row.append(n, role, b); return row;
-  }));
+// ---- settings: your account, linked platforms, and (for admins) people, access requests and guest links ----
+function mk(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  Object.entries(attrs || {}).forEach(([k, v]) => {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e[k] = v;
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+  });
+  kids.flat().forEach(c => e.append(c == null || c === false ? '' : c));
+  return e;
 }
+const seen = ts => ts ? ago(ts) : 'never';  // `ago` is defined further up
+function inFuture(ts) {
+  const s = Math.max(0, ts - Date.now() / 1000);
+  return s < 5400 ? Math.max(1, Math.round(s / 60)) + ' min' : s < 129600 ? Math.round(s / 3600) + ' h' : Math.round(s / 86400) + ' days';
+}
+function copyText(input) {
+  input.focus(); input.select(); input.setSelectionRange(0, 9999);
+  try { if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(input.value); else document.execCommand('copy'); } catch (e) {}
+}
+let me = {}, people = [], access = {requests: [], invites: [], guests: []}, openPerson = null;
+
+function renderProfile() {
+  const name = me.guest ? 'Guest' + (me.label ? ' (' + me.label + ')' : '') : me.owner ? 'Owner' : me.user || '';
+  $('sname').textContent = name || 'Signed out';
+  $('sav').textContent = (me.guest ? 'G' : name).slice(0, 1);
+  $('srole').textContent = me.guest ? 'guest' : me.owner ? 'owner' : me.role || '';
+  $('srole').className = 'pill ' + (me.guest ? 'guest' : me.owner ? 'owner' : me.role || '');
+  $('acctsub').textContent = me.guest ? 'Access ends in ' + inFuture(me.guest_until || 0) + '. You can control the TVs.'
+    : !me.required ? 'No password is set, so everyone is the owner.' : me.owner ? 'Your password is set in .env on the Pi.' : '';
+  $('signout').classList.toggle('hide', !me.required);
+  $('pwcard').classList.toggle('hide', !me.required || me.owner || me.guest);
+  $('platforms').classList.toggle('hide', !!me.guest);
+  $('adminarea').classList.toggle('hide', !me.admin);
+  $('dbgrow').classList.toggle('hide', !me.admin);
+}
+
+function personRow(u) {
+  const mine = u.name === me.user || (u.owner && me.owner);
+  const canAct = !u.owner && !mine && (me.owner || u.role !== 'admin');
+  const facts = [u.favs + (u.favs === 1 ? ' favourite' : ' favourites'), u.owner ? 'password in .env' : 'last seen ' + seen(u.last_login)].join(' · ');
+  const row = mk('div', {class: 's-row'},
+    mk('div', {class: 'avatar', 'aria-hidden': 'true'}, u.name.slice(0, 1)),
+    mk('div', {class: 'grow'}, mk('b', {}, u.name), ' ', mk('span', {class: 'pill ' + (u.owner ? 'owner' : u.role)}, u.owner ? 'owner' : u.role),
+      mine && !u.owner ? mk('span', {class: 'pill'}, 'you') : null, mk('span', {class: 'sub'}, facts)),
+    canAct ? mk('button', {class: 's-more', 'aria-label': 'Actions for ' + u.name, 'aria-expanded': String(openPerson === u.name),
+      onclick: () => { openPerson = openPerson === u.name ? null : u.name; renderPeople(); }}, '⋯') : null);
+  const out = [row];
+  if (canAct && openPerson === u.name) {
+    const reset = mk('form', {class: 'hide'}, mk('input', {type: 'password', placeholder: 'New password (6+)', autocomplete: 'new-password', 'aria-label': 'New password for ' + u.name}), mk('button', {class: 'go'}, 'Set'));
+    reset.onsubmit = async e => {
+      e.preventDefault();
+      const r = await busy(reset.querySelector('button'), () => api('/api/accounts', 'POST', {name: u.name, password: reset.querySelector('input').value}));
+      if (r && r.ok !== false) { openPerson = null; loadSettings(); }
+    };
+    const remove = mk('button', {class: 's-danger', onclick: async () => {
+      if (remove.dataset.sure !== '1') { remove.dataset.sure = '1'; remove.textContent = 'Tap again: deletes their favourites'; return; }
+      await api('/api/accounts', 'DELETE', {name: u.name}); openPerson = null; loadSettings();
+    }}, 'Remove');
+    out.push(mk('div', {class: 's-actions'},
+      mk('button', {onclick: async () => { await api('/api/accounts', 'PATCH', {name: u.name, role: u.role === 'admin' ? 'user' : 'admin'}); loadSettings(); }}, u.role === 'admin' ? 'Make user' : 'Make admin'),
+      mk('button', {onclick: () => { reset.classList.toggle('hide'); const i = reset.querySelector('input'); if (!reset.classList.contains('hide')) i.focus(); }}, 'Reset password'),
+      mk('button', {onclick: async e => { await busy(e.currentTarget, () => api('/api/accounts/signout', 'POST', {name: u.name})); }}, 'Sign out everywhere'),
+      remove, reset));
+  }
+  return out;
+}
+function renderPeople() { $('people').replaceChildren(...people.flatMap(personRow)); }
+
+function requestRow(r) {
+  const form = mk('form', {class: 's-actions hide', style: 'padding-left:0'},
+    mk('input', {value: r.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '').slice(0, 20), 'aria-label': 'Account name', autocapitalize: 'none'}),
+    mk('input', {type: 'password', placeholder: 'Password (blank = make one)', autocomplete: 'new-password', 'aria-label': 'Password'}),
+    mk('button', {class: 'go'}, 'Create account'));
+  const result = mk('p', {class: 's-ok hide', role: 'status'});
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const [n, p] = form.querySelectorAll('input');
+    const res = await busy(form.querySelector('button'), () => api('/api/requests/' + r.id + '/approve', 'POST', {name: n.value, password: p.value}));
+    if (res && res.ok) {
+      form.classList.add('hide');
+      result.classList.remove('hide');
+      result.textContent = 'Created "' + res.name + '"' + (res.password ? '. Password (shown once): ' + res.password : '') + '. Tell them.';
+      loadPeople();
+    }
+  };
+  return mk('div', {class: 's-row', style: 'flex-wrap:wrap'},
+    mk('div', {class: 'avatar', 'aria-hidden': 'true'}, r.name.slice(0, 1)),
+    mk('div', {class: 'grow'}, mk('b', {}, r.name), mk('span', {class: 'sub'}, (r.note ? '“' + r.note + '” · ' : '') + ago(r.ts))),
+    mk('button', {onclick: () => { form.classList.toggle('hide'); }}, 'Approve'),
+    mk('button', {class: 's-danger', onclick: async () => { await api('/api/requests/' + r.id, 'DELETE'); loadAccess(); }}, 'Deny'),
+    form, result);
+}
+function renderAccess() {
+  const n = access.requests.length;
+  $('reqcount').textContent = n; $('reqcount').classList.toggle('hide', !n);
+  $('requests').replaceChildren(...(n ? access.requests.map(requestRow) : [mk('p', {class: 's-empty'}, 'No requests waiting.')]));
+  const rows = [
+    ...access.guests.map(g => mk('div', {class: 's-row'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, (g.label || 'G').slice(0, 1)),
+      mk('div', {class: 'grow'}, mk('b', {}, g.label || 'Guest'), mk('span', {class: 'sub'}, 'Using it now · ends in ' + inFuture(g.exp))),
+      mk('button', {class: 's-danger', onclick: async () => { await api('/api/guests/' + g.id, 'DELETE'); loadAccess(); }}, 'Revoke'))),
+    ...access.invites.map(i => mk('div', {class: 's-row'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✉'),
+      mk('div', {class: 'grow'}, mk('b', {}, i.label || 'Unopened link'), mk('span', {class: 'sub'}, 'Not opened yet · ' + i.hours + ' h of access · link expires in ' + inFuture(i.redeem_by))),
+      mk('button', {class: 's-danger', onclick: async () => { await api('/api/invites/' + i.id, 'DELETE'); loadAccess(); }}, 'Revoke')))];
+  $('guests').classList.toggle('hide', !rows.length);
+  $('guests').replaceChildren(...rows);
+}
+async function loadPeople() {
+  const r = await fetch('/api/accounts').then(x => x.json()).catch(() => ({}));
+  people = r.users || []; renderPeople();
+}
+async function loadAccess() {
+  const r = await fetch('/api/access').then(x => x.json()).catch(() => null);
+  if (r) { access = r; renderAccess(); }
+}
+async function loadSettings() {
+  me = await fetch('/api/auth').then(r => r.json()).catch(() => ({}));
+  renderProfile();
+  if (me.admin) await Promise.all([loadPeople(), loadAccess()]);
+}
+function loadAccounts() { return loadSettings(); }
+
+$('pwopen').onclick = () => { const open = $('pwform').classList.toggle('hide') === false; $('pwopen').setAttribute('aria-expanded', String(open)); };
+$('pwform').onsubmit = async e => {
+  e.preventDefault();
+  const r = await busy($('pwform').querySelector('button'), () => api('/api/account/password', 'POST', {current: $('pwcur').value, new: $('pwnew').value}));
+  if (r && r.ok) location.href = '/login';
+};
+$('addperson').onclick = () => { const open = $('acctadd').classList.toggle('hide') === false; $('addperson').setAttribute('aria-expanded', String(open)); if (open) $('acctname').focus(); };
 $('acctadd').onsubmit = async e => {
   e.preventDefault();
   const r = await busy($('acctadd').querySelector('button'), () => api('/api/accounts', 'POST',
     {name: $('acctname').value, password: $('acctpw').value, role: $('acctadmin').checked ? 'admin' : 'user'}));
-  if (r && r.ok !== false) { $('acctname').value = ''; $('acctpw').value = ''; $('acctadmin').checked = false; loadAccounts(); }
+  if (r && r.ok !== false) { $('acctname').value = ''; $('acctpw').value = ''; $('acctadmin').checked = false; $('acctadd').classList.add('hide'); loadPeople(); }
 };
+$('invmake').onclick = async e => {
+  e.preventDefault();
+  const r = await busy($('invmake'), () => api('/api/invites', 'POST', {hours: Number($('invhours').value), label: $('invlabel').value}));
+  if (r && r.ok) { $('invurl').value = r.url; $('invout').classList.remove('hide'); $('invlabel').value = ''; loadAccess(); }
+};
+$('invcopy').onclick = () => { copyText($('invurl')); $('invcopy').textContent = 'Copied'; setTimeout(() => { $('invcopy').textContent = 'Copy'; }, 1500); };
 loadAccounts();
 
 fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
@@ -1121,12 +1303,17 @@ async function loadTargets() {
   if (changed) { renderCards(); tvInfo(); if (view() === 'share') renderPicker(); if (view() === 'tv' || view() === 'all') loadShell(); }
 }
 
+let beforeSettings = '#/';  // where the gear takes you back to
 function show() {
   const v = view();
+  if (v !== 'settings') beforeSettings = location.hash || '#/';
+  $('gear').setAttribute('aria-pressed', String(v === 'settings'));
+  $('gear').title = v === 'settings' ? 'Close settings' : 'Settings';
+  $('gear').setAttribute('aria-label', $('gear').title);
   if (v === 'tv') {
     const id = decodeURIComponent(location.hash.slice(5));
     if (id !== target) {
-      target = id; st = {}; qualFor = null; $('qual').innerHTML = '';
+      target = id; st = {}; lastRun = null; qualFor = null; $('qual').innerHTML = '';
       try { localStorage.setItem('target', id); } catch (e) {}
       loadFavs(); poll(); loadShell();
     }
@@ -1140,7 +1327,8 @@ function show() {
 }
 window.addEventListener('hashchange', show);
 window.addEventListener('popstate', show);
-$('back').onclick = () => { location.hash = '#/'; };
+$('back').onclick = () => { location.hash = view() === 'settings' ? beforeSettings : '#/'; };
+$('gear').onclick = e => { if (view() === 'settings') { e.preventDefault(); location.hash = beforeSettings; } };
 
 document.addEventListener('click', async e => {
   const b = e.target.closest('button[data-k]');

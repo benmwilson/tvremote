@@ -10,8 +10,10 @@ import os
 import re
 import secrets
 import threading
+import time
 
 OWNER = "owner"
+GUEST = "guest"  # the pseudo-account behind a one-time link: controls the TVs, nothing else
 ROLES = ("user", "admin")
 _lock = threading.Lock()
 
@@ -44,11 +46,23 @@ def exists(name):
 def role(name):
     if name == OWNER:
         return "admin"
+    if name == GUEST:
+        return "guest"
     return _load().get(name, {}).get("role", "user") if name in _load() else "user"
 
 
 def listing():
-    return [{"name": n, "role": role(n)} for n in names()]
+    d = _load()
+    return [{"name": n, "role": role(n), "created": d[n].get("created"), "last_login": d[n].get("last_login")} for n in sorted(d)]
+
+
+def touch(name):
+    """Remember when an account last logged in."""
+    with _lock:
+        d = _load()
+        if name in d:
+            d[name]["last_login"] = time.time()
+            _write(d)
 
 
 def set_role(name, new_role):
@@ -63,7 +77,7 @@ def set_role(name, new_role):
 
 
 def valid_name(name):
-    return bool(re.fullmatch(r"[a-z0-9_-]{2,20}", name or "")) and name != OWNER
+    return bool(re.fullmatch(r"[a-z0-9_-]{2,20}", name or "")) and name not in (OWNER, GUEST)
 
 
 def _write(d):
@@ -87,7 +101,8 @@ def add(name, password, new_role=None):
     salt = secrets.token_hex(16)
     with _lock:
         d = _load()
-        d[name] = {"salt": salt, "hash": _hash(password, salt), "role": new_role or d.get(name, {}).get("role", "user")}
+        d[name] = {"salt": salt, "hash": _hash(password, salt), "role": new_role or d.get(name, {}).get("role", "user"),
+                   "created": d.get(name, {}).get("created") or time.time(), "last_login": d.get(name, {}).get("last_login")}
         _write(d)
     return name
 
@@ -107,3 +122,10 @@ def verify(name, password):
         _hash(password or "", "00" * 16)  # similar work either way, so timing doesn't reveal which names exist
         return False
     return hmac.compare_digest(_hash(password or "", u["salt"]), u["hash"])
+
+
+def change_password(name, current, new):
+    """An account changes its own password. Raises ValueError when the current one is wrong or the new one is too short."""
+    if not verify(name, current):
+        raise ValueError("The current password is wrong.")
+    add(name, new)

@@ -37,6 +37,7 @@ YTDL_HEIGHTS = ("1080", "720", "480")
 
 import hlsproxy
 import live
+import access
 import accounts
 import chat
 import kick
@@ -86,7 +87,7 @@ def guard():
         return Response("Cross-site request blocked", 403)
     if request.path == "/play" and request.headers.get("Sec-Fetch-Site") == "cross-site" and not token_ok:
         return Response("Cross-site request blocked", 403)
-    if not PASSWORD or re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/logo\.svg|/icon-\d+\.png|/manifest\.json", request.path):
+    if not PASSWORD or re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
@@ -95,6 +96,8 @@ def guard():
     who = session_user(request.cookies.get("tv_auth", ""))  # one read of the session: valid and whose, together
     if who:
         g.user = who
+        if who == accounts.GUEST and guest_blocked():
+            return Response(json.dumps({"ok": False, "error": "Guests can control the TVs, but not do that."}), 403, mimetype="application/json")
         return None
     a = request.authorization
     wants_page = "text/html" in request.headers.get("Accept", "")
@@ -109,6 +112,12 @@ def guard():
 
 
 SESSION_DAYS = 180
+
+
+def guest_blocked():
+    """What a one-time-link guest may not do: change favourites, link accounts, anything about accounts."""
+    return (request.method != "GET" and request.path.startswith("/api/favourites")) or \
+        request.path.startswith(("/auth/kick", "/api/kick/chat", "/api/kick/unlink", "/api/account"))
 _sessions_lock = threading.Lock()
 
 
@@ -141,13 +150,13 @@ def _h(tok):
     return hmac.new(PASSWORD.encode(), tok.encode(), hashlib.sha256).hexdigest()
 
 
-def new_session(user=accounts.OWNER):
+def new_session(user=accounts.OWNER, seconds=None, extra=None):
     """A random token for one login; the server remembers it (hashed) until it expires or the user logs out."""
     tok = secrets.token_urlsafe(32)
     with _sessions_lock:
         d = {k: v for k, v in _sess_load().items() if _exp(v) > time.time()}
-        exp = time.time() + SESSION_DAYS * 86400
-        d[_h(tok)] = exp if user == accounts.OWNER else {"exp": exp, "user": user}
+        exp = time.time() + (seconds or SESSION_DAYS * 86400)
+        d[_h(tok)] = exp if user == accounts.OWNER else {"exp": exp, "user": user, **(extra or {})}
         _sess_save(d)
     return tok
 
@@ -165,7 +174,24 @@ def session_user(tok):
         return None
     if not isinstance(v, dict):
         return accounts.OWNER
-    return v["user"] if accounts.exists(v["user"]) else None
+    return v["user"] if v["user"] == accounts.GUEST or accounts.exists(v["user"]) else None
+
+
+def guest_sessions():
+    return [{"id": k[:8], "label": v.get("label", ""), "exp": v["exp"]} for k, v in _sess_load().items()
+            if isinstance(v, dict) and v.get("user") == accounts.GUEST and v["exp"] > time.time() and k not in _revoked]
+
+
+def drop_guest(gid):
+    with _sessions_lock:
+        d = _sess_load()
+        gone = [k for k, v in d.items() if len(gid) >= 8 and k.startswith(gid) and isinstance(v, dict) and v.get("user") == accounts.GUEST]
+        for k in gone:
+            del d[k]
+            _revoked.add(k)
+        if gone:
+            _sess_save(d)
+        return bool(gone)
 
 
 def valid_session(tok):
@@ -210,7 +236,7 @@ input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;f
 <body><form method="post" action="/login"><img src="/logo.svg" width="84" height="84" alt="" style="justify-self:center;border-radius:20px"><h1 style="text-align:center">TV Remote</h1>
 <input name="username" placeholder="Username (blank for the owner)" autocomplete="username" autocapitalize="none" aria-label="Username">
 <input type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password" autofocus required>
-<input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button></form></body></html>"""
+<input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button><a href="/request" style="text-align:center;color:#8c97a8;padding:10px">Request access</a></form></body></html>"""
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -228,6 +254,7 @@ def login():
         else:
             user = None
         if user:
+            accounts.touch(user)
             r = redirect(nxt, 303)
             r.set_cookie("tv_auth", new_session(user), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
             return r
@@ -247,8 +274,12 @@ def logout():
 
 @app.get("/api/auth")
 def api_auth():
+    info = {}
+    if g.user == accounts.GUEST:
+        v = _sess_load().get(_h(request.cookies.get("tv_auth", ""))) or {}
+        info = {"guest_until": v.get("exp"), "label": v.get("label", "")}
     return jsonify(required=bool(PASSWORD), user=g.user, owner=g.user == accounts.OWNER, role=accounts.role(g.user),
-                   admin=accounts.role(g.user) == "admin")
+                   admin=accounts.role(g.user) == "admin", guest=g.user == accounts.GUEST, **info)
 
 
 # ---------- routing ----------
@@ -609,6 +640,7 @@ def display_title(url):
 def fav_file(user=None):
     """The owner's favourites keep their old file; an account gets its own. Outside a request (background threads) it is the owner's."""
     user = user or (g.user if has_request_context() else accounts.OWNER)
+    user = accounts.OWNER if user == accounts.GUEST else user
     return FAV_FILE if user == accounts.OWNER else os.path.join(DATA, f"favourites.{user}.json")
 
 
@@ -1505,7 +1537,8 @@ def refuse():
 @app.get("/api/accounts")
 def accounts_list():
     admin_only()
-    return jsonify(users=accounts.listing())
+    people = [{"name": accounts.OWNER, "role": "admin", "owner": True, "created": None, "last_login": None}] + accounts.listing()
+    return jsonify(users=[{**u, "favs": len(load_favs(u["name"]))} for u in people])
 
 
 @app.post("/api/accounts")
@@ -1552,6 +1585,148 @@ def accounts_del():
             except OSError:
                 pass
     return accounts_list()
+
+
+@app.post("/api/accounts/signout")
+def accounts_signout():
+    admin_only()
+    name = str((request.get_json(silent=True) or {}).get("name", ""))
+    if not accounts.exists(name):
+        return jsonify(ok=False, error="No such account."), 400
+    if not may_change(name):
+        return refuse()
+    drop_user_sessions(name)
+    return jsonify(ok=True)
+
+
+@app.post("/api/account/password")
+def account_password():
+    data = request.get_json(silent=True) or {}
+    if g.user == accounts.OWNER:
+        return jsonify(ok=False, error="The owner's password is set in .env on the Pi."), 400
+    try:
+        accounts.change_password(g.user, data.get("current"), data.get("new"))
+    except ValueError as e:
+        time.sleep(0.8)  # slows guessing
+        return jsonify(ok=False, error=str(e)), 400
+    drop_user_sessions(g.user)  # signed out everywhere, this device included: log in again with the new one
+    return jsonify(ok=True)
+
+
+@app.get("/api/access")
+def access_state():
+    admin_only()
+    return jsonify(requests=access.requests_pending(), invites=access.invites_pending(), guests=guest_sessions())
+
+
+def slug_name(text):
+    return re.sub(r"[^a-z0-9_-]", "", re.sub(r"\s+", "-", (text or "").lower()))[:20]
+
+
+@app.post("/api/requests/<rid>/approve")
+def request_approve(rid):
+    admin_only()
+    data = request.get_json(silent=True) or {}
+    req = next((r for r in access.requests_pending() if r["id"] == rid), None)
+    if not req:
+        return jsonify(ok=False, error="That request is gone."), 404
+    name = slug_name(data.get("name") or req["name"])
+    if accounts.exists(name):
+        return jsonify(ok=False, error="That name is taken. Pick another."), 400
+    password = data.get("password") or secrets.token_urlsafe(9)
+    role = data.get("role") if data.get("role") in accounts.ROLES else "user"
+    if role == "admin" and g.user != accounts.OWNER:
+        return refuse()
+    try:
+        accounts.add(name, password, role)
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    access.pop_request(rid)
+    return jsonify(ok=True, name=name, password=None if data.get("password") else password)  # a generated one is shown once
+
+
+@app.delete("/api/requests/<rid>")
+def request_deny(rid):
+    admin_only()
+    access.pop_request(rid)
+    return access_state()
+
+
+@app.post("/api/invites")
+def invite_create():
+    admin_only()
+    data = request.get_json(silent=True) or {}
+    try:
+        token = access.create_invite(int(data.get("hours") or 24), data.get("label"))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, error="Pick how long access lasts."), 400
+    return jsonify(ok=True, url=request.host_url + "join/" + token)
+
+
+@app.delete("/api/invites/<iid>")
+def invite_revoke(iid):
+    admin_only()
+    access.revoke_invite(iid)
+    return access_state()
+
+
+@app.delete("/api/guests/<gid>")
+def guest_revoke(gid):
+    admin_only()
+    drop_guest(gid)
+    return access_state()
+
+
+PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0e14"><title>__TITLE__</title>
+<style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0e14;color:#f6f1ee;font:17px -apple-system,system-ui,sans-serif}
+main{width:min(340px,86vw);display:grid;gap:14px}h1{margin:0 0 6px;font-size:26px;text-align:center}p{margin:0;color:#a9b3c3;text-align:center;line-height:1.4}
+input,button{font:inherit;min-height:52px;border-radius:14px;border:0;padding:0 16px;box-sizing:border-box;width:100%}
+input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em}a{color:#8c97a8;text-align:center;padding:10px}</style></head>
+<body><main><img src="/logo.svg" width="84" height="84" alt="" style="justify-self:center;border-radius:20px">__BODY__</main></body></html>"""
+
+
+def page(title, body, status=200):
+    return Response(PAGE.replace("__TITLE__", title).replace("__BODY__", body), status, mimetype="text/html", headers={"Cache-Control": "no-store"})
+
+
+def request_form(err=""):
+    return page("Request access", '<h1>Request access</h1><form method="post" action="/request" style="display:grid;gap:14px">'
+                '<input name="name" placeholder="Your name" maxlength="30" autocomplete="name" required>'
+                '<input name="note" placeholder="Anything to add? (optional)" maxlength="140">'
+                f'<p class="e" role="alert">{html.escape(err)}</p><button>Send request</button><a href="/login">Back to log in</a></form>',
+                400 if err else 200)
+
+
+@app.route("/request", methods=["GET", "POST"])
+def request_access():
+    if request.method == "GET":
+        return request_form()
+    try:
+        access.add_request(request.form.get("name"), request.form.get("note"), request.remote_addr)
+    except ValueError as e:
+        return request_form(str(e))
+    return page("Request sent", "<h1>Request sent</h1><p>Thanks. An admin will look at it. Ask them to tell you when you have an account.</p>"
+                '<a href="/login">Back to log in</a>')
+
+
+@app.route("/join/<token>", methods=["GET", "POST"])
+def join(token):
+    inv = access.peek_invite(token)
+    if not inv:
+        return page("Link expired", "<h1>Link expired</h1><p>This link was already used or has expired. Ask for a new one.</p>", 410)
+    if request.method == "GET":  # opening the link only shows this page: a chat app's link preview must not use the link up
+        hrs = inv["hours"]
+        span = f"{hrs} hour{'s' if hrs != 1 else ''}" if hrs < 48 else f"{hrs // 24} days"
+        return page("Control the TV", f'<h1>Control the TV</h1><p>You can play things and control the TVs for {span} after you continue. '
+                    'This link works once.</p><form method="post" style="display:grid"><button>Continue</button></form>')
+    inv = access.redeem_invite(token)
+    if not inv:
+        return page("Link expired", "<h1>Link expired</h1><p>This link was already used or has expired. Ask for a new one.</p>", 410)
+    seconds = inv["hours"] * 3600
+    r = redirect("/", 303)
+    r.set_cookie("tv_auth", new_session(accounts.GUEST, seconds, {"label": inv["label"]}), max_age=seconds, httponly=True, samesite="Lax")
+    return r
 
 
 @app.delete("/api/favourites")

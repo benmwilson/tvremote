@@ -65,7 +65,7 @@ class AccountsTest(unittest.TestCase):
     def test_only_the_owner_manages_accounts(self):
         owner, _ = self.login("", "owner-pw")
         r = owner.post("/api/accounts", json={"name": "sam", "password": "secret1"})
-        self.assertEqual(r.get_json()["users"], [{"name": "sam", "role": "user"}])
+        self.assertEqual([u["name"] for u in r.get_json()["users"]], ["owner", "sam"])
         self.assertEqual(owner.post("/api/accounts", json={"name": "x", "password": "secret1"}).status_code, 400)
         sam, _ = self.login("sam", "secret1")
         self.assertEqual(sam.get("/api/accounts").status_code, 403)
@@ -81,7 +81,7 @@ class AccountsTest(unittest.TestCase):
         self.assertEqual(owner.get("/api/auth").get_json()["role"], "admin")  # the owner can never be locked out
         owner.post("/api/accounts", json={"name": "sam", "password": "secret1"})
         owner.post("/api/accounts", json={"name": "amy", "password": "secret1", "role": "admin"})
-        self.assertEqual(owner.get("/api/accounts").get_json()["users"], [{"name": "amy", "role": "admin"}, {"name": "sam", "role": "user"}])
+        self.assertEqual([(u["name"], u["role"]) for u in owner.get("/api/accounts").get_json()["users"]], [("owner", "admin"), ("amy", "admin"), ("sam", "user")])
         sam, _ = self.login("sam", "secret1")
         for path in ("/api/accounts", "/api/debug", "/api/screen.png"):
             self.assertEqual(sam.get(path).status_code, 403, path)
