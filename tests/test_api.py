@@ -476,6 +476,11 @@ class ShellFlow(unittest.TestCase):
             server.play_on(c, "https://kick.com/a", None)
         self.assertEqual(calls, [False])
 
+    def test_login_redirect_only_goes_to_plain_paths_on_this_site(self):
+        for bad in ("//evil.example", "/\\evil.example", "/\\\\evil.example", "https://evil.example", "/ok\r\nSet-Cookie: x=1", "", "evil"):
+            self.assertEqual(server.safe_next(bad), "/", repr(bad))
+        self.assertEqual(server.safe_next("/?target=bedroom"), "/?target=bedroom")
+
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]
         saved = []

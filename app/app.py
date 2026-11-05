@@ -156,7 +156,12 @@ def drop_session(tok):
 
 
 def safe_next(n):
-    return n if n.startswith("/") and not n.startswith("//") else "/"
+    """Where to go after login: only a plain path on this site. Browsers read "/\x" as "//x", so backslashes and
+    control characters are out too."""
+    if not n or not n.startswith("/") or n.startswith("//") or "\\" in n or any(ord(c) < 32 for c in n):
+        return "/"
+    p = urlparse(n)
+    return n if not p.scheme and not p.netloc else "/"
 
 
 LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
