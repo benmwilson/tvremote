@@ -200,8 +200,6 @@ class CastTarget:
             mc.play() if ms.player_is_paused else mc.pause()
         elif action == "mute":
             rc.set_volume_muted(not cast.status.volume_muted)
-        elif action == "unmute":
-            rc.set_volume_muted(False)
         elif action == "volume":
             rc.set_volume(max(0.0, min(1.0, float(value) / 100)))
         elif action == "volume_delta":

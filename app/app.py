@@ -357,7 +357,6 @@ def api_play():
 COMMANDS = {
     "pause": lambda v: ["cycle", "pause"],
     "mute": lambda v: ["cycle", "mute"],
-    "unmute": lambda v: ["set_property", "mute", False],
     "volume": lambda v: ["set_property", "volume", max(0.0, min(130.0, float(v)))],
     "volume_delta": lambda v: ["add", "volume", float(v)],
     "seek": lambda v: ["seek", float(v), "relative"],
