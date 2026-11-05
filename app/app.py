@@ -11,7 +11,7 @@ import threading
 import time
 from urllib.parse import urlparse
 
-from flask import Flask, Response, abort, jsonify, redirect, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, send_file, redirect, request, send_from_directory
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("TVREMOTE_DATA", "/data")
@@ -274,8 +274,33 @@ def _watch(proc):
         screen("ended", name)
 
 
-def start_player(url, quality=None):
-    screen("loading", fav_name(url))  # before the old stream stops, so the swap never shows the desktop
+def buffering_screen():
+    """Drawn only while the picture is stalled, so redrawing costs the stream nothing."""
+    return "\n".join([
+        r"{\an7\pos(0,0)\p1\bord0\shad0\1c&H000000&\1a&HB0&}m 0 0 l 1920 0 1920 1080 0 1080{\p0}",
+        r"{\an5\pos(960,500)\fs72\b1\bord0\shad0\1c&HF6F1EE&}Buffering\u2026",
+        r"{\an5\pos(960,590)\fs36\b0\bord0\shad0\1c&HA9978C&}Waiting for the stream. If this keeps happening, lower the quality on your phone."])
+
+
+def _stall_monitor(proc):
+    """Count stalls and show Buffering on the TV while the picture waits for data."""
+    stalled_at = None
+    while proc.poll() is None:
+        time.sleep(1)
+        stalled = prop("paused-for-cache") is True
+        if stalled and stalled_at is None:
+            stalled_at = time.time()
+            state["stalls"] = state.get("stalls", 0) + 1
+            mpv(["osd-overlay", 3, "ass-events", buffering_screen(), 1920, 1080])
+        elif not stalled and stalled_at is not None:
+            state["stall_s"] = state.get("stall_s", 0) + time.time() - stalled_at
+            stalled_at = None
+            mpv(["osd-overlay", 3, "none"])
+
+
+def start_player(url, quality=None, screen_kind="loading"):
+    # before the old stream stops, so a swap never shows the desktop
+    screen(screen_kind, fav_name(url) + ("  \u00b7  " + quality if screen_kind == "quality" and quality else ""))
     stop_player()
     source, player = resolve(url)
     try:
@@ -299,9 +324,10 @@ def start_player(url, quality=None):
     log = open(LOG_FILE, "w")
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log,
                             stderr=subprocess.STDOUT, start_new_session=True)
-    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time())
+    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time(), stalls=0, stall_s=0)
     chat_sync()
     threading.Thread(target=_watch, args=(proc,), daemon=True).start()
+    threading.Thread(target=_stall_monitor, args=(proc,), daemon=True).start()
     if player == "streamlink":  # warm the metadata cache for the title
         threading.Thread(target=sl_info, args=(url,), daemon=True).start()
     threading.Thread(target=switch_tv_to_pi, daemon=True).start()
@@ -484,7 +510,7 @@ def api_cmd():
         if not state["url"]:
             return jsonify(ok=False, error="Nothing to restart"), 400
         with lock:
-            start_player(state["url"], data.get("quality") or state["quality"])
+            start_player(state["url"], data.get("quality") or state["quality"], "quality")
         return jsonify(ok=True)
     if action == "chat":
         _chat["pref"] = data.get("value") != "off"
@@ -560,6 +586,7 @@ def pi_status():
             data[key] = prop(name)
         if state["player"] == "streamlink":
             data["title"] = display_title(state["url"])
+        data["stalls"], data["stall_s"] = state.get("stalls", 0), round(state.get("stall_s", 0))
         data["chat_ok"] = state["source"] == "Twitch" and bool(chat.channel_of(state["url"] or ""))
         data["chat"] = bool(_chat["obj"])
         # live = streamlink, or a stream with no duration
@@ -697,9 +724,23 @@ def bedroom_card():
 cards = targets.Cards({"living": living_card, "bedroom": bedroom_card}, ORDER)
 
 
+SHELL_SHOT = "/tmp/tvremote-shell.png"
+
+
 def shell_state():
-    return {"enabled": bool(settings.get("shell")), "running": bool(HOME and HOME.running()),
-            "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None}
+    running = bool(HOME and HOME.running())
+    return {"enabled": bool(settings.get("shell")), "running": running,
+            "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None,
+            "props": HOME.props() if running and hasattr(HOME, "props") else None}  # what the window is doing, for debugging
+
+
+@app.get("/api/shell/screenshot")
+def api_shell_screenshot():
+    """What the home screen window is drawing right now, as a PNG (for debugging)."""
+    r = mpvipc.send(shell.SOCK, ["screenshot-to-file", SHELL_SHOT, "window"], 4)
+    if not (r and r.get("error") == "success"):
+        return jsonify(ok=False, error="The home screen isn't running, or couldn't take a screenshot."), 502
+    return send_file(SHELL_SHOT, mimetype="image/png", max_age=0)
 
 
 @app.get("/api/shell")
@@ -854,7 +895,8 @@ if __name__ == "__main__":
         CAST = CastTarget(DATA, resolve, display_title, YTDL_HEIGHTS, SL_DEFAULT)
     cards.start()
     settings.update(load_settings())
-    HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone")
+    HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
+                       favs=lambda: [(f.get("name") or "")[:28] for f in load_favs()][:5])
     if settings["shell"]:
         threading.Thread(target=HOME.start, daemon=True).start()
     from waitress import serve

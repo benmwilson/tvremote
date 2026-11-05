@@ -219,6 +219,39 @@ class ShellFlow(unittest.TestCase):
             server.start_player("https://kick.com/chan")
         self.assertEqual(order[:2], ["screen:loading", "stop"])
 
+    def test_changing_quality_shows_the_quality_screen_first(self):
+        order = []
+        self.home.show = lambda kind, detail="": order.append((kind, detail)) or True
+        with mock.patch.object(server, "stop_player", side_effect=lambda: order.append("stop")),                 mock.patch.object(server.subprocess, "Popen"), mock.patch.object(server, "_watch"),                 mock.patch.object(server, "_stall_monitor"), mock.patch.object(server, "chat_sync"),                 mock.patch.object(server, "switch_tv_to_pi"):
+            server.start_player("https://kick.com/chan", "720p60", "quality")
+        self.assertEqual(order[:2], [("quality", "chan  ·  720p60"), "stop"])
+
+    def test_the_restart_command_asks_for_the_quality_screen(self):
+        server.state.update(url="https://kick.com/chan", quality="1080p60,best")
+        with mock.patch.object(server, "start_player") as sp:
+            self.client.post("/api/cmd", json={"action": "restart", "quality": "720p60"})
+        sp.assert_called_once_with("https://kick.com/chan", "720p60", "quality")
+
+    def test_a_stall_shows_buffering_on_the_tv_and_is_counted(self):
+        proc = mock.Mock()
+        proc.poll.side_effect = [None, None, None, None, None, 0]
+        stalled = iter([False, True, True, False, False])
+        sent = []
+        server.state.update(stalls=0, stall_s=0)
+        with mock.patch.object(server.time, "sleep"), mock.patch.object(server, "prop", lambda n: next(stalled)),                 mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
+            server._stall_monitor(proc)
+        drawn = [c for c in sent if c[0] == "osd-overlay"]
+        self.assertEqual(drawn[0][1], 3)
+        self.assertIn("Buffering", drawn[0][3])
+        self.assertEqual(drawn[-1], ["osd-overlay", 3, "none"])
+        self.assertEqual(server.state["stalls"], 1)
+
+    def test_status_reports_how_often_the_stream_stalled(self):
+        server.state.update(stalls=2, stall_s=7.4, proc=None)
+        with mock.patch.object(server, "prop", lambda n: 1 if n == "pid" else None):
+            data = server.pi_status()
+        self.assertEqual((data["stalls"], data["stall_s"]), (2, 7))
+
     def test_stopping_shows_the_idle_screen(self):
         with mock.patch.object(server, "stop_player"):
             self.client.post("/api/cmd", json={"action": "stop"})
@@ -273,6 +306,21 @@ class ShellFlow(unittest.TestCase):
         self.assertTrue(r.get_json()["enabled"])
         self.assertEqual(self.home.started, 1)
         self.assertTrue(self.client.get("/api/shell").get_json()["running"])
+
+    def test_shell_state_reports_what_the_window_is_doing(self):
+        self.home.props = lambda: {"fullscreen": True, "pause": False}
+        self.assertEqual(self.client.get("/api/shell").get_json()["props"], {"fullscreen": True, "pause": False})
+
+    def test_screenshot_of_the_home_screen_is_refused_when_it_is_not_running(self):
+        with mock.patch.object(server.mpvipc, "send", return_value=None):
+            self.assertEqual(self.client.get("/api/shell/screenshot").status_code, 502)
+
+    def test_screenshot_of_the_home_screen_is_served(self):
+        shot = os.path.join(tempfile.mkdtemp(), "shell.png")
+        open(shot, "wb").write(b"PNG fake")
+        with mock.patch.object(server, "SHELL_SHOT", shot), mock.patch.object(server.mpvipc, "send", return_value={"error": "success"}):
+            r = self.client.get("/api/shell/screenshot")
+        self.assertEqual((r.status_code, r.mimetype), (200, "image/png"))
 
     def test_with_the_screen_off_nothing_is_drawn(self):
         server.settings["shell"] = False

@@ -1,6 +1,7 @@
 import sys
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
@@ -52,6 +53,61 @@ class Screens(unittest.TestCase):
 
     def test_loading_dots_change(self):
         self.assertNotEqual(shell.screen("loading", "c", dots=1), shell.screen("loading", "c", dots=2))
+
+
+class Idle(unittest.TestCase):
+    def test_the_ready_screen_shows_clock_date_address_and_favourites(self):
+        t = shell.screen("idle", hint="Open http://pi.example:8765 on your phone", now=datetime(2026, 11, 4, 21, 5), favs=["capped", "xqc"])
+        for want in ("21:05", "Wednesday", "November", "Ready", "Open http://pi.example:8765 on your phone", "capped", "xqc"):
+            self.assertIn(want, t)
+
+    def test_other_screens_have_no_clock(self):
+        self.assertNotIn("21:05", shell.screen("ended", "chan", now=datetime(2026, 11, 4, 21, 5)))
+
+    def test_the_clock_is_redrawn_while_idle(self):
+        minutes = iter(range(10, 59))
+        s, popen, sent = make_shell([FakeProc()])
+        s._clock = lambda: datetime(2026, 11, 4, 21, next(minutes))
+        s.idle_interval = 0.02
+        s.start()
+        time.sleep(0.25)
+        frames = {c[3] for c in sent if c[0] == "osd-overlay" and c[2] == "ass-events"}
+        self.assertGreaterEqual(len(frames), 3)
+        s.show("playing")
+        time.sleep(0.1)
+        sent.clear()
+        time.sleep(0.15)
+        self.assertEqual(sent, [])
+
+    def test_the_window_loops_so_it_never_reaches_an_end_and_pauses(self):
+        s, popen, sent = make_shell([FakeProc()])
+        s.start()
+        self.assertIn("--loop-file=inf", popen.call_args[0][0])
+
+    def test_every_screen_unpauses_the_window(self):
+        s, popen, sent = make_shell([FakeProc()])
+        s.start()
+        s.show("playing")
+        sent.clear()
+        s.show("idle")
+        self.assertIn(["set_property", "pause", False], sent)
+
+
+class QualitySwap(unittest.TestCase):
+    def test_changing_quality_has_its_own_screen(self):
+        t = shell.screen("quality", "chan  ·  720p60")
+        self.assertIn("Switching quality", t)
+        self.assertIn("720p60", t)
+
+    def test_the_quality_screen_animates_like_loading(self):
+        s, popen, sent = make_shell([FakeProc()])
+        s.interval = 0.02
+        s.start()
+        sent.clear()
+        s.show("quality", "chan  ·  720p60")
+        time.sleep(0.2)
+        self.assertGreaterEqual(len({c[3] for c in sent if c[0] == "osd-overlay" and c[2] == "ass-events"}), 2)
+        s.show("playing")
 
 
 class Process(unittest.TestCase):

@@ -36,7 +36,7 @@ button{position:relative;touch-action:manipulation;-webkit-user-select:none;user
 button:active{transform:scale(.95);filter:brightness(1.4)}
 /* busy: the command is on its way. The label fades and a spinner takes its place until the TV answers. */
 button.busy{pointer-events:none}
-button.busy>*{opacity:0}
+button.busy{color:transparent!important}
 button.busy::after{content:"";position:absolute;inset:0;margin:auto;width:22px;height:22px;border-radius:50%;
   border:3px solid var(--line);border-top-color:var(--tv,var(--fg));animation:spin .8s linear infinite}
 button.ok{animation:okflash .6s ease-out}
@@ -89,8 +89,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;heigh
 input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:var(--line)}
 input[type=range]::-moz-range-progress{height:8px;border-radius:4px;background:var(--tv)}
 input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--fg);border:4px solid var(--card)}
-.row3{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:8px;margin-top:14px}
-select{min-height:52px;padding:0 12px;width:100%}
+.row3{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,.8fr);gap:8px;margin-top:14px}
+select{min-height:52px;padding:0 8px;width:100%;font-size:15px}
 .danger{color:var(--bad)}
 input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .seg button{background:var(--card2)}.seg button.on{background:var(--fg);color:#0b0e14;font-weight:700}
@@ -290,7 +290,7 @@ const view = () => location.pathname === '/share' ? 'share' : location.hash.star
 // Run a button's command with feedback: spinner while it is in flight (at least `min` ms so a quick tap is still
 // seen), then a brief confirm or shake. `hold` keeps the spinner a little longer after success for things that
 // take the TV a moment, like changing input.
-async function busy(btn, work, hold = 0, min = 450) {
+async function busy(btn, work, hold = 0, min = 450, until = null) {
   if (btn.classList.contains('busy')) return null;
   btn.classList.add('busy');
   const t0 = Date.now();
@@ -298,6 +298,10 @@ async function busy(btn, work, hold = 0, min = 450) {
   try { r = await work(); } catch (e) {}
   const ok = !!r && r.ok !== false;
   await new Promise(done => setTimeout(done, Math.max(0, min - (Date.now() - t0)) + (ok ? hold : 0)));
+  if (ok && until && !r.noWait) {  // keep spinning until what it started is actually up (or 30 s)
+    const t1 = Date.now();
+    while (!until() && Date.now() - t1 < 30000) await new Promise(done => setTimeout(done, 250));
+  }
   btn.classList.remove('busy');
   btn.classList.add(ok ? 'ok' : 'fail');
   setTimeout(() => btn.classList.remove('ok', 'fail'), 700);
@@ -333,6 +337,8 @@ function render() {
     if (st.height) meta.push(st.height + 'p');
     if (st.hwdec) meta.push((target === 'living' ? 'hw: ' : 'via ') + st.hwdec);
     if (st.drops != null) meta.push(st.drops + ' dropped');
+    if (st.buffering) meta.push('buffering');
+    if (st.stalls) meta.push(st.stalls + (st.stalls === 1 ? ' stall' : ' stalls') + ' (' + st.stall_s + ' s)');
   }
   if (!run && st.error) meta.push(st.error);
   $('meta').textContent = meta.join(' · ');
@@ -424,7 +430,7 @@ async function search(q) {
   const r = await api('/api/search?q=' + encodeURIComponent(q));
   const box = $('results');
   box.innerHTML = '';
-  if (!Array.isArray(r) || !r.length) { box.textContent = 'No results. Try different words.'; return; }
+  if (!Array.isArray(r) || !r.length) { box.textContent = 'No results. Try different words.'; return {ok: false}; }
   r.forEach(v => {
     const b = el('button', 'res');
     const img = document.createElement('img'); img.src = v.thumb; img.loading = 'lazy'; img.alt = '';
@@ -434,12 +440,14 @@ async function search(q) {
     b.onclick = () => play(v.url);
     box.appendChild(b);
   });
+  return {ok: true, noWait: true};  // results are showing: nothing is starting yet
 }
 
-function go() {
+async function go() {
   const t = $('link').value.trim();
-  if (!t) return;
-  if (site === 'youtube' && !/https?:\/\//.test(t)) search(t); else play(t);
+  if (!t) return null;
+  if (site === 'youtube' && !/https?:\/\//.test(t)) return search(t);
+  return play(t);
 }
 
 document.addEventListener('click', e => {
@@ -448,8 +456,15 @@ document.addEventListener('click', e => {
   const s = e.target.closest('#site button');
   if (s) { site = s.dataset.s; document.querySelectorAll('#site button').forEach(x => x.classList.toggle('on', x === s)); }
 });
-$('go').onclick = go;
-$('link').onkeydown = e => { if (e.key === 'Enter') go(); };
+$('go').onclick = () => {
+  const prev = st.url, t0 = Date.now();
+  let sawStarting = false;
+  busy($('go'), go, 0, 450, () => {  // spin until the new stream is running, or it failed
+    if (st.starting) sawStarting = true;
+    return (st.running && (st.url !== prev || sawStarting)) || (!!st.error && Date.now() - t0 > 1500);
+  });
+};
+$('link').onkeydown = e => { if (e.key === 'Enter') $('go').click(); };
 $('stop').onclick = () => busy($('stop'), () => cmd('stop')).then(poll);
 $('fav').onclick = async () => {
   if (!st.url) return;
