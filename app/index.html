@@ -1762,7 +1762,7 @@ function renderWall() {
     top.append(el('span', 'badge ' + r.source, r.source || ''), el('span', 'nm', name));
     if (w.selected === r.i) top.append(el('span', 'pill', 'Controlling'));
     if (r.i && r.running === false && !r.error) top.append(el('span', 'sub', 'Starting\u2026'));
-    if (r.i) { const x = el('button'); setBtn(x, 'x', ''); x.setAttribute('aria-label', 'Remove ' + name + ' from the screen'); x.onclick = () => wallApi({action: 'remove', i: r.i}); top.append(x); }
+    { const x = el('button'); setBtn(x, 'x', ''); x.setAttribute('aria-label', 'Remove ' + name + ' from the screen'); x.onclick = () => wallApi({action: 'remove', i: r.i}); top.append(x); }  // any stream can be taken off
     top.onclick = e => { if (!e.target.closest('button')) wallApi({action: 'select', i: r.i}); };  // the name selects it: the card above then controls this one
     const on = w.sound.includes(r.i), sound = el('button', 'snd');
     setBtn(sound, on ? 'volume' : 'mute', on ? 'Sound' : 'Muted');

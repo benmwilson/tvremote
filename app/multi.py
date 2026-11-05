@@ -255,6 +255,21 @@ class Wall:
             if not self.extras:
                 self.layout = None
 
+    def drop_main(self):
+        """Take the first stream off the screen: the next one takes its place. Returns the stream that is now first, or None when it is alone.
+        The window of the one that moves up is ended here; the first window restarts with its stream (the caller relays out)."""
+        with self.lock:
+            if not self.extras:
+                return None
+            t = self.extras.pop(0)
+            self._kill(t)
+            self.main_url, self.main_quality = t["url"], t.get("quality")
+            self.sound = {k - 1 for k in self.sound if k != 0} or {0}  # the tiles after it move up one; if only it had sound, the new first does
+            self.selected = 0 if self.selected == 0 else self.selected - 1
+            if not self.extras:
+                self.layout = None
+            return self.main_url
+
     def select(self, i):
         """The card controls tile i from now on. No window changes."""
         with self.lock:

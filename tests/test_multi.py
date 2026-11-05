@@ -274,6 +274,27 @@ class ControlledStreamTest(unittest.TestCase):
         send.assert_any_call(multi._sock(1), ["set_property", "mute", False])
 
 
+class RemoveFirstTest(unittest.TestCase):
+    def test_removing_the_first_stream_promotes_the_next_and_keeps_sound_and_selection_with_their_streams(self):
+        w = wall()
+        w.add("https://kick.com/b", "https://kick.com/a")
+        w.add("https://kick.com/c", "https://kick.com/a")
+        w.sound, w.selected = {0, 2}, 2  # a and c have sound; c is controlled
+        self.assertEqual(w.drop_main(), "https://kick.com/b")
+        self.assertEqual([t["url"] for t in w.extras], ["https://kick.com/c"])
+        self.assertEqual((w.sound, w.selected), ({1}, 1))  # c moved up one and kept both
+        self.assertTrue(w.active())
+
+    def test_the_last_one_left_is_alone_and_has_sound(self):
+        w = wall()
+        w.add("https://kick.com/b", "https://kick.com/a")
+        w.sound = {0}  # only the one being removed had sound
+        self.assertEqual(w.drop_main(), "https://kick.com/b")
+        self.assertFalse(w.active())
+        self.assertEqual(w.sound, {0})
+        self.assertIsNone(w.drop_main())  # nothing left to promote
+
+
 class AddressCacheTest(unittest.TestCase):
     def test_a_stream_address_is_remembered_so_a_swap_does_not_wait_for_streamlink(self):
         import app as server

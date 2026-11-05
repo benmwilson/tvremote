@@ -1156,8 +1156,14 @@ def api_wall():
         remember(url)  # a stream added to the screen is a recent one too
         wall_later(wall_relayout)
     elif act == "remove":
-        wall.remove(i)
-        wall_later(wall_relayout)
+        if i == 0:  # the first stream: the next one takes its place
+            new_main = wall.drop_main()
+            if not new_main:
+                return jsonify(ok=False, error="Nothing to remove"), 400
+            wall_later(wall_relayout, new_main)
+        else:
+            wall.remove(i)
+            wall_later(wall_relayout)
     elif act == "layout":
         if d.get("layout") not in multi.LAYOUTS:
             return jsonify(ok=False, error="Unknown layout"), 400
