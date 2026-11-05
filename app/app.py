@@ -11,7 +11,7 @@ import threading
 import time
 from urllib.parse import urlparse
 
-from flask import Flask, Response, jsonify, redirect, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, redirect, request, send_from_directory
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("TVREMOTE_DATA", "/data")
@@ -32,7 +32,24 @@ SOURCES = [
 SL_DEFAULT = "1080p60,best"
 YTDL_HEIGHTS = ("1080", "720", "480")
 
+import roku
+
+try:
+    from cast import CastTarget
+except ImportError:  # pychromecast missing: Pi target only
+    CastTarget = None
+CAST = None  # created at startup (mDNS discovery runs in the background)
+
 app = Flask(__name__, static_folder=None)
+
+
+def tgt():
+    """The Chromecast target when ?target=bedroom, else None (= the Pi)."""
+    if request.args.get("target") == "bedroom":
+        if not CAST:  # never fall back to the Pi: that would control the wrong TV
+            abort(Response("Chromecast support is not running", 503))
+        return CAST
+    return None
 lock = threading.Lock()
 state = {"proc": None, "url": None, "quality": None, "source": None, "player": None}
 _qcache = {}
@@ -289,10 +306,23 @@ def manifest():
 def play_get():
     """Used by the iPhone Shortcut: start playing, then show the remote."""
     url = normalise(request.args.get("u") or request.args.get("url"))
+    c = tgt()
     if url:
+        try:
+            play_on(c, url, request.args.get("q"))
+        except Exception as e:  # shown on the remote via /api/status
+            if c:
+                c.state["error"] = str(e)
+    return redirect(f"/?target={c.id}" if c else "/", code=303)
+
+
+def play_on(c, url, quality):
+    """Start `url` on the Chromecast target `c`, or on the Pi when c is None."""
+    if c:
+        c.play(url, quality)
+    else:
         with lock:
-            start_player(url, request.args.get("q"))
-    return redirect("/", code=303)
+            start_player(url, quality)
 
 
 @app.post("/api/play")
@@ -302,8 +332,10 @@ def api_play():
                     data.get("site", "kick"))
     if not url:
         return jsonify(ok=False, error="No link found"), 400
-    with lock:
-        start_player(url, data.get("quality"))
+    try:
+        play_on(tgt(), url, data.get("quality"))
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)), 502
     return jsonify(ok=True, url=url)
 
 
@@ -320,6 +352,13 @@ COMMANDS = {
 def api_cmd():
     data = request.get_json(silent=True) or {}
     action = data.get("action")
+    c = tgt()
+    if c:
+        try:
+            ok, err = c.cmd(action, data.get("value"), data.get("quality"))
+        except Exception as e:
+            return jsonify(ok=False, error=str(e)), 502
+        return jsonify(ok=ok, error=err), (200 if ok else 400)
     if action == "stop":
         with lock:
             stop_player()
@@ -350,6 +389,12 @@ PROPS = {
 
 @app.get("/api/status")
 def api_status():
+    c = tgt()
+    if c:
+        try:
+            return jsonify(c.status())
+        except Exception as e:
+            return jsonify(running=False, target=c.id, error=str(e))
     running = prop("pid") is not None
     data = {"running": running, "url": state["url"], "quality": state["quality"],
             "source": state["source"], "streamlink": state["player"] == "streamlink"}
@@ -389,7 +434,54 @@ def api_tv():
 
 @app.get("/api/qualities")
 def api_qualities():
+    c = tgt()
+    if c:
+        return jsonify(c.qualities(request.args.get("url") or c.state["url"], qualities))
     return jsonify(qualities(request.args.get("url") or state["url"]))
+
+
+ROKU_IPS = {"living": os.environ.get("TVREMOTE_ROKU_LIVING", ""),
+            "bedroom": os.environ.get("TVREMOTE_ROKU_BEDROOM", "")}
+
+
+@app.get("/api/targets")
+def api_targets():
+    out = [{"id": "living", "name": "Living room", "type": "pi", "online": True}]
+    if CAST:
+        out.append(CAST.info())
+    for t in out:
+        t["roku"] = bool(ROKU_IPS.get(t["id"]))
+    return jsonify(out)
+
+
+def roku_ip():
+    return ROKU_IPS.get("bedroom" if request.args.get("target") == "bedroom" else "living")
+
+
+@app.get("/api/roku")
+def api_roku():
+    ip = roku_ip()
+    if not ip:
+        return jsonify(ok=False, error="No Roku configured for this TV"), 404
+    try:
+        return jsonify(roku.info(ip))
+    except roku.RokuError as e:
+        return jsonify(ok=False, error=str(e)), 502
+
+
+@app.post("/api/roku/key")
+def api_roku_key():
+    ip = roku_ip()
+    if not ip:
+        return jsonify(ok=False, error="No Roku configured for this TV"), 404
+    k = (request.get_json(silent=True) or {}).get("key")
+    if k not in roku.KEYS:
+        return jsonify(ok=False, error="Unknown key"), 400
+    try:
+        roku.key(ip, k)
+    except roku.RokuError as e:
+        return jsonify(ok=False, error=str(e)), 502
+    return jsonify(ok=True)
 
 
 @app.get("/api/search")
@@ -431,6 +523,11 @@ def versions():
 
 @app.get("/api/debug")
 def api_debug():
+    c = tgt()
+    if c:
+        d = c.debug()
+        d["versions"] = {**versions(), **d["versions"]}
+        return jsonify(d)
     p = state["proc"]
     log = chr(10).join(log_lines())[-8000:]
     return jsonify(
@@ -469,5 +566,7 @@ def favs_del():
 
 if __name__ == "__main__":
     os.makedirs(DATA, exist_ok=True)
+    if CastTarget:
+        CAST = CastTarget(DATA, resolve, display_title, YTDL_HEIGHTS, SL_DEFAULT)
     from waitress import serve
     serve(app, host="0.0.0.0", port=PORT, threads=8)

@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Latest streamlink / yt-dlp (apt's yt-dlp comes in via mpv but is too old; venv comes first on PATH)
 RUN python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir flask waitress streamlink "yt-dlp[default,curl-cffi]" deno
+    && /opt/venv/bin/pip install --no-cache-dir flask waitress streamlink "yt-dlp[default,curl-cffi]" deno pychromecast
 ENV PATH=/opt/venv/bin:$PATH
 
 # uid/gid 1000 so the host's Wayland and PipeWire sockets accept us

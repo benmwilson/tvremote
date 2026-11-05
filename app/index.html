@@ -57,6 +57,7 @@ select{min-height:52px;padding:0 10px}
 <body>
 
 <header><h1>TV Remote</h1><span id="tv" style="flex:1;margin-left:10px;color:var(--dim);font-size:13px"></span><span id="dot" title="Connection"></span></header>
+<div class="row seg hide" id="targets" style="margin:0 0 10px"></div>
 <div class="card" id="now">
   <div><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span></div>
   <div id="title">Nothing playing</div>
@@ -73,6 +74,19 @@ select{min-height:52px;padding:0 10px}
     <button id="fav">☆ Favourite</button><button id="stop" style="color:var(--bad)">■ Stop</button></div>
 </div>
 <div id="err"></div>
+
+<h2 id="tvhead">TV</h2>
+<div class="card hide" id="tvctl">
+  <div class="row"><button data-k="PowerOn">TV on</button><button data-k="PowerOff">TV off</button>
+    <button data-k="VolumeDown" aria-label="TV volume down">🔉 −</button><button data-k="VolumeMute" aria-label="TV mute">🔇</button>
+    <button data-k="VolumeUp" aria-label="TV volume up">🔊 +</button></div>
+  <div class="row"><button data-k="InputHDMI1">HDMI 1</button><button data-k="InputHDMI2">HDMI 2</button><button data-k="InputHDMI3">HDMI 3</button></div>
+  <details style="margin-top:10px"><summary style="min-height:44px;line-height:44px;color:var(--dim)">Navigation</summary>
+    <div class="row"><button data-k="Home">Home</button><button data-k="Up">▲</button><button data-k="Back">Back</button></div>
+    <div class="row"><button data-k="Left">◀</button><button data-k="Select">OK</button><button data-k="Right">▶</button></div>
+    <div class="row"><button data-k="Info">✱</button><button data-k="Down">▼</button><button data-k="Play">⏯</button></div>
+  </details>
+</div>
 
 <h2>Play</h2>
 <div class="card">
@@ -102,12 +116,15 @@ select{min-height:52px;padding:0 10px}
 </aside>
 <script>
 const $ = id => document.getElementById(id);
-let site = 'kick', st = {}, dragging = false, qualFor = null, favList = [];
+let site = 'kick', st = {}, dragging = false, qualFor = null, favList = [], targets = [];
+let target = 'living';
+try { target = new URLSearchParams(location.search).get('target') || localStorage.getItem('target') || 'living'; } catch (e) {}
 
 const err = m => { $('err').textContent = m || ''; if (m) setTimeout(() => $('err').textContent = '', 5000); };
 async function api(path, method = 'GET', body) {
   try {
-    const r = await fetch(path, {method, headers: body ? {'Content-Type': 'application/json'} : {},
+    const u = path + (path.includes('?') ? '&' : '?') + 'target=' + encodeURIComponent(target);
+    const r = await fetch(u, {method, headers: body ? {'Content-Type': 'application/json'} : {},
       body: body ? JSON.stringify(body) : undefined});
     const j = await r.json().catch(() => ({}));
     if (!r.ok) err(j.error || 'Request failed');
@@ -129,7 +146,7 @@ function render() {
     if (!st.live && st.position != null) meta.push(fmt(st.position) + (st.duration ? ' / ' + fmt(st.duration) : ''));
     if (st.live && st.position != null) meta.push('watching ' + fmt(st.position));
     if (st.height) meta.push(st.height + 'p');
-    if (st.hwdec) meta.push('hw: ' + st.hwdec);
+    if (st.hwdec) meta.push((target === 'living' ? 'hw: ' : 'via ') + st.hwdec);
     if (st.drops != null) meta.push(st.drops + ' dropped');
   }
   if (!run && st.error) meta.push(st.error);
@@ -261,11 +278,48 @@ function dbg(open) {
 $('dbgOpen').onclick = () => dbg(true);
 $('dbgClose').onclick = $('scrim').onclick = () => dbg(false);
 
+// ---- TV info + Roku controls ----
+const POWER = {PowerOn: 'on', Ready: 'standby', DisplayOff: 'screen off'};
 async function tvInfo() {
-  const t = await api('/api/tv');
-  $('tv').textContent = t && t.name ? t.name + (t.power ? ' · ' + t.power : '') : '';
+  const cur = targets.find(t => t.id === target) || {};
+  $('tvctl').classList.toggle('hide', !cur.roku);
+  $('tvhead').classList.toggle('hide', !cur.roku);
+  const t = cur.roku ? await api('/api/roku') : target === 'living' ? await api('/api/tv') : null;
+  const name = t && (t.name || cur.name);
+  const bits = t ? [POWER[t.power] || t.power, t.app && t.app !== 'Roku' ? t.app : null] : [];
+  $('tv').textContent = name ? [name, ...bits.filter(Boolean)].join(' · ') : (cur.device || '');
+  $('tvhead').textContent = cur.roku ? [name || 'TV', t && t.error ? '(unreachable)' : ''].join(' ') : 'TV';
 }
-tvInfo(); setInterval(tvInfo, 30000);
+
+async function loadTargets() {
+  const r = await fetch('/api/targets').then(x => x.json()).catch(() => null);
+  if (Array.isArray(r)) targets = r;
+  if (!targets.some(t => t.id === target)) target = 'living';
+  const box = $('targets');
+  box.innerHTML = '';
+  box.classList.toggle('hide', targets.length < 2);
+  targets.forEach(t => {
+    const b = document.createElement('button');
+    b.textContent = t.name + (t.online ? '' : ' (offline)');
+    b.className = t.id === target ? 'on' : '';
+    b.onclick = () => {
+      target = t.id; try { localStorage.setItem('target', target); } catch (e) {}
+      st = {}; qualFor = null; $('qual').innerHTML = ''; loadTargets(); loadFavs(); poll(); tvInfo();
+    };
+    box.appendChild(b);
+  });
+  tvInfo();
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button[data-k]');
+  if (!b) return;
+  const r = await api('/api/roku/key', 'POST', {key: b.dataset.k});
+  if (r && r.ok) setTimeout(tvInfo, 1500);
+});
+
+loadTargets(); setInterval(loadTargets, 30000);
+setInterval(tvInfo, 30000);
 loadFavs(); poll(); setInterval(poll, 2000);
 </script>
 </body>
