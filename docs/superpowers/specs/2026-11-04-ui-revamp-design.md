@@ -14,8 +14,8 @@ The revamp is about that loop: **share, pick a TV, watch without buffering**, an
 1. **Share → pick → playing.** From the iPhone share sheet, one Shortcut opens a picker; one tap on a TV card starts playback there and shows that TV's remote. Two taps after Share, counting the card.
 2. **Two views, swappable.** *All TVs*: a card per TV. *One TV*: the full remote for a single TV. Tapping a card opens that TV's remote; a control in the header goes back.
 3. **TV cards** show: name, brand + screen size + model (e.g. "TCL 43″ · 43S425-CA"), what is playing now (title, source badge Kick/Twitch/YouTube/other, LIVE or elapsed time, paused), power state, current input, and the connection type ("Pi on HDMI" / "Chromecast").
-4. **Playback health is visible.** Each TV shows whether the stream is smooth or buffering, how long it took to start, and on the Pi the dropped-frame count. The existing debug drawer keeps the detail. (This item is my addition, tied to Ben's reason for the project; he has not yet confirmed it.)
-5. **The picker prevents wrong-TV plays.** It always asks. The TV used last is listed first. A TV that is already playing something is labelled "Replaces: <title>" so you can see what you're about to cut off. (Wording and the "replaces" label are my call.)
+4. **Playback health is visible but quiet.** Each card has a small status dot, barely noticeable while the stream is smooth. It turns amber and says "Buffering" only when something is wrong. The detail (start time, dropped frames on the Pi) stays in the debug drawer. Ben approved this on the cards as long as it isn't intrusive.
+5. **The picker prevents wrong-TV plays.** It always asks. The TV used last is listed first. A TV that is already playing something shows "Playing: <title>" on its card, the same as the All TVs view, so you can see what a tap would cut off. No separate warning.
 6. Phone-first at 390 px wide, large touch targets, dark, Canadian spelling, works as an iOS Home Screen web app. Keep it one dependency-free HTML file.
 
 ## Non-goals
@@ -75,5 +75,4 @@ The revamp is about that loop: **share, pick a TV, watch without buffering**, an
 
 ## Open questions for Ben
 
-- Is the "Replaces: <title>" label on busy TVs what you want, or should the picker warn some other way?
-- Should the health indicator be on the card, or only in the debug drawer?
+None outstanding. Ben dropped the "Replaces" label and approved a quiet health dot on the cards.
