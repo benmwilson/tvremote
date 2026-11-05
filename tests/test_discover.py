@@ -155,6 +155,18 @@ class Endpoints(unittest.TestCase):
             key.assert_called_once_with(LIVING["ip"], "Info")
 
 
+class InputSwitchSaysWhyItFailed(unittest.TestCase):
+    def test_no_saved_settings_and_a_refused_command_are_both_logged(self):
+        with mock.patch.dict(server.ROKU_IPS, {"living": "", "bedroom": ""}), mock.patch.dict(server.INPUTS, {"living": "", "bedroom": ""}):
+            with self.assertLogs(server.app.logger, "WARNING") as cm:
+                server.switch_input("living")
+        self.assertIn("no Roku address", cm.output[0])
+        with mock.patch.dict(server.ROKU_IPS, {"living": LIVING["ip"]}), mock.patch.dict(server.INPUTS, {"living": "HDMI1"}),                 mock.patch.object(roku, "info", return_value={"power": "PowerOn", "app_id": "837"}),                 mock.patch.object(roku, "key", side_effect=roku.RokuError("TV refused: set Control by mobile apps to Permissive")):
+            with self.assertLogs(server.app.logger, "WARNING") as cm:
+                server.switch_input("living")
+        self.assertIn("Permissive", cm.output[0])
+
+
 class WhatTheTvIsPlayingByItself(unittest.TestCase):
     """The TV was started by hand (its own YouTube app). The page shows it, and nothing here ever sends the TV a key."""
 

@@ -668,6 +668,7 @@ def switch_input(tid):
     """Wake the Roku TV and select this target's HDMI input (set in the setup wizard, e.g. HDMI2)."""
     ip, hdmi = ROKU_IPS.get(tid), INPUTS.get(tid)
     if not (ip and hdmi):
+        app.logger.warning("Input switch skipped for %s: no Roku address and HDMI input are saved for it (setup wizard, TV step).", tid)
         return
     try:
         info = roku.info(ip)
@@ -677,8 +678,8 @@ def switch_input(tid):
         elif info.get("app_id") == "tvinput." + hdmi.lower():
             return  # already on it: re-selecting relaunches the input
         roku.key(ip, "Input" + hdmi)
-    except (roku.RokuError, OSError):
-        pass  # best effort: playback already started
+    except (roku.RokuError, OSError) as e:
+        app.logger.warning("Input switch failed for %s (%s, %s): %s", tid, ip, hdmi, e)  # playback already started: best effort, but say why
 
 
 RECENT_FILE = os.path.join(DATA, "recents.json")
