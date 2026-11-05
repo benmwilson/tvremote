@@ -32,7 +32,18 @@ h2{font-size:15px;font-weight:600;color:var(--dim);margin:26px 4px 10px}
 button,select,input{font:inherit;color:var(--fg);border:0;border-radius:14px;background:var(--card2)}
 button{min-height:52px;padding:0 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;
   transition:transform .12s,filter .12s}
-button:active{transform:scale(.97);filter:brightness(1.25)}
+button{position:relative;touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+button:active{transform:scale(.95);filter:brightness(1.4)}
+/* busy: the command is on its way. The label fades and a spinner takes its place until the TV answers. */
+button.busy{pointer-events:none}
+button.busy>*{opacity:0}
+button.busy::after{content:"";position:absolute;inset:0;margin:auto;width:22px;height:22px;border-radius:50%;
+  border:3px solid var(--line);border-top-color:var(--tv,var(--fg));animation:spin .8s linear infinite}
+button.ok{animation:okflash .6s ease-out}
+button.fail{animation:shake .4s}
+@keyframes okflash{0%{box-shadow:0 0 0 0 var(--tv,var(--ok))}70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+button.fail{box-shadow:inset 0 0 0 2px var(--bad)}
 button:disabled{opacity:.45;cursor:default}
 :focus-visible{outline:2px solid var(--tv);outline-offset:2px}
 .row{display:flex;gap:8px;margin-top:10px}.row>*{flex:1;min-width:0}
@@ -128,7 +139,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .db td{padding:1px 8px 1px 0;vertical-align:top;word-break:break-all}.db td:first-child{color:var(--dim);white-space:nowrap}
 .db pre{margin:0;white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow:auto}
 #err{color:var(--bad);min-height:1em;margin:10px 4px 0;font-size:14px}
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}
+  button.busy::after{animation:none;border-top-color:var(--line);border-right-color:var(--tv,var(--fg))}}
 </style>
 </head>
 <body>
@@ -270,6 +282,24 @@ const visibleTvs = () => { const h = hiddenTvs(); return targets.filter(t => !h.
 let editing = false;
 const view = () => location.pathname === '/share' ? 'share' : location.hash.startsWith('#/tv/') ? 'tv' : 'all';
 
+// Run a button's command with feedback: spinner while it is in flight (at least `min` ms so a quick tap is still
+// seen), then a brief confirm or shake. `hold` keeps the spinner a little longer after success for things that
+// take the TV a moment, like changing input.
+async function busy(btn, work, hold = 0, min = 450) {
+  if (btn.classList.contains('busy')) return null;
+  btn.classList.add('busy');
+  const t0 = Date.now();
+  let r = null;
+  try { r = await work(); } catch (e) {}
+  const ok = !!r && r.ok !== false;
+  await new Promise(done => setTimeout(done, Math.max(0, min - (Date.now() - t0)) + (ok ? hold : 0)));
+  btn.classList.remove('busy');
+  btn.classList.add(ok ? 'ok' : 'fail');
+  setTimeout(() => btn.classList.remove('ok', 'fail'), 700);
+  return r;
+}
+document.addEventListener('touchstart', () => {}, {passive: true});  // iOS only shows :active pressed states once a touch listener exists
+
 const err = m => { $('err').textContent = m || ''; if (m) setTimeout(() => $('err').textContent = '', 6000); };
 async function api(path, method = 'GET', body) {
   try {
@@ -402,13 +432,13 @@ function go() {
 
 document.addEventListener('click', e => {
   const b = e.target.closest('button[data-a]');
-  if (b) { cmd(b.dataset.a, b.dataset.v).then(poll); return; }
+  if (b) { busy(b, () => cmd(b.dataset.a, b.dataset.v)).then(poll); return; }
   const s = e.target.closest('#site button');
   if (s) { site = s.dataset.s; document.querySelectorAll('#site button').forEach(x => x.classList.toggle('on', x === s)); }
 });
 $('go').onclick = go;
 $('link').onkeydown = e => { if (e.key === 'Enter') go(); };
-$('stop').onclick = () => cmd('stop').then(poll);
+$('stop').onclick = () => busy($('stop'), () => cmd('stop')).then(poll);
 $('fav').onclick = async () => {
   if (!st.url) return;
   const had = favList.some(f => f.url === st.url);
@@ -585,8 +615,10 @@ $('back').onclick = () => { location.hash = '#/'; };
 document.addEventListener('click', async e => {
   const b = e.target.closest('button[data-k]');
   if (!b) return;
-  const r = await api('/api/roku/key', 'POST', {key: b.dataset.k});
-  if (r && r.ok) setTimeout(loadTargets, 1500);
+  const k = b.dataset.k;
+  const hold = k === 'PowerOn' ? 4000 : /^Input/.test(k) ? 2500 : 0;  // the TV takes a moment to wake or change input
+  const r = await busy(b, () => api('/api/roku/key', 'POST', {key: k}), hold);
+  if (r && r.ok) setTimeout(loadTargets, 500);
 });
 
 // ---- share picker: /share?u=<link> ----
