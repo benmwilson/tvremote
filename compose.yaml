@@ -21,6 +21,7 @@ services:
       - /dev/video19:/dev/video19
     volumes:
       - /run/user/${PI_UID:-1000}:/run/user/${PI_UID:-1000} # Wayland + PipeWire sockets
+      - /etc/localtime:/etc/localtime:ro # the clock on the TV's Ready screen uses the Pi's time zone
       - tvremote-data:/data # favourites.json, player.log
     environment:
       - XDG_RUNTIME_DIR=/run/user/${PI_UID:-1000}
@@ -30,6 +31,7 @@ services:
       - TVREMOTE_CEC_PHYS=${CEC_PHYS:-1.0.0.0}
       - TVREMOTE_CEC_NAME=HunnidPi
       - TVREMOTE_PASSWORD=${PASSWORD:-}
+      - TVREMOTE_SHELL_VO=${SHELL_VO:-wlshm,gpu}
       - TVREMOTE_ROKU_LIVING=${ROKU_LIVING:-}
       - TVREMOTE_ROKU_BEDROOM=${ROKU_BEDROOM:-}
       - TVREMOTE_INPUT_LIVING=${INPUT_LIVING:-}

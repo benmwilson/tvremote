@@ -60,6 +60,15 @@ Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose 
 ### How Kick/Twitch reach the Chromecast
 
 By default the Chromecast fetches the stream itself (`direct`). `&via=proxy` on `/play` (or `TVREMOTE_CAST_VIA=proxy` in the container environment) makes the Pi fetch the HLS segments over its wired link and relay them to the Chromecast (`app/hlsproxy.py`). The relay path is token-guarded and only fetches public http(s) hosts. In testing, both modes buffer only while starting (about 10–17 s) on a strong Wi-Fi link.
+## The TV's home screen
+
+Between streams the living-room TV shows the app's own screens instead of the Pi desktop: **Ready** (with the address of the remote), an animated **Loading**, **Not live right now** when a channel is offline, **Stream ended**, and **Couldn't play** with the reason. It is a fullscreen window kept behind the streams; while a stream plays it is paused and draws nothing.
+
+- **Turn it off or on** from the living-room TV's remote: the "Home screen on this TV" switch. Off shows the Pi desktop again. The app and the remote keep running either way. Turning it on restarts anything playing, so the stream window opens on top.
+- Starts off with `TVREMOTE_SHELL=0` in the container environment; the switch's setting is saved in `/data/settings.json`.
+- Playing no longer re-selects an input the TV is already on (that relaunched the input and flashed the screen): the app asks the Roku what it is showing first. This needs `ROKU_LIVING` and `INPUT_LIVING` set.
+- If the home screen won't open: `docker exec tvremote cat /tmp/tvremote-shell.log`. It tries a plain software window first (`wlshm`), then `gpu`. The Debug drawer shows nothing about it yet.
+
 ## Sources
 
 | Source | Player |

@@ -38,6 +38,8 @@ app/hlsproxy.py         optional Pi-side HLS relay for the Chromecast (token-gua
 app/roku.py             Roku ECP control (power, volume, input, keys)
 app/chat.py             Twitch chat overlay drawn on the Pi's screen
 app/targets.py          cached TV cards (never waits on a slow TV) and playback health
+app/shell.py            the TV's home screen: a fullscreen mpv window behind the streams (idle / loading / not live / ended / error)
+app/mpvipc.py           one command over an mpv IPC socket (shared by the player and the home screen)
 tests/                  unittest suite (python -m unittest discover -s tests) and a stub API server for checking the UI
 config/mpv.conf         baked into the image at /home/app/.config/mpv/mpv.conf
 docker/entrypoint.sh    set display to 1080p60, register CEC name, start the app

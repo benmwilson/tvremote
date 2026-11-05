@@ -144,12 +144,16 @@ class CastTarget:
         fmt = f"b[vcodec^=avc1][height<={q}][ext=mp4]/b[ext=mp4][height<={q}]/b[ext=mp4]"
         return run(["yt-dlp", "--no-playlist", "-g", "-f", fmt, url], 45).splitlines()[0], "video/mp4", "BUFFERED"
 
-    def play(self, url, quality=None, via=None):
+    def play(self, url, quality=None, via=None, cancelled=lambda: False):
         """via: "direct" (Chromecast fetches the stream itself) or "proxy" (the Pi fetches, serves it on the LAN)."""
         via = via if via in ("direct", "proxy") else self.via_mode
         source, player = self.resolve(url)
         q = self._quality(player, quality)
+        if cancelled():
+            return  # a newer tap replaced this one while its link was being worked out
         cast = self._connect()
+        if cancelled():
+            return
         hlsproxy.clear()  # any previous relay session ends; _start_proxy sets a new one
         with self.lock:
             self.state.update(url=url, source=source, player=player, quality=q, error=None,
@@ -163,6 +167,8 @@ class CastTarget:
             self.state["proxy_tried"] = True
             return self._start_proxy(url, source, q)
         media, ctype, stype = self._media_url(url, source, player, q)
+        if cancelled():
+            return
         if cast.app_id != APP_MEDIA_RECEIVER:  # e.g. the YouTube app is open and would ignore the LOAD
             cast.start_app(APP_MEDIA_RECEIVER)
         cast.media_controller.play_media(media, ctype, title=self.title_fn(url), stream_type=stype)

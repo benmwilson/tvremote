@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """TV Remote: web controller for mpv / streamlink on the Pi."""
+import hashlib
 import hmac
+import html
 import json
 import os
 import re
+import secrets
 import signal
 import socket
 import subprocess
 import threading
 import time
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
-from flask import Flask, Response, abort, jsonify, redirect, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, send_file, redirect, request, send_from_directory
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("TVREMOTE_DATA", "/data")
@@ -33,8 +36,11 @@ SL_DEFAULT = "1080p60,best"
 YTDL_HEIGHTS = ("1080", "720", "480")
 
 import hlsproxy
+import live
 import chat
+import mpvipc
 import roku
+import shell
 import targets
 
 try:
@@ -76,16 +82,122 @@ def guard():
         return Response("Cross-site request blocked", 403)
     if request.path == "/play" and request.headers.get("Sec-Fetch-Site") == "cross-site" and not token_ok:
         return Response("Cross-site request blocked", 403)
-    if not PASSWORD or re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)", request.path):
+    if not PASSWORD or re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/logo\.svg|/icon-\d+\.png|/manifest\.json", request.path):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
+    if request.path in ("/login", "/logout"):
+        return None
+    if valid_session(request.cookies.get("tv_auth", "")):
+        return None
     a = request.authorization
     if a and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
-        return None
+        return None  # curl and scripts
     if request.path == "/play" and token_ok:
         return None
+    if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):  # a browser: show the login page
+        return redirect("/login?next=" + quote(request.full_path.rstrip("?")), 303)
     return Response("Password required", 401, {"WWW-Authenticate": 'Basic realm="TV Remote"'})
+
+
+SESSION_DAYS = 180
+_sessions_lock = threading.Lock()
+
+
+def _sess_file():
+    return os.path.join(DATA, "sessions.json")
+
+
+def _sess_load():
+    try:
+        with open(_sess_file()) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _sess_save(d):
+    try:
+        with open(_sess_file() + ".tmp", "w") as f:
+            json.dump(d, f)
+        os.replace(_sess_file() + ".tmp", _sess_file())
+    except OSError:
+        pass  # sessions then last until the next restart
+
+
+_revoked = set()  # logged-out tokens, kept in memory too so a failed disk write still ends the session
+
+
+def _h(tok):
+    # keyed with the password: only hashes are stored (the file can't be used as a cookie) and a new password voids every session
+    return hmac.new(PASSWORD.encode(), tok.encode(), hashlib.sha256).hexdigest()
+
+
+def new_session():
+    """A random token for one login; the server remembers it (hashed) until it expires or the user logs out."""
+    tok = secrets.token_urlsafe(32)
+    with _sessions_lock:
+        d = {k: v for k, v in _sess_load().items() if v > time.time()}
+        d[_h(tok)] = time.time() + SESSION_DAYS * 86400
+        _sess_save(d)
+    return tok
+
+
+def valid_session(tok):
+    return bool(tok) and _h(tok) not in _revoked and _sess_load().get(_h(tok), 0) > time.time()
+
+
+def drop_session(tok):
+    with _sessions_lock:
+        d = _sess_load()
+        if d.pop(_h(tok), None) is not None:  # only real sessions are remembered: /logout needs no login, so junk must not pile up
+            _revoked.add(_h(tok))
+            _sess_save(d)
+
+
+def safe_next(n):
+    return n if n.startswith("/") and not n.startswith("//") else "/"
+
+
+LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0e14"><title>TV Remote login</title>
+<style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0e14;color:#f6f1ee;font:17px -apple-system,system-ui,sans-serif}
+form{width:min(340px,86vw);display:grid;gap:14px}h1{margin:0 0 6px;font-size:28px}
+input,button{font:inherit;min-height:52px;border-radius:14px;border:0;padding:0 16px;box-sizing:border-box;width:100%}
+input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em;margin:0}</style></head>
+<body><form method="post" action="/login"><img src="/logo.svg" width="84" height="84" alt="" style="justify-self:center;border-radius:20px"><h1 style="text-align:center">TV Remote</h1>
+<input type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password" autofocus required>
+<input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button></form></body></html>"""
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    nxt = safe_next(request.values.get("next", "/"))
+    if not PASSWORD:
+        return redirect(nxt, 303)
+    err = ""
+    if request.method == "POST":
+        if hmac.compare_digest(request.form.get("password", "").encode(), PASSWORD.encode()):
+            r = redirect(nxt, 303)
+            r.set_cookie("tv_auth", new_session(), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
+            return r
+        time.sleep(0.8)  # slows guessing
+        err = "Wrong password"
+    return Response(LOGIN_PAGE.replace("__NEXT__", html.escape(nxt, quote=True)).replace("__ERR__", err), 401 if err else 200,
+                    mimetype="text/html", headers={"Cache-Control": "no-store"})
+
+
+@app.route("/logout", methods=["GET", "POST"])
+def logout():
+    drop_session(request.cookies.get("tv_auth", ""))
+    r = redirect("/login", 303)
+    r.delete_cookie("tv_auth")
+    return r
+
+
+@app.get("/api/auth")
+def api_auth():
+    return jsonify(required=bool(PASSWORD))
 
 
 # ---------- routing ----------
@@ -137,27 +249,7 @@ def normalise(text, site="kick"):
 
 def mpv(cmd, timeout=1.0):
     """Send one command over mpv's IPC socket and return the reply."""
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(timeout)
-            s.connect(SOCK)
-            s.sendall((json.dumps({"command": cmd, "request_id": 1}) + "\n").encode())
-            buf = b""
-            while True:
-                chunk = s.recv(65536)
-                if not chunk:
-                    return None
-                buf += chunk
-                while b"\n" in buf:
-                    line, buf = buf.split(b"\n", 1)
-                    try:
-                        msg = json.loads(line)
-                    except ValueError:
-                        continue
-                    if msg.get("request_id") == 1:
-                        return msg
-    except OSError:
-        return None
+    return mpvipc.send(SOCK, cmd, timeout)
 
 
 def prop(name):
@@ -175,13 +267,68 @@ def cec(*args):
         pass
 
 
+SETTINGS_FILE = os.path.join(DATA, "settings.json")
+settings = {"stats": False, "shell": os.environ.get("TVREMOTE_SHELL", "1") != "0"}  # the TV's home screen; TVREMOTE_SHELL=0 starts with it off
+HOME = None  # the home screen (shell.Shell), created at startup
+
+
+def load_settings():
+    try:
+        with open(SETTINGS_FILE) as f:
+            return {**settings, **json.load(f)}
+    except (OSError, ValueError):
+        return dict(settings)
+
+
+def save_settings():
+    tmp = SETTINGS_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(settings, f)
+    os.replace(tmp, SETTINGS_FILE)
+
+
+def screen(kind, detail=""):
+    """Show a screen on the TV's home screen, if it is on."""
+    if HOME and settings.get("shell"):
+        HOME.show(kind, detail)
+
+
+def describe_error(raw):
+    """Plain words for the player's last error."""
+    if not raw:
+        return None
+    if re.search(r"No playable streams|offline", raw, re.I):
+        return "Isn't live right now"
+    if re.search(r"HTTP.?error 404|Not Found", raw, re.I):
+        return "That link wasn't found (404)"
+    if re.search(r"logged-in|log in|login|sign in", raw, re.I):
+        return "That needs a login, which isn't supported"
+    return raw
+
+
+def on_input(tv_id):
+    """True when this TV is awake and already showing the HDMI input its target uses. Re-selecting an input the
+    TV is already on relaunches it, which flashes the screen."""
+    ip, hdmi = ROKU_IPS.get(tv_id), INPUTS.get(tv_id)
+    if not (ip and hdmi):
+        return False
+    try:
+        info = roku.info(ip)
+    except (roku.RokuError, OSError):
+        return False
+    return info.get("power") == "PowerOn" and info.get("app_id") == "tvinput." + hdmi.lower()
+
+
 def switch_tv_to_pi():
+    if on_input("living"):
+        return
     cec("--to", "0", "--image-view-on")
     cec("--active-source", f"phys-addr={CEC_PHYS}")
 
 
 def stop_player():
     p = state["proc"]
+    state["proc"] = None  # first, so the watcher knows this end was on purpose
     if p and p.poll() is None:
         try:
             os.killpg(p.pid, signal.SIGTERM)
@@ -191,7 +338,6 @@ def stop_player():
         except ProcessLookupError:
             pass
     chat_stop()
-    state["proc"] = None
 
 
 _chat = {"obj": None, "pref": False}  # off by default: redrawing the overlay drops about 2 frames/s on the Pi
@@ -217,7 +363,101 @@ def chat_sync():
         _chat["obj"] = chat.TwitchChat(ch, chat_send)
 
 
-def start_player(url, quality=None):
+def _watch(proc):
+    """Follow one player: hide the loading screen once it is up, and show how it ended."""
+    for _ in range(120):  # up to a minute for mpv to open its window
+        if proc.poll() is not None or prop("pid") is not None:
+            break
+        time.sleep(0.5)
+    if proc.poll() is None:
+        screen("playing")
+    proc.wait()
+    if state["proc"] is not proc:
+        return  # replaced, or stopped on purpose
+    raw = last_error()
+    name = fav_name(state["url"] or "")
+    if raw and re.search(r"No playable streams|offline", raw, re.I):
+        screen("offline", name)
+    elif proc.returncode or raw:
+        screen("error", describe_error(raw) or "The player stopped unexpectedly.")
+    else:
+        screen("ended", name)
+
+
+def buffering_screen():
+    """Drawn only while the picture is stalled, so redrawing costs the stream nothing."""
+    return "\n".join([
+        r"{\an7\pos(0,0)\p1\bord0\shad0\1c&H000000&\1a&HB0&}m 0 0 l 1920 0 1920 1080 0 1080{\p0}",
+        r"{\an5\pos(960,500)\fs72\b1\bord0\shad0\1c&HF6F1EE&}Buffering…",
+        r"{\an5\pos(960,590)\fs36\b0\bord0\shad0\1c&HA9978C&}Waiting for the stream. If this keeps happening, lower the quality on your phone."])
+
+
+def lag_pill():
+    """A small corner note, drawn only while the stream stutters (overlay 4), so a lag has an explanation on screen."""
+    return "\n".join([
+        r"{\an9\pos(1860,50)\p1\bord0\shad0\1c&H000000&\1a&H60&}m -330 -22 l 0 -22 0 34 -330 34{\p0}",
+        r"{\an9\pos(1840,56)\fs34\b1\bord0\shad0\1c&HF6F1EE&}Stream lagging…"])
+
+
+def stats_overlay(drop_delta, drops, cache_s, fps, stalls):
+    """Debug numbers as plain text for show-text (top-left). Plain show-text stays up; osd-overlay text kept vanishing."""
+    c = "-" if cache_s is None else f"{cache_s:.1f}s"
+    text = f"dropped {drop_delta}/s ({drops} total)   buffer {c}   {fps or '-'} fps   stalls {stalls}"
+    return text
+
+
+def is_lagging(drop_delta, cache_s):
+    """A stutter: a burst of dropped frames, or the buffer running nearly dry."""
+    return drop_delta >= 8 or (cache_s is not None and cache_s < 0.6)
+
+
+def _stall_monitor(proc):
+    """Count stalls and show Buffering on the TV while the picture waits for data; a smaller note while it only stutters."""
+    stalled_at = None
+    drops, lagging, calm, tick, stats_up = None, False, 0, 0, False
+    while proc.poll() is None:
+        time.sleep(1)
+        stalled = prop("paused-for-cache") is True
+        d, cache = prop("frame-drop-count"), prop("demuxer-cache-duration")
+        if isinstance(d, (int, float)) and prop("pause") is not True and not stalled:
+            bad = drops is not None and is_lagging(d - drops, cache if isinstance(cache, (int, float)) else None)
+            calm = 0 if bad else calm + 1
+            if bad and not lagging:
+                lagging = True
+                mpv(["osd-overlay", 4, "ass-events", lag_pill(), 1920, 1080])
+            elif lagging and calm >= 4:  # stays up a few seconds so it can be read
+                lagging = False
+                mpv(["osd-overlay", 4, "none"])
+        tick += 1
+        if settings.get("stats") and tick % 2 == 0 and isinstance(d, (int, float)):  # a redraw costs a little, so only every 2 s
+            fps = prop("estimated-vf-fps")
+            mpv(["show-text", stats_overlay(int(d - drops) if drops is not None else 0, int(d),
+                 cache if isinstance(cache, (int, float)) else None, round(fps) if isinstance(fps, (int, float)) else None,
+                 state.get("stalls", 0)), 2600])  # a bit longer than the 2 s redraw, so it never blinks off
+            if not stats_up:
+                for k, v in (("osd-font-size", 26), ("osd-border-size", 2), ("osd-margin-x", 28), ("osd-margin-y", 22), ("osd-color", "#C8D0DC")):
+                    mpv(["set_property", k, v])
+            stats_up = True
+        elif stats_up and not settings.get("stats"):
+            for k, v in (("osd-font-size", 44), ("osd-border-size", 3), ("osd-margin-x", 60), ("osd-margin-y", 50), ("osd-color", "#FFFFFF")):
+                mpv(["set_property", k, v])
+            mpv(["show-text", "", 1])
+            stats_up = False
+        if isinstance(d, (int, float)):
+            drops = d
+        if stalled and stalled_at is None:
+            stalled_at = time.time()
+            state["stalls"] = state.get("stalls", 0) + 1
+            mpv(["osd-overlay", 3, "ass-events", buffering_screen(), 1920, 1080])
+        elif not stalled and stalled_at is not None:
+            state["stall_s"] = state.get("stall_s", 0) + time.time() - stalled_at
+            stalled_at = None
+            mpv(["osd-overlay", 3, "none"])
+
+
+def start_player(url, quality=None, screen_kind="loading"):
+    # before the old stream stops, so a swap never shows the desktop
+    screen(screen_kind, fav_name(url) + ("  \u00b7  " + quality if screen_kind == "quality" and quality else ""))
     stop_player()
     source, player = resolve(url)
     try:
@@ -241,8 +481,12 @@ def start_player(url, quality=None):
     log = open(LOG_FILE, "w")
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log,
                             stderr=subprocess.STDOUT, start_new_session=True)
-    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time())
+    state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time(), stalls=0, stall_s=0)
     chat_sync()
+    threading.Thread(target=_watch, args=(proc,), daemon=True).start()
+    if is_channel(url):
+        threading.Thread(target=livewatch.refresh_one, args=(url,), daemon=True).start()
+    threading.Thread(target=_stall_monitor, args=(proc,), daemon=True).start()
     if player == "streamlink":  # warm the metadata cache for the title
         threading.Thread(target=sl_info, args=(url,), daemon=True).start()
     threading.Thread(target=switch_tv_to_pi, daemon=True).start()
@@ -333,10 +577,25 @@ def index():
     return send_from_directory(BASE, "index.html", max_age=0)
 
 
+@app.get("/logo.svg")
+def logo():
+    return send_from_directory(BASE, "logo.svg", max_age=86400)
+
+
+@app.get("/icon-<int:n>.png")
+def icon(n):
+    if n not in (180, 512):
+        abort(404)
+    return send_from_directory(BASE, f"icon-{n}.png", max_age=86400)
+
+
 @app.get("/manifest.json")
 def manifest():
     return jsonify(name="TV Remote", short_name="TV Remote", start_url="/", display="standalone",
-                   background_color="#0b0b0f", theme_color="#0b0b0f")
+                   background_color="#0b0e14", theme_color="#0b0e14",
+                   icons=[{"src": "/icon-180.png", "sizes": "180x180", "type": "image/png"},
+                          {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                          {"src": "/logo.svg", "sizes": "any", "type": "image/svg+xml"}])
 
 
 @app.get("/play")
@@ -359,21 +618,33 @@ def switch_input(tid):
     if not (ip and hdmi):
         return
     try:
-        if roku.info(ip).get("power") != "PowerOn":
+        info = roku.info(ip)
+        if info.get("power") != "PowerOn":
             roku.key(ip, "PowerOn")
             time.sleep(6)  # TV needs a few seconds before it accepts an input change
+        elif info.get("app_id") == "tvinput." + hdmi.lower():
+            return  # already on it: re-selecting relaunches the input
         roku.key(ip, "Input" + hdmi)
     except (roku.RokuError, OSError):
         pass  # best effort: playback already started
 
 
+_start_seq = {}  # per TV: the newest start request. A request that is no longer the newest quits without starting.
+
+
 def play_on(c, url, quality, via=None):
-    """Start `url` on the Chromecast target `c`, or on the Pi when c is None."""
+    """Start `url` on the Chromecast target `c`, or on the Pi when c is None. Newest tap wins: an older start that is
+    still working out its link (yt-dlp can take ~20 s) gives up instead of running after the newer one."""
+    tid = c.id if c else "living"
+    seq = _start_seq[tid] = _start_seq.get(tid, 0) + 1
+    newest = lambda: _start_seq.get(tid) == seq
     if c:
-        c.play(url, quality, via)
+        c.play(url, quality, via, cancelled=lambda: not newest())
     else:
+        resolve(url)  # the slow part (cached afterwards), done before taking the player lock so a newer tap is never stuck behind it
         with lock:
-            start_player(url, quality)
+            if newest():
+                start_player(url, quality)
     threading.Thread(target=switch_input, args=(c.id if c else "living",), daemon=True).start()
 
 
@@ -415,12 +686,14 @@ def api_cmd():
     if action == "stop":
         with lock:
             stop_player()
+            state.update(url=None, source=None, quality=None)  # a deliberate stop leaves no old error or "now playing" behind
+        screen("idle")
         return jsonify(ok=True)
     if action == "restart":
         if not state["url"]:
             return jsonify(ok=False, error="Nothing to restart"), 400
         with lock:
-            start_player(state["url"], data.get("quality") or state["quality"])
+            start_player(state["url"], data.get("quality") or state["quality"], "quality" if data.get("quality") else "refresh")
         return jsonify(ok=True)
     if action == "chat":
         _chat["pref"] = data.get("value") != "off"
@@ -461,11 +734,17 @@ def osd_paused(paused):
         mpv(["osd-overlay", 2, "none"])
 
 
+def volume_text(vol, muted):
+    """Plain text for show-text: a block bar and the number, or Muted. (osd-overlay drawing flashed and lagged the stream.)"""
+    v = max(0, min(100, round(vol)))
+    return "Muted" if muted else "Volume %d%%  %s%s" % (v, "█" * (v // 5), "░" * (20 - v // 5))
+
+
 def osd_volume():
-    """Draw a TV-style volume message on the stream (mpv OSD)."""
+    """Show the volume on the TV for 1.5 s."""
     vol, muted = prop("volume"), prop("mute")
     if vol is not None:
-        mpv(["show-text", "Muted" if muted else f"Volume {round(vol)}%", 1500])
+        mpv(["show-text", volume_text(vol, muted), 1500])
 
 
 PROPS = {
@@ -496,6 +775,9 @@ def pi_status():
             data[key] = prop(name)
         if state["player"] == "streamlink":
             data["title"] = display_title(state["url"])
+        data["stalls"], data["stall_s"] = state.get("stalls", 0), round(state.get("stall_s", 0))
+        facts = livewatch.snapshot().get(state["url"] or "", {})
+        data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(state["url"] or "")
         data["chat_ok"] = state["source"] == "Twitch" and bool(chat.channel_of(state["url"] or ""))
         data["chat"] = bool(_chat["obj"])
         # live = streamlink, or a stream with no duration
@@ -504,7 +786,7 @@ def pi_status():
         p = state["proc"]
         data["starting"] = bool(p and p.poll() is None)
         if state["url"] and not data["starting"]:
-            data["error"] = last_error()
+            data["error"] = describe_error(last_error())
     return data
 
 
@@ -584,9 +866,35 @@ _roku_busy = set()
 ROKU_TTL = 15    # seconds: TV details change rarely, and every ECP call costs two round trips
 
 
+def on_tv_off(tv_id):
+    """The TV went to standby: stop a live stream on the Pi (a paused live stream falls behind and can't resume cleanly),
+    pause anything else, including the Chromecast."""
+    try:
+        if tv_id == "living":
+            if not pi_playing():
+                return
+            if pi_status().get("live"):
+                with lock:
+                    stop_player()
+                    state.update(url=None, source=None, quality=None)
+                screen("idle")
+            elif prop("pause") is not True:
+                mpv(["set_property", "pause", True])
+                osd_paused(True)
+        elif tv_id == "bedroom" and CAST:
+            st = CAST.status()
+            if st.get("running") and not st.get("paused"):
+                CAST.cmd("pause")
+    except Exception:
+        pass  # best effort: the TV is off either way
+
+
 def fetch_roku(tv_id):
+    was_on = (_roku.get(tv_id, (0, {}))[1] or {}).get("power") == "PowerOn"
     try:
         info = roku.info(ROKU_IPS[tv_id])
+        if was_on and info.get("power") != "PowerOn":  # went to standby (the TV's own remote, or the app)
+            threading.Thread(target=on_tv_off, args=(tv_id,), daemon=True).start()
     except (roku.RokuError, OSError):
         info = _roku.get(tv_id, (0, {}))[1]  # a TV that won't talk ECP keeps its last details
     _roku[tv_id] = (time.time(), info)
@@ -611,10 +919,12 @@ def make_card(tv_id, status):
     now = {"title": status.get("title") or fav_name(status.get("url") or ""), "source": status.get("source"),
            "live": bool(status.get("live")), "paused": bool(status.get("paused")),
            "starting": bool(status.get("starting")), "position": status.get("position"),
+           "game": livewatch.snapshot().get(status.get("url") or "", {}).get("game"),
+           "live_for": livewatch.live_for(status.get("url") or ""),
            "stream": stream_label(status.get("quality"))} if busy else None
     return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection,
             "brand": r.get("brand"), "model": r.get("model"), "size": r.get("size"), "tv_name": r.get("name"),
-            "power": r.get("power"), "input": r.get("app"), "now": now, "error": status.get("error"),
+            "power": r.get("power"), "input": r.get("app"), "input_id": r.get("app_id"), "now": now, "error": status.get("error"),
             "health": targets.health(kind, status)}
 
 
@@ -631,6 +941,72 @@ def bedroom_card():
 
 
 cards = targets.Cards({"living": living_card, "bedroom": bedroom_card}, ORDER)
+
+
+SHELL_SHOT = "/tmp/tvremote-shell.png"
+
+
+def shell_state():
+    running = bool(HOME and HOME.running())
+    return {"enabled": bool(settings.get("shell")), "running": running,
+            "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None,
+            "props": HOME.props() if running and hasattr(HOME, "props") else None}  # what the window is doing, for debugging
+
+
+SCREEN_SHOT = "/tmp/tvremote-screen.png"
+
+
+@app.get("/api/screen.png")
+def api_screen():
+    """The Pi's real screen, as the desktop is showing it right now (for debugging what the TV displays)."""
+    try:
+        subprocess.run(["grim", "-o", os.environ.get("TVREMOTE_OUTPUT", "HDMI-A-1"), SCREEN_SHOT],
+                       check=True, capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return jsonify(ok=False, error="Couldn't capture the screen (is grim installed, and is the desktop running?)."), 502
+    return send_file(SCREEN_SHOT, mimetype="image/png", max_age=0)
+
+
+@app.get("/api/stats")
+def api_stats():
+    return jsonify(enabled=bool(settings.get("stats")))
+
+
+@app.post("/api/stats")
+def api_stats_set():
+    settings["stats"] = bool((request.get_json(silent=True) or {}).get("enabled"))
+    save_settings()
+    return jsonify(enabled=settings["stats"])
+
+
+@app.get("/api/shell/screenshot")
+def api_shell_screenshot():
+    """What the home screen window is drawing right now, as a PNG (for debugging)."""
+    r = mpvipc.send(shell.SOCK, ["screenshot-to-file", SHELL_SHOT, "window"], 4)
+    if not (r and r.get("error") == "success"):
+        return jsonify(ok=False, error="The home screen isn't running, or couldn't take a screenshot."), 502
+    return send_file(SHELL_SHOT, mimetype="image/png", max_age=0)
+
+
+@app.get("/api/shell")
+def api_shell():
+    return jsonify(shell_state())
+
+
+@app.post("/api/shell")
+def api_shell_set():
+    """Turn the TV's home screen on or off (off shows the Pi desktop again). The app and this remote keep running."""
+    settings["shell"] = bool((request.get_json(silent=True) or {}).get("enabled"))
+    save_settings()
+    if HOME:
+        if settings["shell"]:
+            HOME.start()
+            if state["proc"] and state["url"]:  # the new window opens on top of a playing stream, so bring the stream back up
+                with lock:
+                    start_player(state["url"], state["quality"])
+        else:
+            HOME.stop()
+    return jsonify(shell_state())
 
 
 @app.get("/api/targets")
@@ -663,6 +1039,22 @@ def api_roku():
         return jsonify(ok=False, error=str(e)), 502
 
 
+@app.post("/api/tv/wake")
+def api_tv_wake():
+    """Turn the TV on and put it on this target's input (the same thing starting a stream does). Returns at once."""
+    tid = request.args.get("target") or "living"
+    if tid not in ROKU_IPS and tid != "living":
+        return jsonify(ok=False, error="Unknown TV."), 400
+
+    def go():
+        if ROKU_IPS.get(tid) and INPUTS.get(tid):
+            switch_input(tid)
+        elif tid == "living":
+            switch_tv_to_pi()  # no Roku address: wake and select over HDMI-CEC
+    threading.Thread(target=go, daemon=True).start()
+    return jsonify(ok=True)
+
+
 @app.post("/api/roku/key")
 def api_roku_key():
     ip = roku_ip()
@@ -675,6 +1067,8 @@ def api_roku_key():
         roku.key(ip, k)
     except roku.RokuError as e:
         return jsonify(ok=False, error=str(e)), 502
+    if k == "PowerOff":
+        threading.Thread(target=on_tv_off, args=(request.args.get("target") or "living",), daemon=True).start()
     return jsonify(ok=True)
 
 
@@ -732,9 +1126,75 @@ def api_debug():
         versions=versions(), last_error=last_error(), log=log)
 
 
+def is_channel(url):
+    """A Kick or Twitch channel page (not a video, clip or directory)."""
+    if route(url)[0] not in ("Kick", "Twitch"):
+        return False
+    parts = [p for p in urlparse(url).path.split("/") if p]
+    return len(parts) == 1 and parts[0] not in ("videos", "directory", "clips")
+
+
+def run_streamlink_json(url, timeout=30):
+    """`streamlink --json` for a channel: streams and metadata when it is live, an error when not, None if it could not run.
+    Runs at a low priority so it never competes with a stream that is playing."""
+    try:
+        out = subprocess.run(["nice", "-n", "10", "streamlink", "--json", url],
+                             capture_output=True, text=True, timeout=timeout).stdout
+        return json.loads(out)
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+
+
+def live_seconds(j):
+    """How long a channel has been live, from the elapsed-time tag in the stream's own playlist (Kick and Twitch carry one)."""
+    try:
+        text = hlsproxy._get(j["streams"]["best"]["url"]).decode(errors="replace")
+    except Exception:
+        return None
+    m = re.search(r"ELAPSED-SECS:(\d+(?:\.\d+)?)", text)
+    return float(m.group(1)) if m else None
+
+
+def check_live(url):
+    """{"live", "game", "title", "uptime_s"} for a channel, {"live": False} when offline, None when it could not be checked."""
+    if not is_channel(url):
+        return None
+    j = run_streamlink_json(url)
+    if j is None:
+        return None
+    if j.get("streams"):
+        meta = j.get("metadata") or {}
+        return {"live": True, "game": meta.get("category"), "title": meta.get("title"), "uptime_s": live_seconds(j)}
+    if "No playable streams" in (j.get("error") or ""):
+        return {"live": False}
+    return None
+
+
+def watched_urls():
+    urls = [f.get("url") or "" for f in load_favs()]
+    if state.get("url"):
+        urls.append(state["url"])
+    return list(dict.fromkeys(u for u in urls if is_channel(u)))
+
+
+def pi_playing():
+    p = state.get("proc")
+    return bool(p and p.poll() is None)
+
+
+livewatch = live.LiveWatch(os.path.join(DATA, "live.json"), urls=watched_urls, check=check_live, busy=pi_playing)
+
+
 @app.get("/api/favourites")
 def favs_get():
-    return jsonify(load_favs())
+    livewatch.poke()
+    snap = livewatch.snapshot()
+    out = []
+    for f in load_favs():
+        e = snap.get(f.get("url"), {})
+        out.append({**f, "live": e.get("live"), "game": e.get("game"), "last_live": e.get("last_live"),
+                    "checked": e.get("checked"), "live_for": livewatch.live_for(f.get("url"))})
+    return jsonify(out)
 
 
 @app.post("/api/favourites")
@@ -746,6 +1206,19 @@ def favs_add():
     favs = [f for f in load_favs() if f.get("url") != url]
     name = data.get("name") or fav_name(url)
     favs.append({"name": name[:40], "url": url, "source": route(url)[0]})
+    save_favs(favs)
+    return jsonify(favs)
+
+
+@app.post("/api/favourites/order")
+def favs_order():
+    """Save the favourites in the order the phone shows them. Anything not listed keeps its place at the end."""
+    urls = (request.get_json(silent=True) or {}).get("urls")
+    if not isinstance(urls, list):
+        return jsonify(ok=False), 400
+    favs = load_favs()
+    rank = {u: i for i, u in enumerate(urls)}
+    favs.sort(key=lambda f: rank.get(f.get("url"), len(rank)))  # stable: unlisted ones stay in their old order
     save_favs(favs)
     return jsonify(favs)
 
@@ -763,5 +1236,11 @@ if __name__ == "__main__":
     if CastTarget:
         CAST = CastTarget(DATA, resolve, display_title, YTDL_HEIGHTS, SL_DEFAULT)
     cards.start()
+    livewatch.start()
+    settings.update(load_settings())
+    HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
+                       favs=lambda: [(f.get("name") or "")[:28] for f in load_favs()][:5])
+    if settings["shell"]:
+        threading.Thread(target=HOME.start, daemon=True).start()
     from waitress import serve
     serve(app, host="0.0.0.0", port=PORT, threads=8)

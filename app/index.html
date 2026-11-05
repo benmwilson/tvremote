@@ -9,6 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="TV Remote">
 <meta name="theme-color" content="#0b0e14">
 <link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<link rel="apple-touch-icon" href="/icon-180.png">
 <title>TV Remote</title>
 <style>
 /* Design tokens.
@@ -23,6 +25,7 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.35 ui-rounded,"SF Pro Rounded",-apple-system,system-ui,sans-serif;
   padding:max(14px,env(safe-area-inset-top)) 14px max(28px,env(safe-area-inset-bottom));max-width:560px;margin:auto}
 .ic{width:24px;height:24px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.logo{flex:none;margin:0 4px 0 2px;border-radius:9px}
 header{display:flex;align-items:center;gap:6px;margin:2px 2px 14px;min-height:44px}
 h1{font-size:19px;font-weight:700;margin:0;letter-spacing:-.01em}
 .grow{flex:1}
@@ -36,7 +39,7 @@ button{position:relative;touch-action:manipulation;-webkit-user-select:none;user
 button:active{transform:scale(.95);filter:brightness(1.4)}
 /* busy: the command is on its way. The label fades and a spinner takes its place until the TV answers. */
 button.busy{pointer-events:none}
-button.busy>*{opacity:0}
+button.busy{color:transparent!important}
 button.busy::after{content:"";position:absolute;inset:0;margin:auto;width:22px;height:22px;border-radius:50%;
   border:3px solid var(--line);border-top-color:var(--tv,var(--fg));animation:spin .8s linear infinite}
 button.ok{animation:okflash .6s ease-out}
@@ -89,8 +92,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;heigh
 input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:var(--line)}
 input[type=range]::-moz-range-progress{height:8px;border-radius:4px;background:var(--tv)}
 input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--fg);border:4px solid var(--card)}
-.row3{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:8px;margin-top:14px}
-select{min-height:52px;padding:0 12px;width:100%}
+.row3.single{grid-template-columns:minmax(0,1fr)}
+.row3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:14px}
+.pair{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.row3.single .pair{grid-template-columns:minmax(0,1fr)}
+.tvoff{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:12px 14px;border-radius:14px;background:rgba(255,176,98,.12);border:1px solid rgba(255,176,98,.35)}
+.tvoff b{display:block}.tvoff .grow{min-width:0}.tvoff button{flex:none;min-height:44px;padding:0 16px;background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
+.now.off .pp,.now.off .vol{opacity:.55}
+#tvctl.off button:not([data-k=PowerOn]){opacity:.4;pointer-events:none}
+select{min-height:52px;padding:0 8px;width:100%;font-size:15px}
 .danger{color:var(--bad)}
 input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .seg button{background:var(--card2)}.seg button.on{background:var(--fg);color:#0b0e14;font-weight:700}
@@ -116,6 +126,26 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .fav{position:relative;background:var(--card);border-radius:16px;padding:12px;min-height:72px;text-align:left;display:block;width:100%;min-width:0}
 .fav b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:30px;margin-bottom:6px}
 .fav{overflow:hidden}
+.av{width:36px;height:36px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:#fff;overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
+.iconlink{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
+.nowhead{display:flex;align-items:center;gap:8px}.nowhead .av{width:40px;height:40px}
+.fav .fhead{display:flex;align-items:center;gap:10px;padding-right:30px;margin-bottom:6px}
+.fav .fhead b{margin:0;padding:0;min-width:0;flex:1}
+.fav>.iconlink{position:absolute;right:0;bottom:0}
+.fav .badge{margin-right:8px}
+#logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
+.sub.warn{color:var(--warn,#ffb062)}
+.sortbtn{margin-left:auto;margin-right:8px;min-height:44px;padding:0 14px;background:none;color:var(--dim);font-size:14px;border-radius:12px}
+.sortbtn[aria-pressed=true]{background:var(--card2,#222a38);color:var(--text,#fff)}
+.fav .mv{position:absolute;right:0;top:0;display:flex}
+.fav .mv button{width:44px;height:44px;background:none;color:var(--dim);font-size:22px;touch-action:none;cursor:grab}
+.fav.drag{position:relative;z-index:2;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.fav:not(.drag){transition:transform .15s}
+.fav .livenote{display:block;margin-top:4px;font-size:13px}
+.fav .note{display:block;color:var(--warn);font-size:13px;margin-top:4px}
+.fav .note:empty{display:none}
 .fav .starting{display:none;font-size:13px;color:var(--dim)}
 .fav .spin{display:none;position:absolute;right:12px;bottom:12px;width:18px;height:18px;border-radius:50%;
   border:3px solid var(--line);border-top-color:var(--tv,var(--fg));animation:spin .8s linear infinite}
@@ -148,6 +178,11 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2v13.6a.9.9 0 001.4.8l10.2-6.8a.9.9 0 000-1.6L9.4 4.4A.9.9 0 008 5.2z" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor" stroke="none"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.6-5.9M20 4v5h-5"/></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4.5H6.5A1.5 1.5 0 005 6v12a1.5 1.5 0 001.5 1.5H10M15 8l4 4-4 4M19 12H9.5"/></symbol>
+<symbol id="i-logo" viewBox="0 0 100 100"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8cc8ff"/><stop offset="1" stop-color="#4f8fff"/></linearGradient></defs>
+<rect width="100" height="100" rx="22" fill="#0b0e14"/><rect x="14" y="22" width="72" height="48" rx="12" fill="#131a28" stroke="url(#lg)" stroke-width="6"/>
+<path d="M44 36V56L61 46Z" fill="url(#lg)" stroke="url(#lg)" stroke-width="5" stroke-linejoin="round"/><path d="M38 82H62M50 73V82" stroke="url(#lg)" stroke-width="6" stroke-linecap="round" fill="none"/></symbol>
 <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.6" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5v5h3.6l5 4.2V5.3L7.6 9.5z" fill="currentColor" stroke="none"/><path d="M16 9.2a4.2 4.2 0 010 5.6M18.8 6.6a8 8 0 010 10.8"/></symbol>
 <symbol id="i-volume-low" viewBox="0 0 24 24"><path d="M4 9.5v5h3.6l5 4.2V5.3L7.6 9.5z" fill="currentColor" stroke="none"/><path d="M16 9.5a3.3 3.3 0 010 5"/></symbol>
@@ -169,13 +204,15 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
 <symbol id="i-list" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></symbol>
 <symbol id="i-grid" viewBox="0 0 24 24"><rect x="5" y="5" width="5.5" height="5.5" rx="1.2"/><rect x="13.5" y="5" width="5.5" height="5.5" rx="1.2"/><rect x="5" y="13.5" width="5.5" height="5.5" rx="1.2"/><rect x="13.5" y="13.5" width="5.5" height="5.5" rx="1.2"/></symbol>
+<symbol id="i-external" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M10 6H6.5A1.5 1.5 0 005 7.5v10A1.5 1.5 0 006.5 19h10a1.5 1.5 0 001.5-1.5V14"/></symbol>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
 </defs></svg>
 
 <header>
   <button id="back" class="hide" aria-label="Back to all TVs"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg>All TVs</button>
+  <svg class="logo" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true"><use href="#i-logo"/></svg>
   <h1>TV Remote</h1><span class="grow"></span>
-  <span id="dot" role="img" aria-label="Connection to the Pi"></span>
+  <a id="logout" class="hide" href="/logout" aria-label="Log out" title="Log out"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg></a><span id="dot" role="img" aria-label="Connection to the Pi"></span>
 </header>
 
 <section id="view-all" class="hide">
@@ -199,22 +236,27 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <section id="view-tv" class="hide">
 <div id="tvid" class="tvid"></div>
 <div class="card now" id="now">
-  <div><span class="badge" id="src">Idle</span> <span class="badge live hide" id="live">LIVE</span></div>
+  <div class="tvoff hide" id="tvoff" role="status"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg>
+    <div class="grow"><b>The TV is off</b><span class="sub" id="tvoffsub"></span></div>
+    <button id="tvwake">Turn on</button></div>
+  <div class="nowhead"><span id="nowav" class="hide"></span><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span><span class="grow"></span><a id="nowlink" class="iconlink hide" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a></div>
   <div id="title" class="ttl">Nothing playing</div>
+  <div id="game" class="sub hide"></div>
   <div id="meta"></div>
   <button id="pp" class="pp" data-a="pause" aria-label="Pause or resume"></button>
   <div class="row" id="seek">
     <button data-a="seek" data-v="-60" aria-label="Back 60 seconds">&minus;60</button><button data-a="seek" data-v="-10" aria-label="Back 10 seconds">&minus;10</button>
     <button data-a="seek" data-v="10" aria-label="Forward 10 seconds">+10</button><button data-a="seek" data-v="60" aria-label="Forward 60 seconds">+60</button>
   </div>
-  <div class="vol">
+  <div class="vol" id="volrow">
     <button id="mute" class="sq" data-a="mute" aria-label="Mute"></button>
     <input type="range" id="vol" min="0" max="100" step="1" aria-label="Volume">
     <b id="volv">100</b>
   </div>
-  <div class="row3"><select id="qual" aria-label="Quality"></select>
+  <div class="row3" id="ctlrow"><select id="qual" aria-label="Quality"></select>
     <button id="fav"></button>
-    <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div>
+    <div class="pair"><button id="refresh" aria-label="Refresh the stream" title="Refresh the stream"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+    <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div></div>
 </div>
 <div id="err" role="status"></div>
 
@@ -247,7 +289,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 </div>
 <div id="results" style="margin-top:10px"></div>
 
-<div class="bar" style="margin-top:26px"><h2>Favourites</h2><div class="viewtog">
+<div class="bar" style="margin-top:26px"><h2>Favourites</h2><button id="favSort" class="sortbtn" aria-pressed="false">Reorder</button><div class="viewtog">
   <button id="favList" aria-label="Show favourites as a list" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg></button>
   <button id="favTiles" aria-label="Show favourites as tiles" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg></button></div></div>
 <div class="grid list" id="favs"></div>
@@ -259,6 +301,10 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <aside id="drawer" class="hide" aria-label="Debug">
   <div class="dh"><b>Debug</b><span id="dage"></span><button id="dbgClose" aria-label="Close debug"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="db">
+    <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:0 0 6px">
+  <div class="grow"><b>Home screen on the TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
+    <button id="statsrow" class="tvrow" role="switch" aria-checked="false" style="margin:0 0 6px">
+  <div class="grow"><b>Stats on the TV</b><span class="sub warn">Warning: this drops frames while it is on. Dropped frames, buffer and fps in the corner, redrawn every 2 s. Use it to diagnose, then switch it off.</span></div><span class="sw"></span></button>
     <h3>Player</h3><table id="d-player"></table>
     <h3>mpv</h3><table id="d-mpv"></table>
     <h3>Versions</h3><table id="d-ver"></table>
@@ -285,7 +331,7 @@ const view = () => location.pathname === '/share' ? 'share' : location.hash.star
 // Run a button's command with feedback: spinner while it is in flight (at least `min` ms so a quick tap is still
 // seen), then a brief confirm or shake. `hold` keeps the spinner a little longer after success for things that
 // take the TV a moment, like changing input.
-async function busy(btn, work, hold = 0, min = 450) {
+async function busy(btn, work, hold = 0, min = 450, until = null) {
   if (btn.classList.contains('busy')) return null;
   btn.classList.add('busy');
   const t0 = Date.now();
@@ -293,12 +339,63 @@ async function busy(btn, work, hold = 0, min = 450) {
   try { r = await work(); } catch (e) {}
   const ok = !!r && r.ok !== false;
   await new Promise(done => setTimeout(done, Math.max(0, min - (Date.now() - t0)) + (ok ? hold : 0)));
+  if (ok && until && !r.noWait) {  // keep spinning until what it started is actually up (or 30 s)
+    const t1 = Date.now();
+    while (!until() && Date.now() - t1 < 30000) await new Promise(done => setTimeout(done, 250));
+  }
   btn.classList.remove('busy');
   btn.classList.add(ok ? 'ok' : 'fail');
   setTimeout(() => btn.classList.remove('ok', 'fail'), 700);
   return r;
 }
 document.addEventListener('touchstart', () => {}, {passive: true});  // iOS only shows :active pressed states once a touch listener exists
+
+// "2 h 14 min", "45 min", "just started"
+const dur = sec => { const m = Math.round(sec / 60); if (m < 2) return 'just started'; if (m < 90) return m + ' min';
+  const h = Math.floor(m / 60); if (h < 48) return h + ' h ' + (m % 60) + ' min'; return Math.floor(h / 24) + ' d ' + (h % 24) + ' h'; };
+const ago = ts => { const m = Math.round((Date.now() / 1000 - ts) / 60); if (m < 2) return 'just now'; if (m < 90) return m + ' min ago';
+  const h = Math.round(m / 60); if (h < 48) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; };
+const liveLine = f => f.live === true ? ['live for ' + dur(f.live_for || 0), f.game].filter(Boolean).join(' \u00b7 ')
+  : f.live === false ? ['Offline', f.last_live ? 'last live ' + ago(f.last_live) : 'not seen live yet', f.game ? 'was playing ' + f.game : null].filter(Boolean).join(' \u00b7 ')
+  : '';
+
+// ---- avatars and platform links ----
+const chanName = url => { try { return new URL(url).pathname.split('/').filter(Boolean)[0] || new URL(url).hostname; } catch (e) { return ''; } };
+const initials = n => (n || '?').replace(/^[^A-Za-z0-9]+/, '').slice(0, 2).toUpperCase() || '?';
+const hueOf = n => { let h = 0; for (const c of n || '') h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const kickSlug = url => { try { const u = new URL(url), p = u.pathname.split('/').filter(Boolean);
+  return /(^|\.)kick\.com$/.test(u.hostname) && p.length === 1 ? p[0] : null; } catch (e) { return null; } };
+const avCache = {};
+// Kick's channel details come from the visitor's own browser (as gtaservers.org does), so no account and nothing from the Pi.
+async function kickAvatar(slug) {
+  if (avCache[slug] !== undefined) return avCache[slug];
+  try { const c = JSON.parse(localStorage.getItem('av:' + slug) || 'null'); if (c && Date.now() - c.t < 7 * 864e5) return (avCache[slug] = c.src); } catch (e) {}
+  try {
+    const j = await (await fetch('https://kick.com/api/v2/channels/' + encodeURIComponent(slug))).json();
+    const src = (j.user && j.user.profile_pic) || null;
+    avCache[slug] = src;
+    try { localStorage.setItem('av:' + slug, JSON.stringify({t: Date.now(), src})); } catch (e) {}
+    return src;
+  } catch (e) { return (avCache[slug] = null); }  // blocked or offline: the initials stay
+}
+function avatarEl(name, url, cls) {
+  const a = el('span', 'av' + (cls ? ' ' + cls : ''), initials(name));
+  a.style.background = 'hsl(' + hueOf(name) + ' 45% 32%)';
+  const slug = kickSlug(url);
+  if (slug) kickAvatar(slug).then(src => {
+    if (!src) return;
+    const i = document.createElement('img'); i.src = src; i.alt = '';
+    a.textContent = ''; a.appendChild(i);
+  });
+  return a;
+}
+function linkEl(url, source) {
+  const a = document.createElement('a'); a.className = 'iconlink'; a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  a.setAttribute('aria-label', 'Open on ' + (source || 'the site')); a.innerHTML = ic('external');
+  a.onclick = e => e.stopPropagation();
+  return a;
+}
+let nowAvFor = '';
 
 const err = m => { $('err').textContent = m || ''; if (m) setTimeout(() => $('err').textContent = '', 6000); };
 async function api(path, method = 'GET', body) {
@@ -321,6 +418,17 @@ function render() {
   $('src').className = 'badge ' + (st.source || '');
   $('live').classList.toggle('hide', !(run && st.live));
   $('title').textContent = run ? (st.title || st.url) : st.starting ? 'Starting…' : st.error ? 'Playback stopped' : 'Nothing playing';
+  const nowUrl = run ? st.url : '';
+  if (nowUrl !== nowAvFor) {  // the streamer's picture and a link to their page
+    nowAvFor = nowUrl;
+    $('nowav').replaceChildren(...(nowUrl ? [avatarEl(chanName(nowUrl), nowUrl)] : []));
+    $('nowav').classList.toggle('hide', !nowUrl);
+    $('nowlink').classList.toggle('hide', !nowUrl);
+    if (nowUrl) { $('nowlink').href = nowUrl; $('nowlink').setAttribute('aria-label', 'Open on ' + (st.source || 'the site')); }
+  }
+  const gameLine = run ? [st.game, st.live_for != null ? 'live for ' + dur(st.live_for) : null].filter(Boolean).join(' \u00b7 ') : '';
+  $('game').textContent = gameLine;
+  $('game').classList.toggle('hide', !gameLine);
   let meta = [];
   if (run) {
     if (!st.live && st.position != null) meta.push(fmt(st.position) + (st.duration ? ' / ' + fmt(st.duration) : ''));
@@ -328,12 +436,23 @@ function render() {
     if (st.height) meta.push(st.height + 'p');
     if (st.hwdec) meta.push((target === 'living' ? 'hw: ' : 'via ') + st.hwdec);
     if (st.drops != null) meta.push(st.drops + ' dropped');
+    if (st.buffering) meta.push('buffering');
+    if (st.stalls) meta.push(st.stalls + (st.stalls === 1 ? ' stall' : ' stalls') + ' (' + st.stall_s + ' s)');
   }
   if (!run && st.error) meta.push(st.error);
   $('meta').textContent = meta.join(' · ');
+  const up = !!run, starting = !!st.starting && !run;   // nothing to control until a stream is playing
+  $('pp').classList.toggle('hide', !up);
+  $('volrow').classList.toggle('hide', !up);
+  $('ctlrow').classList.toggle('hide', !up && !starting);
+  $('refresh').classList.toggle('hide', !up);
+  $('qual').classList.toggle('hide', !up || !$('qual').options.length);  // starting: only Stop
+  $('ctlrow').classList.toggle('single', !up && starting);  // starting: just Stop, so you can cancel
+  $('fav').classList.toggle('hide', !up);
   $('pp').classList.toggle('paused', !!st.paused);
   setBtn($('pp'), st.paused ? 'play' : 'pause', st.paused ? 'Paused' : '');
   $('seek').classList.toggle('hide', !run || st.live);
+  if (!up && !starting && !st.error) $('meta').textContent = 'Pick something below, or open a favourite.';
   setBtn($('mute'), st.muted ? 'mute' : 'volume', '');
   $('mute').setAttribute('aria-label', st.muted ? 'Unmute' : 'Mute');
   if (!dragging && st.volume != null) { $('vol').value = st.volume; $('volv').textContent = Math.round(st.volume); }
@@ -351,7 +470,7 @@ async function loadQualities() {
   sel.innerHTML = '';
   (q || []).forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; sel.appendChild(o); });
   sel.value = [...sel.options].map(o => o.value).find(v => String(st.quality).split(',').includes(v)) || '';
-  sel.classList.toggle('hide', !sel.options.length);
+  sel.classList.toggle('hide', !sel.options.length || !st.running);
 }
 
 async function poll() {
@@ -360,19 +479,65 @@ async function poll() {
   if (s) { st = s; render(); }
 }
 
+let reordering = false;
 async function loadFavs() {
   favList = await api('/api/favourites') || [];
+  drawFavs();
+}
+// Drag a row by its handle: the row follows the finger, the others slide out of the way, and the order is saved on release.
+function dragFav(e, row, from) {
+  e.preventDefault();
+  const grip = e.currentTarget, items = [...$('favs').children], rects = items.map(n => n.getBoundingClientRect());
+  const h = rects[from].height + 8, y0 = e.clientY;
+  let to = from;
+  grip.setPointerCapture(e.pointerId);
+  row.classList.add('drag');
+  grip.onpointermove = m => {
+    const dy = m.clientY - y0, c = rects[from].top + rects[from].height / 2 + dy;
+    row.style.transform = 'translateY(' + dy + 'px)';
+    const j = rects.findIndex(r => c < r.top + r.height / 2);
+    to = j < 0 ? items.length - 1 : j;
+    items.forEach((n, k) => { if (k !== from) n.style.transform = from < k && k <= to ? 'translateY(' + -h + 'px)' : to <= k && k < from ? 'translateY(' + h + 'px)' : ''; });
+  };
+  grip.onpointerup = grip.onpointercancel = async () => {
+    grip.onpointermove = grip.onpointerup = grip.onpointercancel = null;
+    if (to !== from) { favList.splice(to, 0, favList.splice(from, 1)[0]); await api('/api/favourites/order', 'POST', {urls: favList.map(f => f.url)}); }
+    drawFavs();
+  };
+}
+async function moveFav(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= favList.length) return;
+  [favList[i], favList[j]] = [favList[j], favList[i]];
+  drawFavs();
+  await api('/api/favourites/order', 'POST', {urls: favList.map(f => f.url)});
+}
+function drawFavs() {
   const g = $('favs');
   g.innerHTML = '';
   if (!favList.length) g.append(Object.assign(el('div', 'sub', 'No favourites yet. Tap the star while something is playing to save it.'), {style: 'grid-column:1/-1;padding:4px'}));
-  favList.forEach(f => {
+  // live ones first (keeping your order among them); while reordering, exactly your order
+  const shown = reordering ? favList : [...favList].sort((a, b) => (b.live === true) - (a.live === true));
+  shown.forEach(f => {
     const b = el('div', 'fav'); b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = f.url;
     const x = el('button', 'x'); x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Remove ' + f.name);
     x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'DELETE', {url: f.url}); loadFavs(); };
-    b.onclick = () => playFav(f.url);
-    b.onkeydown = e => { if (e.key === 'Enter') playFav(f.url); };
+    b.onclick = () => { if (!reordering) playFav(f.url); };
+    b.onkeydown = e => { if (e.key === 'Enter' && !reordering) playFav(f.url); };
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
-    b.append(el('b', null, f.name), el('span', 'badge ' + (f.source || ''), f.source || 'Other'), el('span', 'starting', 'Starting\u2026'), spin, x);
+    const live = f.live === true ? el('span', 'badge live', 'LIVE') : null;
+    const lnote = el('span', 'sub livenote', liveLine(f));
+    const head = el('div', 'fhead'); head.append(avatarEl(f.name, f.url), el('b', null, f.name));
+    b.append(head, el('span', 'badge ' + (f.source || ''), f.source || 'Other'), ...(live ? [live] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
+    if (reordering) {
+      const i = favList.indexOf(f), mv = el('span', 'mv');
+      const grip = el('button', 'grip', '☰');  // drag this to move the row; arrow keys also work
+      grip.setAttribute('aria-label', 'Drag to move ' + f.name);
+      grip.onpointerdown = e => dragFav(e, b, i);
+      grip.onkeydown = e => { if (e.key === 'ArrowUp') { e.preventDefault(); moveFav(i, -1); } if (e.key === 'ArrowDown') { e.preventDefault(); moveFav(i, 1); } };
+      mv.append(grip); b.append(mv);
+      b.querySelectorAll('.iconlink,.x').forEach(n => n.classList.add('hide'));
+    }
     g.appendChild(b);
   });
   markFavs();
@@ -381,23 +546,29 @@ async function loadFavs() {
 
 // A tapped favourite shows a spinner until that stream is playing (or fails, or 30 s pass).
 let favLoading = null;  // {url, t0}
+let favNote = null;  // {url, text, until}: why the last tapped favourite didn't start
 function markFavs() {
   document.querySelectorAll('#favs .fav').forEach(b => {
+    const n = b.querySelector('.note');
+    if (n) n.textContent = favNote && favNote.url === b.dataset.url && Date.now() < favNote.until ? favNote.text : '';
     const on = !!favLoading && b.dataset.url === favLoading.url;
     b.classList.toggle('loading', on);
     if (on) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
   });
 }
-async function playFav(url) {
-  if (favLoading) return;
+async function playFav(url) {  // a new tap replaces the one still loading: the Pi keeps only the newest
   favLoading = {url, t0: Date.now()}; markFavs();
   const r = await play(url);
-  if (!r || !r.ok) { favLoading = null; markFavs(); }
+  if ((!r || !r.ok) && favLoading && favLoading.url === url) { favLoading = null; markFavs(); }
 }
 function checkFavLoading() {
   if (!favLoading) return;
   const age = Date.now() - favLoading.t0;
-  if ((st.running && st.url === favLoading.url) || (st.error && age > 1500) || age > 30000) { favLoading = null; markFavs(); }
+  const failed = !!st.error && age > 1500;
+  if ((st.running && st.url === favLoading.url) || failed || age > 30000) {
+    if (failed) { favNote = {url: favLoading.url, text: st.error, until: Date.now() + 8000}; setTimeout(markFavs, 8100); }
+    favLoading = null; markFavs();
+  }
 }
 
 async function play(text) {
@@ -412,7 +583,7 @@ async function search(q) {
   const r = await api('/api/search?q=' + encodeURIComponent(q));
   const box = $('results');
   box.innerHTML = '';
-  if (!Array.isArray(r) || !r.length) { box.textContent = 'No results. Try different words.'; return; }
+  if (!Array.isArray(r) || !r.length) { box.textContent = 'No results. Try different words.'; return {ok: false}; }
   r.forEach(v => {
     const b = el('button', 'res');
     const img = document.createElement('img'); img.src = v.thumb; img.loading = 'lazy'; img.alt = '';
@@ -422,12 +593,14 @@ async function search(q) {
     b.onclick = () => play(v.url);
     box.appendChild(b);
   });
+  return {ok: true, noWait: true};  // results are showing: nothing is starting yet
 }
 
-function go() {
+async function go() {
   const t = $('link').value.trim();
-  if (!t) return;
-  if (site === 'youtube' && !/https?:\/\//.test(t)) search(t); else play(t);
+  if (!t) return null;
+  if (site === 'youtube' && !/https?:\/\//.test(t)) return search(t);
+  return play(t);
 }
 
 document.addEventListener('click', e => {
@@ -436,8 +609,20 @@ document.addEventListener('click', e => {
   const s = e.target.closest('#site button');
   if (s) { site = s.dataset.s; document.querySelectorAll('#site button').forEach(x => x.classList.toggle('on', x === s)); }
 });
-$('go').onclick = go;
-$('link').onkeydown = e => { if (e.key === 'Enter') go(); };
+$('go').onclick = () => {
+  const prev = st.url, t0 = Date.now();
+  let sawStarting = false;
+  busy($('go'), go, 0, 450, () => {  // spin until the new stream is running, or it failed
+    if (st.starting) sawStarting = true;
+    return (st.running && (st.url !== prev || sawStarting)) || (!!st.error && Date.now() - t0 > 1500);
+  });
+};
+$('link').onkeydown = e => { if (e.key === 'Enter') $('go').click(); };
+$('tvwake').onclick = async () => {
+  const r = await busy($('tvwake'), () => api('/api/tv/wake', 'POST'), 7000);  // it takes a few seconds to wake and pick its input
+  if (r && r.ok) { loadTargets(); setTimeout(loadTargets, 4000); setTimeout(loadTargets, 8000); }
+};
+$('refresh').onclick = () => busy($('refresh'), () => cmd('restart')).then(() => setTimeout(poll, 1500));
 $('stop').onclick = () => busy($('stop'), () => cmd('stop')).then(poll);
 $('fav').onclick = async () => {
   if (!st.url) return;
@@ -460,9 +645,49 @@ function applyFavView() {
   $('favTiles').setAttribute('aria-pressed', String(favView === 'tiles'));
   try { localStorage.setItem('favView', favView); } catch (e) {}
 }
+$('favSort').onclick = () => { reordering = !reordering; $('favSort').setAttribute('aria-pressed', String(reordering)); $('favSort').textContent = reordering ? 'Done' : 'Reorder'; drawFavs(); };
 $('favList').onclick = () => { favView = 'list'; applyFavView(); };
 $('favTiles').onclick = () => { favView = 'tiles'; applyFavView(); };
 applyFavView();
+
+// ---- the TV's home screen switch (Pi TV only) ----
+let shellInfo = null;
+function renderShell() {
+  const s = shellInfo;
+  if (!s) return;
+  $('shellrow').setAttribute('aria-checked', String(s.enabled));
+  $('shellsub').textContent = !s.enabled ? 'Off: the Pi desktop shows between streams. Turning it on restarts anything playing.'
+    : s.running ? 'On: this TV stays on the app between streams.'
+    : s.error ? "Couldn't start: " + s.error : 'Starting\u2026';
+}
+async function loadShell() {
+  const cur = targets.find(t => t.id === target) || {};
+  $('shellrow').classList.toggle('hide', cur.kind !== 'pi');
+  loadStats();
+  if (cur.kind !== 'pi') return;
+  try { shellInfo = await (await fetch('/api/shell')).json(); renderShell(); } catch (e) {}
+}
+$('shellrow').onclick = async () => {
+  const want = $('shellrow').getAttribute('aria-checked') !== 'true';
+  const r = await busy($('shellrow'), () => api('/api/shell', 'POST', {enabled: want}));
+  if (r) { shellInfo = r; renderShell(); }
+};
+
+fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
+
+// ---- stats on the TV (Pi TV only) ----
+async function loadStats() {
+  const cur = targets.find(t => t.id === target) || {};
+  $('statsrow').classList.toggle('hide', cur.kind !== 'pi');
+  if (cur.kind !== 'pi') return;
+  const r = await api('/api/stats');
+  if (r) $('statsrow').setAttribute('aria-checked', String(r.enabled));
+}
+$('statsrow').onclick = async () => {
+  const want = $('statsrow').getAttribute('aria-checked') !== 'true';
+  const r = await busy($('statsrow'), () => api('/api/stats', 'POST', {enabled: want}));
+  if (r) $('statsrow').setAttribute('aria-checked', String(r.enabled));
+};
 
 // ---- debug drawer ----
 let dbgTimer = null;
@@ -521,6 +746,7 @@ function cardEl(c, onTap, extra) {
   if (c.reachable && n && !n.starting) {
     tags.append(el('span', 'badge ' + (n.source || ''), n.source || 'Other'));
     if (n.live) tags.append(el('span', 'badge live', 'LIVE'));
+    if (n.game) tags.append(el('span', 'sub', n.game));
     if (n.stream) tags.append(el('span', 'badge', n.stream));
   }
   const pw = c.reachable ? [POWER[c.power] || c.power, c.input && c.input !== 'Roku' ? c.input : null].filter(Boolean).join(' · ') : '';
@@ -560,8 +786,16 @@ function renderCards() {
 }
 $('editTvs').onclick = () => { editing = !editing; renderCards(); };
 
+// off = a Roku that reports standby / screen off, or one that doesn't answer at all (powered down at the wall)
+const tvOff = c => !!c.roku && (c.reachable === false || (!!c.power && c.power !== 'PowerOn'));
 function tvInfo() {  // the TV details in the One TV view come from the same cached card
   const cur = targets.find(t => t.id === target) || {};
+  const off = tvOff(cur);
+  $('tvoff').classList.toggle('hide', !off);
+  $('now').classList.toggle('off', off);
+  $('tvctl').classList.toggle('off', off);
+  $('tvoffsub').textContent = cur.reachable === false ? "It isn't answering. Check it has power, then tap Turn on."
+    : st.running ? 'The stream keeps playing behind the black screen.' : 'Turn it on to watch. Playing something also wakes it.';
   $('view-tv').style.setProperty('--tv', tvColour(target));
   $('tvctl').classList.toggle('hide', !cur.roku);
   $('tvhead').classList.toggle('hide', !cur.roku);
@@ -590,7 +824,7 @@ async function loadTargets() {
     }
   } catch (e) {}
   $('dot').classList.toggle('on', ok);
-  if (changed) { renderCards(); tvInfo(); if (view() === 'share') renderPicker(); }
+  if (changed) { renderCards(); tvInfo(); if (view() === 'share') renderPicker(); if (view() === 'tv') loadShell(); }
 }
 
 function show() {
@@ -600,7 +834,7 @@ function show() {
     if (id !== target) {
       target = id; st = {}; qualFor = null; $('qual').innerHTML = '';
       try { localStorage.setItem('target', id); } catch (e) {}
-      loadFavs(); poll();
+      loadFavs(); poll(); loadShell();
     }
   }
   ['all', 'share', 'tv'].forEach(n => $('view-' + n).classList.toggle('hide', n !== v));
@@ -675,6 +909,7 @@ if (location.pathname === '/' && !location.hash && redirectTarget) history.repla
 show();
 loadTargets(); setInterval(loadTargets, 3000);
 setInterval(poll, 2000);
+setInterval(() => { if (view() === 'tv' && !document.hidden) loadFavs(); }, 60000);
 </script>
 </body>
 </html>
