@@ -38,6 +38,7 @@ YTDL_HEIGHTS = ("1080", "720", "480")
 import hlsproxy
 import live
 import chat
+import kick
 import mpvipc
 import roku
 import shell
@@ -1289,6 +1290,10 @@ def check_live(url):
     """{"live", "game", "title", "uptime_s"} for a channel, {"live": False} when offline, None when it could not be checked."""
     if not is_channel(url):
         return None
+    if route(url)[0] == "Kick" and kick.enabled():
+        r = kick.check(chat.channel_of(url))
+        if r is not None:
+            return r  # the official API; on a failure fall through to streamlink
     j = run_streamlink_json(url)
     if j is None:
         return None

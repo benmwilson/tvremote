@@ -33,6 +33,8 @@ services:
       - TVREMOTE_PASSWORD=${PASSWORD:-}
       - TVREMOTE_SHELL_VO=${SHELL_VO:-wlshm,gpu}
       - TVREMOTE_SHELL=${HOME_SCREEN:-1}  # 0 = never open the full-screen home screen (the Pi desktop stays usable)
+      - TVREMOTE_KICK_CLIENT_ID=${KICK_CLIENT_ID:-}
+      - TVREMOTE_KICK_CLIENT_SECRET=${KICK_CLIENT_SECRET:-}
       - TVREMOTE_ROKU_LIVING=${ROKU_LIVING:-}
       - TVREMOTE_ROKU_BEDROOM=${ROKU_BEDROOM:-}
       - TVREMOTE_INPUT_LIVING=${INPUT_LIVING:-}
