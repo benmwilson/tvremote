@@ -14,7 +14,7 @@ import threading
 import time
 from urllib.parse import quote, urlparse
 
-from flask import Flask, Response, abort, jsonify, send_file, redirect, request, send_from_directory
+from flask import Flask, Response, abort, g, has_request_context, jsonify, send_file, redirect, request, send_from_directory
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("TVREMOTE_DATA", "/data")
@@ -37,6 +37,7 @@ YTDL_HEIGHTS = ("1080", "720", "480")
 
 import hlsproxy
 import live
+import accounts
 import chat
 import kick
 import mpvipc
@@ -78,6 +79,7 @@ _live_cache = {}
 @app.before_request
 def guard():
     """CSRF check, then Basic auth when TVREMOTE_PASSWORD is set (/play also takes ?t=<password>)."""
+    g.user = accounts.OWNER  # the password, a script or no password at all is the owner; a login cookie can say otherwise
     token_ok = bool(PASSWORD) and hmac.compare_digest(request.args.get("t", "").encode(), PASSWORD.encode())
     origin = request.headers.get("Origin")
     if request.method != "GET" and origin and urlparse(origin).netloc != request.host:
@@ -91,6 +93,7 @@ def guard():
     if request.path in ("/login", "/logout"):
         return None
     if valid_session(request.cookies.get("tv_auth", "")):
+        g.user = session_user(request.cookies.get("tv_auth", ""))
         return None
     a = request.authorization
     wants_page = "text/html" in request.headers.get("Accept", "")
@@ -137,18 +140,31 @@ def _h(tok):
     return hmac.new(PASSWORD.encode(), tok.encode(), hashlib.sha256).hexdigest()
 
 
-def new_session():
+def new_session(user=accounts.OWNER):
     """A random token for one login; the server remembers it (hashed) until it expires or the user logs out."""
     tok = secrets.token_urlsafe(32)
     with _sessions_lock:
-        d = {k: v for k, v in _sess_load().items() if v > time.time()}
-        d[_h(tok)] = time.time() + SESSION_DAYS * 86400
+        d = {k: v for k, v in _sess_load().items() if _exp(v) > time.time()}
+        exp = time.time() + SESSION_DAYS * 86400
+        d[_h(tok)] = exp if user == accounts.OWNER else {"exp": exp, "user": user}
         _sess_save(d)
     return tok
 
 
+def _exp(v):
+    return v["exp"] if isinstance(v, dict) else v
+
+
+def session_user(tok):
+    v = _sess_load().get(_h(tok))
+    return v["user"] if isinstance(v, dict) else accounts.OWNER
+
+
 def valid_session(tok):
-    return bool(tok) and _h(tok) not in _revoked and _sess_load().get(_h(tok), 0) > time.time()
+    if not tok or _h(tok) in _revoked:
+        return False
+    v = _sess_load().get(_h(tok), 0)
+    return _exp(v) > time.time() and (not isinstance(v, dict) or accounts.exists(v["user"]))  # a removed account's sessions end
 
 
 def drop_session(tok):
@@ -175,6 +191,7 @@ form{width:min(340px,86vw);display:grid;gap:14px}h1{margin:0 0 6px;font-size:28p
 input,button{font:inherit;min-height:52px;border-radius:14px;border:0;padding:0 16px;box-sizing:border-box;width:100%}
 input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em;margin:0}</style></head>
 <body><form method="post" action="/login"><img src="/logo.svg" width="84" height="84" alt="" style="justify-self:center;border-radius:20px"><h1 style="text-align:center">TV Remote</h1>
+<input name="username" placeholder="Username (blank for the owner)" autocomplete="username" autocapitalize="none" aria-label="Username">
 <input type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password" autofocus required>
 <input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button></form></body></html>"""
 
@@ -186,12 +203,19 @@ def login():
         return redirect(nxt, 303)
     err = ""
     if request.method == "POST":
-        if hmac.compare_digest(request.form.get("password", "").encode(), PASSWORD.encode()):
+        who = request.form.get("username", "").strip().lower()
+        if accounts.exists(who) and accounts.verify(who, request.form.get("password", "")):
+            user = who
+        elif not accounts.exists(who) and hmac.compare_digest(request.form.get("password", "").encode(), PASSWORD.encode()):
+            user = accounts.OWNER  # as before: any other username with the password
+        else:
+            user = None
+        if user:
             r = redirect(nxt, 303)
-            r.set_cookie("tv_auth", new_session(), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
+            r.set_cookie("tv_auth", new_session(user), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
             return r
         time.sleep(0.8)  # slows guessing
-        err = "Wrong password"
+        err = "Wrong username or password"
     return Response(LOGIN_PAGE.replace("__NEXT__", html.escape(nxt, quote=True)).replace("__ERR__", err), 401 if err else 200,
                     mimetype="text/html", headers={"Cache-Control": "no-store"})
 
@@ -206,7 +230,7 @@ def logout():
 
 @app.get("/api/auth")
 def api_auth():
-    return jsonify(required=bool(PASSWORD))
+    return jsonify(required=bool(PASSWORD), user=g.user, owner=g.user == accounts.OWNER)
 
 
 # ---------- routing ----------
@@ -564,19 +588,26 @@ def display_title(url):
 
 # ---------- favourites ----------
 
-def load_favs():
+def fav_file(user=None):
+    """The owner's favourites keep their old file; an account gets its own. Outside a request (background threads) it is the owner's."""
+    user = user or (g.user if has_request_context() else accounts.OWNER)
+    return FAV_FILE if user == accounts.OWNER else os.path.join(DATA, f"favourites.{user}.json")
+
+
+def load_favs(user=None):
     try:
-        with open(FAV_FILE) as f:
+        with open(fav_file(user)) as f:
             return json.load(f)
     except (OSError, ValueError):
         return []
 
 
-def save_favs(favs):
-    tmp = FAV_FILE + ".tmp"
+def save_favs(favs, user=None):
+    path = fav_file(user)
+    tmp = path + ".tmp"
     with open(tmp, "w") as f:
         json.dump(favs, f, indent=2)
-    os.replace(tmp, FAV_FILE)
+    os.replace(tmp, path)
 
 
 def fav_name(url):
@@ -1317,7 +1348,7 @@ def streamer_key(url):
 
 
 def watched_urls():
-    urls = [l["url"] or "" for f in load_favs() for l in fav_links(f)]
+    urls = [l["url"] or "" for u in [accounts.OWNER] + accounts.names() for f in load_favs(u) for l in fav_links(f)]  # everyone's: one pass serves all
     if state.get("url"):
         urls.append(state["url"])
     return list(dict.fromkeys(u for u in urls if is_channel(u)))
@@ -1390,14 +1421,14 @@ def favs_order():
 
 @app.get("/api/kick")
 def kick_state():
-    return jsonify(can_link=kick.can_link(), name=kick.linked())
+    return jsonify(can_link=kick.can_link(), name=kick.linked(g.user), can_chat=kick.can_chat(g.user))
 
 
 @app.get("/auth/kick/start")
 def kick_start():
     if not kick.can_link():
         return Response("Kick login is not set up (KICK_CLIENT_ID, KICK_CLIENT_SECRET and KICK_REDIRECT in .env).", 404)
-    return redirect(kick.link_url(), 303)
+    return redirect(kick.link_url(g.user), 303)
 
 
 @app.get("/auth/kick/done")
@@ -1406,7 +1437,7 @@ def kick_done():
     try:
         if request.args.get("error"):
             raise ValueError(request.args["error"])
-        kick.link_finish(request.args.get("code"), request.args.get("state"))
+        kick.link_finish(request.args.get("code"), request.args.get("state"), g.user)
         return redirect("/?kick=linked", 303)
     except Exception as e:  # a bad state, a refused code or a Kick outage: all end the same way for the user
         print("Kick link failed:", kick.describe(e), flush=True)
@@ -1415,8 +1446,57 @@ def kick_done():
 
 @app.post("/api/kick/unlink")
 def kick_unlink():
-    kick.unlink()
+    kick.unlink(g.user)
     return kick_state()
+
+
+@app.post("/api/kick/chat")
+def kick_chat():
+    data = request.get_json(silent=True) or {}
+    slug = str(data.get("channel", "")).strip("/").lower()
+    slug = slug if re.fullmatch(r"[\w-]{2,25}", slug) else None
+    try:
+        if not slug:
+            raise ValueError("No channel.")
+        kick.send_chat(g.user, slug, data.get("text"))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    return jsonify(ok=True)
+
+
+def owner_only():
+    if g.user != accounts.OWNER:
+        abort(Response(json.dumps({"ok": False, "error": "Only the owner can manage accounts."}), 403, mimetype="application/json"))
+
+
+@app.get("/api/accounts")
+def accounts_list():
+    owner_only()
+    return jsonify(users=accounts.names())
+
+
+@app.post("/api/accounts")
+def accounts_add():
+    owner_only()
+    data = request.get_json(silent=True) or {}
+    try:
+        accounts.add(data.get("name"), data.get("password"))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    return accounts_list()
+
+
+@app.delete("/api/accounts")
+def accounts_del():
+    owner_only()
+    name = str((request.get_json(silent=True) or {}).get("name", ""))
+    if accounts.remove(name):
+        for p in (fav_file(name), kick._path(name)):  # its favourites and Kick link go with it
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+    return accounts_list()
 
 
 @app.delete("/api/favourites")

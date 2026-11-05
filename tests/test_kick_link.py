@@ -4,6 +4,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -17,8 +18,11 @@ import tlscallback  # noqa: E402
 class LinkTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
+        p = mock.patch.multiple(kick, ID=kick.ID, SECRET=kick.SECRET, REDIRECT=kick.REDIRECT, DATA=kick.DATA, _open=kick._open)
+        p.start()
+        self.addCleanup(p.stop)  # put the module back as it was for the other tests
         kick.ID, kick.SECRET, kick.REDIRECT = "id", "secret", "https://192.168.1.2:8766/auth/kick/callback"
-        kick.LINK = os.path.join(self.dir, "link.json")
+        kick.DATA = self.dir
         kick._pending.clear()
         self.sent = []
 

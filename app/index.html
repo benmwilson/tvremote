@@ -295,6 +295,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <div class="chatrow"><button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span><span class="chev">&#9662;</span></button>
   <a id="chatpop" class="iconlink hide" target="_blank" rel="noopener" aria-label="Open this chat on the streaming site" title="Open the chat on the site (you can type there if you're logged in)"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a></div>
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
+  <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" maxlength="500" autocomplete="off" aria-label="Chat message"><button class="go" style="flex:0 0 auto;padding:0 18px">Send</button></form>
 </div>
 <div id="err" role="status"></div>
 
@@ -341,6 +342,9 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <aside id="drawer" class="hide" aria-label="Debug">
   <div class="dh"><b>Debug</b><span id="dage"></span><button id="dbgClose" aria-label="Close debug"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="db">
+    <div id="acct" class="hide" style="margin:0 0 10px"><b>Accounts</b> <span class="sub" id="acctsub"></span>
+      <div id="acctlist"></div>
+      <form id="acctadd" class="row hide"><input id="acctname" placeholder="New name" autocapitalize="none" autocomplete="off" aria-label="New account name"><input id="acctpw" type="password" placeholder="Password (6+)" autocomplete="new-password" aria-label="New account password"><button style="flex:0 0 auto;padding:0 16px">Add</button></form></div>
     <button id="kickrow" class="tvrow hide" style="margin:0 0 6px">
   <div class="grow"><b>Kick account</b><span class="sub" id="kicksub"></span></div></button>
     <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:0 0 6px">
@@ -756,10 +760,12 @@ $('shellrow').onclick = async () => {
 };
 
 // ---- Kick account link (the login page itself is on Kick; the https step is the Pi's own, a one-off certificate warning) ----
-let kickInfo = {};
+var kickInfo = {};
 function renderKick() {
+  chatShow();
   $('kickrow').classList.toggle('hide', !kickInfo.can_link);
-  $('kicksub').textContent = kickInfo.name ? 'Linked as ' + kickInfo.name + '. Tap to unlink.'
+  $('kicksub').textContent = kickInfo.name
+    ? 'Linked as ' + kickInfo.name + (kickInfo.can_chat ? '' : '. To chat as them, unlink and link again') + '. Tap to unlink.'
     : 'Not linked. Tap to log in with Kick; your phone may warn about the Pi’s certificate once, choose to continue.';
 }
 $('kickrow').onclick = async () => {
@@ -767,7 +773,40 @@ $('kickrow').onclick = async () => {
   const r = await busy($('kickrow'), () => api('/api/kick/unlink', 'POST', {}));
   if (r) { kickInfo = r; renderKick(); }
 };
+$('kicksend').onsubmit = async e => {
+  e.preventDefault();
+  const text = $('kicktext').value.trim();
+  if (!text) return;
+  const r = await busy($('kicksend').querySelector('button'), () => api('/api/kick/chat', 'POST', {channel: kickSlug(st.url || ''), text}));
+  if (r && r.ok) $('kicktext').value = '';
+};
 fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {});
+
+// ---- accounts (the owner adds people; each has their own favourites and Kick link) ----
+async function loadAccounts() {
+  const me = await fetch('/api/auth').then(r => r.json()).catch(() => ({}));
+  $('acct').classList.toggle('hide', !me.required);
+  $('acctsub').textContent = 'Signed in as ' + (me.owner ? 'the owner' : me.user);
+  $('acctadd').classList.toggle('hide', !me.owner);
+  const list = me.owner ? await fetch('/api/accounts').then(r => r.json()).catch(() => ({})) : {};
+  $('acctlist').replaceChildren(...(list.users || []).map(name => {
+    const row = document.createElement('div'), b = document.createElement('button');
+    row.className = 'row'; row.style.alignItems = 'center';
+    const n = document.createElement('span'); n.textContent = name;
+    b.textContent = 'Remove'; b.style.flex = '0 0 auto'; b.style.padding = '0 14px';
+    b.onclick = async () => {
+      if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Tap again: deletes their favourites'; return; }
+      await api('/api/accounts', 'DELETE', {name}); loadAccounts();
+    };
+    row.append(n, b); return row;
+  }));
+}
+$('acctadd').onsubmit = async e => {
+  e.preventDefault();
+  const r = await busy($('acctadd').querySelector('button'), () => api('/api/accounts', 'POST', {name: $('acctname').value, password: $('acctpw').value}));
+  if (r && r.ok !== false) { $('acctname').value = ''; $('acctpw').value = ''; loadAccounts(); }
+};
+loadAccounts();
 
 fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
 
@@ -891,6 +930,9 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   $('chatpop').classList.toggle('hide', !pop);
   if (pop) $('chatpop').href = pop;
   $('chatbox').classList.toggle('hide', !want);
+  const canSend = want && !!kick && !!(kickInfo || {}).can_chat;  // typing needs a Kick account linked with chat permission
+  $('kicksend').classList.toggle('hide', !canSend);
+  if (canSend) $('kicktext').placeholder = 'Chat as ' + kickInfo.name;
   $('chatTog').setAttribute('aria-expanded', String(want));
   const key = want ? (kick ? 'kick:' + kick : 'twitch:' + (st.url || '')) : '';
   if (key === chatKey) return;

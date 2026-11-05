@@ -420,7 +420,7 @@ class ShellFlow(unittest.TestCase):
             r = c.post("/login", data={"password": "pw123", "next": "//evil.example"})
             self.assertEqual((r.status_code, r.headers["Location"]), (303, "/"))  # no open redirect
             self.assertIn("HttpOnly", r.headers["Set-Cookie"])
-            self.assertEqual(c.get("/api/auth").get_json(), {"required": True})  # cookie is now set
+            self.assertEqual(c.get("/api/auth").get_json()["required"], True)  # cookie is now set
             old = c.get_cookie("tv_auth").value
             c.get("/logout")
             self.assertEqual(c.get("/api/favourites").status_code, 401)
@@ -540,7 +540,7 @@ class ShellFlow(unittest.TestCase):
 
     def test_the_same_streamer_on_two_sites_is_one_favourite_with_two_chips(self):
         store = []
-        with mock.patch.object(server, "load_favs", lambda: store), mock.patch.object(server, "save_favs", lambda f: store.__setitem__(slice(None), f)):
+        with mock.patch.object(server, "load_favs", lambda u=None: store), mock.patch.object(server, "save_favs", lambda f, u=None: store.__setitem__(slice(None), f)):
             self.client.post("/api/favourites", json={"url": "https://kick.com/capped"})
             self.client.post("/api/favourites", json={"url": "https://www.twitch.tv/Capped"})  # same name, other site: merged
             self.client.post("/api/favourites", json={"url": "https://kick.com/other"})
@@ -562,7 +562,7 @@ class ShellFlow(unittest.TestCase):
             def snapshot(self):
                 return {"https://kick.com/capped": {"live": False, "last_live": 50}, "https://www.twitch.tv/capped": {"live": True, "last_live": 100, "game": "GTA V"}}
             def live_for(self, url): return 60 if "twitch" in url else None
-        with mock.patch.object(server, "livewatch", W()), mock.patch.object(server, "load_favs", lambda: store):
+        with mock.patch.object(server, "livewatch", W()), mock.patch.object(server, "load_favs", lambda u=None: store):
             out = self.client.get("/api/favourites").get_json()[0]
         self.assertEqual((out["live"], out["play_url"], out["game"], out["last_live"]), (True, "https://www.twitch.tv/capped", "GTA V", 100))
         self.assertEqual([l["source"] for l in out["links"]], ["Kick", "Twitch"])

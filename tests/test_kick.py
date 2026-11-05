@@ -1,6 +1,7 @@
 import json
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
@@ -19,6 +20,9 @@ def stub(channel):
 
 class KickTest(unittest.TestCase):
     def setUp(self):
+        p = mock.patch.multiple(kick, ID=kick.ID, SECRET=kick.SECRET, REDIRECT=kick.REDIRECT, DATA=kick.DATA, _open=kick._open)
+        p.start()
+        self.addCleanup(p.stop)  # put the module back as it was for the other tests
         kick.ID, kick.SECRET = "id", "secret"
         kick._token.update(value=None, exp=0.0)
 
