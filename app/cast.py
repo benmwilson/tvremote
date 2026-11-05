@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 import hlsproxy
 import pychromecast
+import store
 import zeroconf
 from pychromecast.config import APP_MEDIA_RECEIVER, APP_YOUTUBE
 from pychromecast.discovery import CastBrowser, SimpleCastListener
@@ -55,6 +56,7 @@ class CastTarget:
     id = "bedroom"
 
     def __init__(self, data_dir, resolve, title_fn, ytdl_heights, sl_default):
+        self.data_dir = data_dir
         self.resolve, self.title_fn, self.heights, self.sl_default = resolve, title_fn, ytdl_heights, sl_default
         self.cfg = dict(DEFAULT_CFG)
         try:
@@ -74,6 +76,7 @@ class CastTarget:
         listener = SimpleCastListener(self._seen, self._gone, self._seen)
         self.browser = CastBrowser(listener, self.zc)
         self.browser.start_discovery()
+        threading.Thread(target=self._adopt_loop, daemon=True).start()  # after a restart: pick up what the Chromecast is still playing
 
     # ---- discovery / connection ----
     def _seen(self, uuid, _name):
@@ -125,6 +128,62 @@ class CastTarget:
                 self.cast = c
             return self.cast
 
+    # ---- what is playing survives an app restart ----
+    # The Chromecast keeps playing when this app restarts, but what we started lived only in memory, so the page said "nothing
+    # playing". The start is saved to disk, and after a restart it is taken back if the Chromecast is still playing that same stream.
+    def _state_file(self):
+        return os.path.join(self.data_dir, "cast_state.json")
+
+    def _save_playing(self):
+        keep = {k: self.state.get(k) for k in ("url", "source", "player", "quality", "started", "mode", "content")}
+        try:
+            store.write_json(self._state_file(), keep)
+        except OSError:
+            pass  # the page just won't recover this one after a restart
+
+    def _forget_playing(self):
+        try:
+            os.remove(self._state_file())
+        except OSError:
+            pass
+
+    def _adopt_once(self):
+        """True when the Chromecast is still playing what we last started, and we took it back. Needs a connected Chromecast."""
+        try:
+            with open(self._state_file()) as f:
+                saved = json.load(f)
+        except (OSError, ValueError):
+            return False
+        if not isinstance(saved, dict) or not saved.get("url"):
+            return False
+        cast = self.cast
+        ms = cast.media_controller.status if cast else None
+        playing = bool(ms) and ms.player_state in ("PLAYING", "PAUSED", "BUFFERING")
+        if saved.get("source") == "YouTube":  # the YouTube receiver doesn't expose the stream address: its app being open is the evidence
+            same = bool(cast) and cast.app_id == APP_YOUTUBE
+        else:
+            same = playing and cast.app_id == APP_MEDIA_RECEIVER and bool(saved.get("content")) and ms.content_id == saved["content"]
+        if not same:
+            self._forget_playing()  # it stopped, or something else is on now: that old note would only mislead
+            return False
+        with self.lock:
+            self.state.update(url=saved["url"], source=saved.get("source"), player=saved.get("player"), quality=saved.get("quality"),
+                              started=saved.get("started") or time.time(), via="direct", mode=saved.get("mode"), content=saved.get("content"),
+                              proxy_tried=True, error=None, first_play=saved.get("started") or time.time())
+        return True
+
+    def _adopt_loop(self):
+        """Wait (up to two minutes) for the Chromecast to be found after a start, then try once to take back what it is playing."""
+        for _ in range(60):
+            if self.device():
+                try:
+                    self._connect()
+                    self._adopt_once()
+                except Exception:
+                    pass  # not found or not answering: nothing to take back
+                return
+            time.sleep(2)
+
     # ---- playback ----
     def _lan_ip(self, host):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
@@ -167,6 +226,8 @@ class CastTarget:
         if source == "YouTube":
             quick_play(cast, "youtube", {"media_id": vid})
             self.state["via"] = "youtube"
+            self.state["content"] = None
+            self._save_playing()
             return
         if via == "proxy" and player == "streamlink":
             self.state["proxy_tried"] = True
@@ -175,6 +236,8 @@ class CastTarget:
             cast.start_app(APP_MEDIA_RECEIVER)
         cast.media_controller.play_media(media, ctype, title=self.title_fn(url), stream_type=stype)
         self.state["via"] = "direct"
+        self.state["content"] = media  # what the Chromecast will report it is playing: how a restart recognises it
+        self._save_playing()
 
     def _start_proxy(self, url, source, q, media=None):
         """The Pi fetches the HLS segments (wired) and relays them; the Chromecast only talks plain HTTP to the Pi."""
@@ -186,6 +249,8 @@ class CastTarget:
         cast.media_controller.play_media(f"http://{self._lan_ip(self.device().host)}:{self.port}/cast/{hlsproxy.token()}/live.m3u8",
                                          "application/x-mpegURL", title=self.title_fn(url), stream_type="LIVE")
         self.state["via"] = "pi-proxy"
+        self.state["content"] = None  # the relay's address changes on every start and is gone after a restart: nothing to take back
+        self._forget_playing()
 
     def _fallback_proxy(self):
         """Direct URL was refused (CORS/403/token): serve the stream from the Pi instead."""
@@ -203,6 +268,7 @@ class CastTarget:
             if self.cast:
                 self.cast.quit_app()
             self.state["url"] = None
+            self._forget_playing()
             return True, None
         if action == "restart":
             if not self.state["url"]:
