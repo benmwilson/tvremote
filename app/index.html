@@ -282,6 +282,14 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .wz-slot,.wz-body,.wz-form,.wz-f{grid-template-columns:minmax(0,1fr)}
 .wz-f select,.wz-f input{min-width:0;max-width:100%;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
 .wz-top b,.wz-top small,.wz-sum b,.wz-sum small{overflow-wrap:anywhere}
+
+/* settings spacing: rows the same height with or without a menu button, no stray gap under notes, no double padding round a single row */
+.s-more{margin:-6px -4px -6px 0}
+.s-row{min-height:46px;box-sizing:border-box}
+.s-form>.sub,.s-form>p{margin:0}.s-form>.sub:last-child{margin:4px 0 0}
+#view-settings .card:has(>.plat){padding:8px}
+#view-settings .s-note{margin:10px 6px 0}
+.s-actions{padding-bottom:6px}
 </style>
 </head>
 <body>
@@ -423,7 +431,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
     <form id="acctadd" class="card s-form hide">
       <input id="acctname" placeholder="Name (letters, digits, - or _)" autocapitalize="none" autocomplete="off" aria-label="New account name">
       <input id="acctpw" type="password" placeholder="Password (6+ characters)" autocomplete="new-password" aria-label="New account password">
-      <label class="s-check"><input id="acctadmin" type="checkbox"> Make this person an admin</label>
+      <label class="s-check" style="justify-content:space-between">Make this person an admin<input id="acctadmin" type="checkbox" class="tg" role="switch"></label>
       <button class="go">Create account</button>
     </form>
 
