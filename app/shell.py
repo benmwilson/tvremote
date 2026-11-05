@@ -17,6 +17,7 @@ import time
 from datetime import datetime, timedelta
 
 import mpvipc
+import multi
 from chat import _esc as esc
 
 SOCK = "/tmp/tvremote-shell.sock"
@@ -114,6 +115,19 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=(), accent=None):
     return r"{\an8\pos(960,@@Y@@)\bord0\shad0}" + r"\N".join(lines)
 
 
+def wall_screen(layout, labels):
+    """The background behind several streams: soft colour glows, and each stream's name on the strip under its window.
+    labels: [(name, source)] in tile order. Returns one ASS event text per piece."""
+    def glow(x, y, w, h, colour, alpha):  # a big rectangle, blurred into a soft light
+        return r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&\1a&H%s&\blur140}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x, y, colour, alpha, w, w, h, h)
+    out = [glow(-200, -260, 1100, 760, "9A5A2E", "50"), glow(1000, 640, 1100, 760, "8A2E6A", "58")]
+    for (x, y, w, h), (name, source) in zip(multi.tiles(layout, len(labels)), labels):
+        dot = SRC_BGR.get(source, DIM)
+        out.append(r"{\an4\pos(%d,%d)\fs26\b1\bord0\shad0\c&H%s&}%s  {\c&H%s&}%s" % (
+            x + 2, y + h + multi.S // 2 + 2, dot, "●", TEXT, esc(clean(name))[:30]))
+    return out
+
+
 def stamp(sec):
     """Seconds as the ASS time h:mm:ss.cc."""
     cs = int(round(max(0.0, sec) * 100))
@@ -123,7 +137,7 @@ def stamp(sec):
     return f"{h}:{m:02d}:{sc:02d}.{cs:02d}"
 
 
-def ass_file(events, accent=None):
+def ass_file(events, accent=None, logo=True):
     """A subtitle file from [(start_seconds, end_seconds, text)], timed to the window's video clock."""
     head = (f"[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: {H}\nWrapStyle: 2\n\n"
             "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
@@ -132,7 +146,7 @@ def ass_file(events, accent=None):
             "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
     ly, ty = layout(events[0][2]) if events else (0, 0)
     body = "".join(f"Dialogue: 0,{stamp(a)},{stamp(b)},Default,,0,0,0,,{t.replace('@@Y@@', str(ty))}\n" for a, b, t in events)
-    if events:  # the logo is its own events spanning the file, so it never flickers when the text changes
+    if events and logo:  # the logo is its own events spanning the file, so it never flickers when the text changes
         span = f"{stamp(min(e[0] for e in events))},{stamp(max(e[1] for e in events))}"
         body += "".join(f"Dialogue: 0,{span},Default,,0,0,0,,{piece}\n" for piece in logo_pieces(ly, accent))
     return head + body
@@ -155,6 +169,7 @@ class Shell:
         self._ready = ready or (lambda: os.path.exists(SOCK))
         self.proc = self.vo = self.error = None
         self.kind, self.detail, self.accent = "idle", "", None
+        self.wall = None  # (layout, [(name, source)]) while several streams are on the screen
         self._gen = 0
         self._lock = threading.RLock()
 
@@ -215,6 +230,13 @@ class Shell:
             self._gen += 1
             return self._show_current() if self.running() else False
 
+    def show_wall(self, layout, labels):
+        """The background for several streams: the window stays up behind them (not paused, not hidden)."""
+        with self._lock:
+            self.kind, self.detail, self.accent, self.wall = "wall", "", None, (layout, labels)
+            self._gen += 1
+            return self._show_current() if self.running() else False
+
     def props(self):
         """What the window is doing, for the debug view."""
         out = {}
@@ -239,6 +261,8 @@ class Shell:
                 a = pos - frac + k
                 out.append((a, a + 1, screen("idle", hint=self.hint, now=base + timedelta(seconds=k), accent=self.accent)))
             return out
+        if kind == "wall" and self.wall:
+            return [(pos, pos + FOREVER, t) for t in wall_screen(*self.wall)]
         hint = "Pick something else on your phone" if kind in ("ended", "offline", "error") else ""
         if kind in ("loading", "quality", "refresh"):  # the dots (or wheel) move for 90 s, then the last frame stays
             step = 0.25 if kind == "refresh" else self.interval
@@ -253,7 +277,7 @@ class Shell:
         path = ASS_FILES[self._n % 2]
         self._n += 1
         try:
-            self._write(path, ass_file(events, self.accent))
+            self._write(path, ass_file(events, self.accent, self.kind != "wall"))
         except OSError:
             return
         r = self._ipc(SOCK, ["sub-add", path, "select"])

@@ -325,6 +325,10 @@ def save_settings():
 def screen(kind, detail="", source=None):
     """Show a screen on the TV's home screen, if it is on. `source` (Kick, Twitch, YouTube) tints it in that site's colour."""
     if HOME and settings.get("shell"):
+        if kind == "playing" and wall.active():  # several streams: the background behind them, not a hidden window
+            labels = [(fav_name(state["url"] or ""), state["source"])] + [(wall.name(t["url"]), t.get("source")) for t in wall.extras]
+            HOME.show_wall(wall.layout, labels)
+            return
         accent = shell.SRC_BGR.get(source)
         if accent:
             HOME.show(kind, detail, accent)

@@ -40,6 +40,7 @@ app/chat.py             Twitch chat: the TV overlay (off by default) and the fee
 app/logo.svg, icon-*.png the project mark (tools/make_icons.py draws the PNGs)
 app/targets.py          cached TV cards (never waits on a slow TV) and playback health
 app/shell.py            the TV's home screen: a fullscreen mpv window behind the streams (idle / loading / not live / ended / error)
+app/multi.py           several streams on the Pi's screen (up to 4, grid or focus): layout table, one mpv window per stream; config/labwc-rc.xml (made by tools/make_labwc_rules.py) places the windows, copied once to ~/.config/labwc/rc.xml on the Pi
 app/mpvipc.py           one command over an mpv IPC socket (shared by the player and the home screen)
 app/accounts.py, access.py, activity.py   accounts and roles, access requests and guest links, last-action per person
 app/sessions.py, throttle.py   login tokens (hashed on disk) and failed-login counting: the security-sensitive state, kept out of app.py

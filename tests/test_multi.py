@@ -91,3 +91,13 @@ class WallTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WallScreenTest(unittest.TestCase):
+    def test_background_has_a_name_strip_per_stream_and_no_big_logo(self):
+        import shell
+        ev = shell.wall_screen("grid", [("alpha", "Kick"), ("beta", "Twitch"), ("gamma", "Other")])
+        self.assertEqual(len(ev), 5)  # two glows and three names
+        self.assertTrue(all(f"{n}" in "".join(ev) for n in ("alpha", "beta", "gamma")))
+        self.assertNotIn("fscx260", shell.ass_file([(0, 1, "x")], logo=False))  # no big logo behind the windows
+        self.assertIn("fscx260", shell.ass_file([(0, 1, "x")]))

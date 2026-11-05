@@ -307,6 +307,10 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #tvmute.muted{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}
 #tvmute.muted .ic{color:#ff8a8a}
 #tvpower.isoff,#tvpower.isoff .ic{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}#tvpower.isoff .ic{background:none}
+.wseg{display:inline-flex;gap:4px}.wseg button{min-height:36px;padding:0 12px;font-size:14px}.wseg button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
+.wtile{display:flex;align-items:center;gap:8px;padding:6px 0;min-width:0}.wtile .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wtile button{flex:none;width:44px;min-height:44px;padding:0}.wtile button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14}
+.wtile .err{color:#ff8a8a;font-size:13px}.wallfavs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.wallfavs button{min-height:36px;padding:0 12px;font-size:14px;border-radius:99px}
 .dbmute{display:flex;gap:8px;margin:6px 0 12px}.dbmute button{flex:1;min-height:44px}
 </style>
 </head>
@@ -540,6 +544,14 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
+<div class="card hide" id="wallcard">
+  <div class="chatrow"><b>Multi-view</b><span class="sub grow" id="wallsub"></span>
+    <span class="wseg hide" id="walllayout"><button data-l="grid">Grid</button><button data-l="focus">Focus</button></span></div>
+  <div id="walltiles"></div>
+  <form id="walladd" class="row" style="margin-top:8px"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Add a channel or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 18px">Add</button></form>
+  <div id="wallfavs" class="wallfavs"></div>
+  <button id="wallclear" class="hide" style="margin-top:8px;width:100%">Back to one stream</button>
+</div>
 <div id="err" role="status"></div>
 
 <h2 id="tvhead">TV</h2>
@@ -771,6 +783,7 @@ function render() {
   checkFavLoading();
   chatShow();
   renderExtras();
+  renderWall();
 }
 
 async function loadQualities() {
@@ -1549,6 +1562,54 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   else { chatPoll(); chatTimer = setInterval(chatPoll, 2000); }
 }
 $('chatTog').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem('chatOpen', chatOpen ? '1' : '0'); } catch (e) {} chatShow(); };
+
+// ---- Multi-view (Pi TV only): several streams on the screen at once ----
+const wallApi = async body => { const r = await api('/api/wall', 'POST', body); if (r && r.ok) poll(); return r; };
+let wallSig = '';
+function renderWall() {
+  const cur = targets.find(t => t.id === target) || {};
+  const show = cur.kind === 'pi' && !!st.running;
+  $('wallcard').classList.toggle('hide', !show);
+  if (!show) return;
+  const w = st.wall;
+  const sig = JSON.stringify([w, st.url, st.title, favList.length]);
+  $('wallclear').classList.toggle('hide', !w);
+  $('walllayout').classList.toggle('hide', !w);
+  if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
+  $('wallsub').textContent = w ? (w.tiles.length + 1) + ' of ' + w.max : 'Watch more than one at once';
+  if (sig === wallSig) return;
+  wallSig = sig;
+  const rows = [{i: 0, name: st.title || st.url || 'Main', source: st.source}, ...(w ? w.tiles : [])];
+  const list = $('walltiles'), onWall = new Set(rows.map(r => r.url || st.url));
+  list.replaceChildren(...(w ? rows : []).map(r => {
+    const row = el('div', 'wtile'), sound = el('button', null), name = el('span', 'nm', r.name || r.url);
+    setBtn(sound, w.audio === r.i ? 'volume' : 'mute', '');
+    sound.setAttribute('aria-pressed', String(w.audio === r.i)); sound.setAttribute('aria-label', 'Sound from ' + (r.name || 'this stream'));
+    sound.onclick = () => wallApi({action: 'audio', i: r.i});
+    row.append(sound, name);
+    if (r.source) row.append(el('span', 'badge ' + r.source, r.source));
+    if (r.error) row.append(el('span', 'err', r.error));
+    if (r.i) {
+      if (w.layout === 'focus') { const sw = el('button'); setBtn(sw, 'swap', ''); sw.setAttribute('aria-label', 'Make this the big one'); sw.onclick = () => wallApi({action: 'swap', i: r.i}); row.append(sw); }
+      const x = el('button'); setBtn(x, 'x', ''); x.setAttribute('aria-label', 'Remove from the screen'); x.onclick = () => wallApi({action: 'remove', i: r.i}); row.append(x);
+    }
+    return row;
+  }));
+  const free = !w || w.tiles.length + 1 < w.max;
+  $('walladd').classList.toggle('hide', !free);
+  $('wallfavs').replaceChildren(...(free ? favList.filter(f => !onWall.has(f.url)).slice(0, 6).map(f => {
+    const b = el('button', null, f.name || f.url); b.onclick = () => busy(b, () => wallApi({action: 'add', url: f.url})); return b;
+  }) : []));
+}
+$('walladd').onsubmit = async e => {
+  e.preventDefault();
+  const v = $('wallurl').value.trim();
+  if (!v) return;
+  const r = await busy($('walladd').querySelector('button'), () => wallApi({action: 'add', url: v, site}));
+  if (r && r.ok) $('wallurl').value = '';
+};
+$('walllayout').onclick = e => { const b = e.target.closest('button[data-l]'); if (b) wallApi({action: 'layout', layout: b.dataset.l}); };
+$('wallclear').onclick = () => busy($('wallclear'), () => wallApi({action: 'clear'}));
 
 // ---- stats on the TV (Pi TV only) ----
 async function loadStats() {
