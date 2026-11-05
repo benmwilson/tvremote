@@ -574,7 +574,31 @@ class ShellFlow(unittest.TestCase):
         server.state.update(url="https://kick.com/chan", proc=None)
         with mock.patch.object(server, "stop_player", side_effect=lambda: order.append("stop")), mock.patch.object(server, "tgt", return_value=None):
             self.client.post("/api/cmd", json={"action": "stop"})
-        self.assertEqual(order, ["screen:idle", "stop"])
+        self.assertEqual(order[:2], ["screen:idle", "stop"])
+
+    def test_stop_cancels_a_start_that_is_still_working_out_its_link(self):
+        started = []
+        gate = threading.Event()
+
+        def slow_resolve(url):
+            gate.wait(2)
+            return ("Kick", "streamlink")
+        server.state.update(url=None, started=0, proc=None)
+        with mock.patch.object(server, "resolve", slow_resolve), mock.patch.object(server, "remember"), mock.patch.object(server, "switch_input"),                 mock.patch.object(server, "start_player", lambda u, q=None, k="loading": started.append(u)),                 mock.patch.object(server, "stop_player"), mock.patch.object(server, "screen"), mock.patch.object(server, "tgt", return_value=None):
+            t = threading.Thread(target=server.play_on, args=(None, "https://kick.com/slowchan", None))
+            t.start()
+            time.sleep(0.1)
+            self.client.post("/api/cmd", json={"action": "stop"})  # pressed while the link is still being resolved
+            gate.set()
+            t.join(3)
+        self.assertEqual(started, [])
+
+    def test_stop_redraws_ready_after_it_waited_for_a_start(self):
+        order = []
+        self.home.show = lambda kind, detail="", accent=None: order.append("screen:" + kind) or True
+        with mock.patch.object(server, "stop_player", side_effect=lambda: order.append("stop")), mock.patch.object(server, "tgt", return_value=None):
+            self.client.post("/api/cmd", json={"action": "stop"})
+        self.assertEqual(order, ["screen:idle", "stop", "screen:idle"])
 
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]

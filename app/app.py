@@ -779,6 +779,8 @@ def api_cmd():
     data = request.get_json(silent=True) or {}
     action = data.get("action")
     c = tgt()
+    if action == "stop":  # a start still working out its link must not launch after this
+        _start_seq[c.id if c else "living"] = _start_seq.get(c.id if c else "living", 0) + 1
     if c:
         try:
             ok, err = c.cmd(action, data.get("value"), data.get("quality"))
@@ -787,9 +789,10 @@ def api_cmd():
         return jsonify(ok=ok, error=err), (200 if ok else 400)
     if action == "stop":
         screen("idle")  # first: the home screen still shows its last screen (in the old site's colour) until it is redrawn
-        with lock:
+        with lock:  # waits for a start that is mid-way, then ends it
             stop_player()
             state.update(url=None, source=None, quality=None)  # a deliberate stop leaves no old error or "now playing" behind
+        screen("idle")  # again: that start may have drawn its Loading screen after the first Ready
         return jsonify(ok=True)
     if action == "restart":
         if not state["url"]:

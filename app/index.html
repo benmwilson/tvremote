@@ -672,7 +672,7 @@ $('tvwake').onclick = async () => {
   if (r && r.ok) { loadTargets(); setTimeout(loadTargets, 4000); setTimeout(loadTargets, 8000); }
 };
 $('refresh').onclick = () => busy($('refresh'), () => cmd('restart')).then(() => setTimeout(poll, 1500));
-$('stop').onclick = () => busy($('stop'), () => cmd('stop')).then(poll);
+$('stop').onclick = () => { favLoading = null; markFavs(); return busy($('stop'), () => cmd('stop')).then(poll); };  // stopping also ends a favourite's loading spinner
 $('fav').onclick = async () => {
   if (!st.url) return;
   const had = isSaved(st.url);
