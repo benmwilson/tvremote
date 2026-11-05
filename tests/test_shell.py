@@ -27,8 +27,10 @@ class FakeProc:
 def make_shell(procs, sent=None, ready=True):
     sent = [] if sent is None else sent
     popen = mock.Mock(side_effect=lambda cmd, **kw: procs.pop(0))
+    # writing the subtitle file is recorded as ["ass-file", text] among the window commands
+    write = lambda path, data: sent.append(["ass-file", data.decode("latin-1") if isinstance(data, bytes) else data, path])
     s = shell.Shell(hint="Open http://pi.example:8765 on your phone", spawn=popen, ipc=lambda sock, cmd, timeout=1.0: sent.append(cmd) or {"error": "success"},
-                    ready=lambda: ready, sleep=lambda x: None)
+                    ready=lambda: ready, sleep=lambda x: None, write=write)
     return s, popen, sent
 
 
@@ -71,7 +73,7 @@ class Idle(unittest.TestCase):
         s.idle_interval = 0.02
         s.start()
         time.sleep(0.25)
-        frames = {c[3] for c in sent if c[0] == "osd-overlay" and c[2] == "ass-events"}
+        frames = {c[1] for c in sent if c[0] == "ass-file" and c[2] == shell.ASS_FILE}
         self.assertGreaterEqual(len(frames), 3)
         s.show("playing")
         time.sleep(0.1)
@@ -79,10 +81,28 @@ class Idle(unittest.TestCase):
         time.sleep(0.15)
         self.assertEqual(sent, [])
 
-    def test_the_window_loops_so_it_never_reaches_an_end_and_pauses(self):
+    def test_the_window_shows_one_still_picture_that_never_ends(self):
         s, popen, sent = make_shell([FakeProc()])
         s.start()
-        self.assertIn("--loop-file=inf", popen.call_args[0][0])
+        cmd = popen.call_args[0][0]
+        self.assertIn("--image-display-duration=inf", cmd)
+        self.assertEqual(cmd[-1], shell.BG_FILE)
+        bg = [c for c in sent if c[0] == "ass-file" and c[2] == shell.BG_FILE]
+        self.assertTrue(bg and bg[0][1].startswith("\x89PNG"))
+
+    def test_the_first_draw_adds_the_subtitle_and_later_draws_reload_it(self):
+        s, popen, sent = make_shell([FakeProc()])
+        s.start()
+        s.show("loading", "chan")
+        names = [c[0] for c in sent if c[0] in ("sub-add", "sub-reload")]
+        self.assertEqual(names[0], "sub-add")
+        self.assertEqual(names.count("sub-add"), 1)
+        self.assertIn("sub-reload", names)
+
+    def test_the_subtitle_file_is_a_complete_ass_script(self):
+        f = shell.ass_file(shell.screen("idle"))
+        for want in ("PlayResX: 1920", "PlayResY: 1080", "[Events]", "Dialogue: 0,0:00:00.00,9:59:59.99", "Ready"):
+            self.assertIn(want, f)
 
     def test_every_screen_unpauses_the_window(self):
         s, popen, sent = make_shell([FakeProc()])
@@ -106,7 +126,7 @@ class QualitySwap(unittest.TestCase):
         sent.clear()
         s.show("quality", "chan  ·  720p60")
         time.sleep(0.2)
-        self.assertGreaterEqual(len({c[3] for c in sent if c[0] == "osd-overlay" and c[2] == "ass-events"}), 2)
+        self.assertGreaterEqual(len({c[1] for c in sent if c[0] == "ass-file" and c[2] == shell.ASS_FILE}), 2)
         s.show("playing")
 
 
@@ -116,7 +136,7 @@ class Process(unittest.TestCase):
         self.assertTrue(s.start())
         self.assertEqual(s.vo, shell.VO_ORDER[0])
         self.assertEqual(popen.call_count, 1)
-        self.assertTrue(any(c[0] == "osd-overlay" for c in sent))  # the idle screen was drawn
+        self.assertTrue(any(c[0] == "sub-add" for c in sent))  # the idle screen was drawn as a subtitle
 
     def test_start_falls_back_when_the_first_output_exits(self):
         s, popen, sent = make_shell([FakeProc(alive=False), FakeProc()])
@@ -146,7 +166,7 @@ class Showing(unittest.TestCase):
         sent.clear()
         self.assertTrue(s.show("playing"))
         self.assertIn(["set_property", "pause", True], sent)
-        self.assertIn(["osd-overlay", 1, "none"], sent)
+        self.assertIn(["set_property", "sub-visibility", False], sent)
 
     def test_other_screens_wake_the_shell_and_draw(self):
         s, popen, sent = make_shell([FakeProc()])
@@ -155,8 +175,8 @@ class Showing(unittest.TestCase):
         sent.clear()
         s.show("ended", "chan")
         self.assertIn(["set_property", "pause", False], sent)
-        drawn = [c for c in sent if c[0] == "osd-overlay" and c[2] == "ass-events"]
-        self.assertTrue(drawn and "Stream ended" in drawn[-1][3])
+        drawn = [c for c in sent if c[0] == "ass-file" and c[2] == shell.ASS_FILE]
+        self.assertTrue(drawn and "Stream ended" in drawn[-1][1])
 
     def test_loading_animates_until_something_else_is_shown(self):
         s, popen, sent = make_shell([FakeProc()])
@@ -165,7 +185,7 @@ class Showing(unittest.TestCase):
         sent.clear()
         s.show("loading", "chan")
         time.sleep(0.2)
-        frames = {c[3] for c in sent if c[0] == "osd-overlay" and c[2] == "ass-events"}
+        frames = {c[1] for c in sent if c[0] == "ass-file" and c[2] == shell.ASS_FILE}
         self.assertGreaterEqual(len(frames), 2)
         s.show("playing")
         time.sleep(0.1)

@@ -2,16 +2,18 @@
 between them. It shows Ready (clock, date, the remote's address, your favourites), Loading, "Not live right now",
 "Stream ended" and error screens.
 
-One mpv plays a plain colour, looped so it never reaches an end; the text is drawn with osd-overlay. While a stream
-plays the shell is paused and silent, so it costs the stream nothing (a redrawing overlay on top of moving video is
-what dropped frames for chat).
+One mpv shows a plain still picture; the text is a subtitle file (osd-overlay and styled show-text were dropped by this
+window on the Pi, subtitles are not). While a stream plays the shell is paused and silent, so it costs the stream nothing
+(a redrawing overlay on top of moving video is what dropped frames for chat).
 shortcut: relies on the desktop stacking a newer fullscreen window above this one; if a stream ever appears behind it,
 turn the home screen off from the remote and tell me what the Pi's desktop does."""
 import os
 import socket
+import struct
 import subprocess
 import threading
 import time
+import zlib
 from datetime import datetime
 
 import mpvipc
@@ -19,6 +21,8 @@ from chat import _esc as esc
 
 SOCK = "/tmp/tvremote-shell.sock"
 LOG = "/tmp/tvremote-shell.log"
+ASS_FILE = "/tmp/tvremote-shell.ass"
+BG_FILE = "/tmp/tvremote-shell-bg.png"
 W, H = 1920, 1080
 BG = "0b0e14"
 VO_ORDER = tuple(v for v in os.environ.get("TVREMOTE_SHELL_VO", "wlshm,gpu").split(",") if v)  # wlshm: plain software drawing; gpu if it won't open
@@ -65,14 +69,41 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=()):
     return r"{\an5\pos(960,540)\bord0\shad0}" + r"\N".join(lines)
 
 
+def bg_png(rgb_hex, w=64, h=36):
+    """A small solid-colour PNG; mpv scales it to fill the screen."""
+    rgb = bytes.fromhex(rgb_hex)
+    raw = (b"\x00" + rgb * w) * h
+
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
+def ass_file(text):
+    """A subtitle file holding one event, on screen for the whole (very long) run of the still picture."""
+    return (f"[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: {H}\nWrapStyle: 2\n\n"
+            "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
+            "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+            "Style: Default,DejaVu Sans,60,&H00F6F1EE,&H00F6F1EE,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n\n"
+            "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+            "Dialogue: 0,0:00:00.00,9:59:59.99,Default,,0,0,0,,{}\n".format(text))
+
+
+def write_file(path, data):
+    with open(path, "wb" if isinstance(data, bytes) else "w", **({} if isinstance(data, bytes) else {"encoding": "utf-8"})) as f:
+        f.write(data)
+
+
 class Shell:
     interval = 0.6        # seconds between loading-dot frames
     idle_interval = 20    # seconds between clock redraws on the Ready screen
 
     def __init__(self, hint="", spawn=subprocess.Popen, ipc=mpvipc.send, ready=None, sleep=time.sleep,
-                 clock=datetime.now, favs=lambda: []):
+                 clock=datetime.now, favs=lambda: [], write=write_file):
         self.hint, self._spawn, self._ipc, self._sleep = hint, spawn, ipc, sleep
-        self._clock, self._favs = clock, favs
+        self._clock, self._favs, self._write = clock, favs, write
+        self._sub = False  # whether the subtitle file is loaded in the window yet
         self._ready = ready or (lambda: os.path.exists(SOCK))
         self.proc = self.vo = self.error = None
         self.kind, self.detail = "idle", ""
@@ -84,16 +115,21 @@ class Shell:
 
     def _cmd(self, vo):
         return ["mpv", "--no-config", f"--vo={vo}", "--hwdec=no", "--fs", "--force-window=yes", "--keep-open=yes",
-                "--loop-file=inf", "--pause=no", "--no-audio", "--no-terminal", "--osc=no", "--osd-level=1",
+                "--image-display-duration=inf", "--pause=no", "--no-audio", "--no-terminal", "--osc=no", "--osd-level=1",
                 "--cursor-autohide=always", "--input-default-bindings=no", "--input-vo-keyboard=no",
                 "--wayland-app-id=tvremote-shell", "--title=TV Remote", f"--input-ipc-server={SOCK}",
-                f"--background-color=#{BG}", f"av://lavfi:color=c=0x{BG}:s={W}x{H}:r=2"]
+                f"--background-color=#{BG}", BG_FILE]
 
     def start(self):
         """Open the window with the first output that works. Returns whether it is running."""
         with self._lock:
             if self.running():
                 return True
+            self._sub = False
+            try:
+                self._write(BG_FILE, bg_png(BG))
+            except OSError:
+                pass
             for vo in VO_ORDER:
                 try:
                     os.unlink(SOCK)
@@ -147,9 +183,10 @@ class Shell:
         kind = self.kind
         if kind == "playing":
             self._ipc(SOCK, ["set_property", "pause", True])
-            self._ipc(SOCK, ["osd-overlay", 1, "none"])
+            self._ipc(SOCK, ["set_property", "sub-visibility", False])
             return True
         self._ipc(SOCK, ["set_property", "pause", False])
+        self._ipc(SOCK, ["set_property", "sub-visibility", True])
         self._draw(0)
         if kind in ("loading", "quality", "idle"):
             threading.Thread(target=self._animate, args=(self._gen, kind), daemon=True).start()
@@ -164,7 +201,15 @@ class Shell:
                 extra = {"now": self._clock(), "favs": self._favs()}
             except Exception:
                 extra = {}
-        self._ipc(SOCK, ["osd-overlay", 1, "ass-events", screen(kind, self.detail, hint, dots, **extra), W, H])
+        try:
+            self._write(ASS_FILE, ass_file(screen(kind, self.detail, hint, dots, **extra)))
+        except OSError:
+            return
+        if self._sub:
+            self._ipc(SOCK, ["sub-reload"])
+        else:
+            r = self._ipc(SOCK, ["sub-add", ASS_FILE, "select"])
+            self._sub = bool(r and r.get("error") == "success")
 
     def _animate(self, gen, kind):
         """Loading: move the dots. Ready: keep the clock right."""
