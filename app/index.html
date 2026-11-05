@@ -576,8 +576,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
   <div class="row"><button data-k="VolumeDown" aria-label="TV volume down"><svg class="ic" aria-hidden="true"><use href="#i-volume-low"/></svg>&minus;</button>
     <button id="tvmute" data-k="VolumeMute" aria-label="Mute the TV" aria-pressed="false" title="Tap to mute or unmute. The TV doesn't report its mute state, so this shows what was last pressed here. Hold to correct what it shows." style="-webkit-touch-callout:none;-webkit-user-select:none;user-select:none"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg></button>
     <button data-k="VolumeUp" aria-label="TV volume up"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg>+</button></div>
-  <div class="row" style="align-items:center;gap:12px"><input id="tvnudge" type="range" min="-10" max="10" step="1" value="0" aria-label="Nudge the TV volume: drag right for louder or left for quieter, let go to apply"><span id="tvnudgev" class="sub" style="flex:none;min-width:34px;text-align:right"></span></div>
-  <p class="sub" style="margin:-4px 2px 4px">The TV can't say what its volume is, so this nudges it: drag right for louder or left for quieter, then let go.</p>
+  <div class="row" style="align-items:center;gap:12px"><input id="tvnudge" type="range" min="-10" max="10" step="1" value="0" aria-label="Nudge the TV volume: drag right for louder or left for quieter, let go to apply"></div>
   <div class="row"><button data-k="InputHDMI1"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>1</button>
     <button data-k="InputHDMI2"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>2</button>
     <button data-k="InputHDMI3"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>3</button></div>
@@ -1907,10 +1906,9 @@ $('tvpower').addEventListener('contextmenu', e => e.preventDefault());
 $('pwon').onclick = () => setPwOver(false);
 $('pwoff').onclick = () => setPwOver(true);
 // Volume nudge: a Roku has no way to set a level, only up and down. Drag from the middle, let go, and it presses that many times.
-$('tvnudge').oninput = () => { const v = +$('tvnudge').value; $('tvnudgev').textContent = v ? (v > 0 ? '+' : '\u2212') + Math.abs(v) : ''; };
 $('tvnudge').onchange = async () => {
   const v = +$('tvnudge').value;
-  $('tvnudge').value = 0; $('tvnudgev').textContent = '';  // springs back to the middle
+  $('tvnudge').value = 0;  // springs back to the middle
   if (!v) return;
   const r = await api('/api/roku/key', 'POST', {key: v > 0 ? 'VolumeUp' : 'VolumeDown', count: Math.abs(v)});
   if (r && r.ok) { tvMuted[target] = false; renderTvMute(); }  // changing the volume unmutes a Roku TV
