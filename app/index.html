@@ -317,7 +317,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   <div class="chatrow"><button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span><span class="chev">&#9662;</span></button>
   <a id="chatpop" class="iconlink hide" target="_blank" rel="noopener" aria-label="Open this chat on the streaming site" title="Open the chat on the site (you can type there if you're logged in)"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a></div>
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
-  <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" maxlength="500" autocomplete="off" aria-label="Chat message"><button class="go" style="flex:0 0 auto;padding:0 18px">Send</button></form>
+  <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
 <div id="err" role="status"></div>
 
@@ -795,8 +795,9 @@ $('kicksend').onsubmit = async e => {
   const text = $('kicktext').value.trim();
   if (!text) return;
   const r = await busy($('kicksend').querySelector('button'), () => api('/api/kick/chat', 'POST', {channel: kickSlug(st.url || ''), text}));
-  if (r && r.ok) $('kicktext').value = '';
+  if (r && r.ok) { $('kicktext').value = ''; $('kicktext').focus(); }  // stay in the box so the keyboard stays up for the next one
 };
+$('kickfull').onclick = () => { const k = kickSlug(st.url || ''); if (k) window.open('https://kick.com/popout/' + encodeURIComponent(k) + '/chat', '_blank', 'noopener'); };
 fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {});
 
 // ---- accounts (the owner adds people; each has their own favourites and Kick link) ----
