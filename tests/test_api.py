@@ -362,6 +362,14 @@ class ShellFlow(unittest.TestCase):
                 server._stall_monitor(proc)
             self.assertEqual(len([c for c in sent if c[1] == 6]), expect)
 
+    def test_waking_the_tv_selects_its_input_without_waiting(self):
+        with mock.patch.object(server, "switch_input") as sw, mock.patch.dict(server.INPUTS, {"living": "HDMI1"}), mock.patch.dict(server.ROKU_IPS, {"living": "203.0.113.1"}):
+            r = self.client.post("/api/tv/wake?target=living")
+            time.sleep(0.1)
+        self.assertEqual(r.get_json(), {"ok": True})
+        sw.assert_called_once_with("living")
+        self.assertEqual(self.client.post("/api/tv/wake?target=nope").status_code, 400)
+
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]
         saved = []

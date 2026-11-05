@@ -895,6 +895,22 @@ def api_roku():
         return jsonify(ok=False, error=str(e)), 502
 
 
+@app.post("/api/tv/wake")
+def api_tv_wake():
+    """Turn the TV on and put it on this target's input (the same thing starting a stream does). Returns at once."""
+    tid = request.args.get("target") or "living"
+    if tid not in ROKU_IPS and tid != "living":
+        return jsonify(ok=False, error="Unknown TV."), 400
+
+    def go():
+        if ROKU_IPS.get(tid) and INPUTS.get(tid):
+            switch_input(tid)
+        elif tid == "living":
+            switch_tv_to_pi()  # no Roku address: wake and select over HDMI-CEC
+    threading.Thread(target=go, daemon=True).start()
+    return jsonify(ok=True)
+
+
 @app.post("/api/roku/key")
 def api_roku_key():
     ip = roku_ip()

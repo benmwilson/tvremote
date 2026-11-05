@@ -90,8 +90,13 @@ input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:var(
 input[type=range]::-moz-range-progress{height:8px;border-radius:4px;background:var(--tv)}
 input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--fg);border:4px solid var(--card)}
 .row3.single{grid-template-columns:minmax(0,1fr)}
-.row3{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.1fr);gap:8px;margin-top:14px}
-.pair{display:flex;gap:8px;min-width:0}.pair button{min-width:0}.pair #stop{flex:1}.pair #refresh{flex:none;width:52px;padding:0}
+.row3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:14px}
+.pair{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.row3.single .pair{grid-template-columns:minmax(0,1fr)}
+.tvoff{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:12px 14px;border-radius:14px;background:rgba(255,176,98,.12);border:1px solid rgba(255,176,98,.35)}
+.tvoff b{display:block}.tvoff .grow{min-width:0}.tvoff button{flex:none;min-height:44px;padding:0 16px;background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
+.now.off .pp,.now.off .vol{opacity:.55}
+#tvctl.off button:not([data-k=PowerOn]){opacity:.4;pointer-events:none}
 select{min-height:52px;padding:0 8px;width:100%;font-size:15px}
 .danger{color:var(--bad)}
 input[type=text]{width:100%;padding:0 14px;min-height:52px}
@@ -220,6 +225,9 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <section id="view-tv" class="hide">
 <div id="tvid" class="tvid"></div>
 <div class="card now" id="now">
+  <div class="tvoff hide" id="tvoff" role="status"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg>
+    <div class="grow"><b>The TV is off</b><span class="sub" id="tvoffsub"></span></div>
+    <button id="tvwake">Turn on</button></div>
   <div class="nowhead"><span id="nowav" class="hide"></span><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span><span class="grow"></span><a id="nowlink" class="iconlink hide" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a></div>
   <div id="title" class="ttl">Nothing playing</div>
   <div id="game" class="sub hide"></div>
@@ -236,7 +244,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   </div>
   <div class="row3" id="ctlrow"><select id="qual" aria-label="Quality"></select>
     <button id="fav"></button>
-    <div class="pair"><button id="refresh" aria-label="Refresh the stream" title="Refresh the stream"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+    <div class="pair"><button id="refresh" aria-label="Refresh the stream" title="Refresh the stream"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
     <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div></div>
 </div>
 <div id="err" role="status"></div>
@@ -579,6 +587,10 @@ $('go').onclick = () => {
   });
 };
 $('link').onkeydown = e => { if (e.key === 'Enter') $('go').click(); };
+$('tvwake').onclick = async () => {
+  const r = await busy($('tvwake'), () => api('/api/tv/wake', 'POST'), 7000);  // it takes a few seconds to wake and pick its input
+  if (r && r.ok) { loadTargets(); setTimeout(loadTargets, 4000); setTimeout(loadTargets, 8000); }
+};
 $('refresh').onclick = () => busy($('refresh'), () => cmd('restart')).then(() => setTimeout(poll, 1500));
 $('stop').onclick = () => busy($('stop'), () => cmd('stop')).then(poll);
 $('fav').onclick = async () => {
@@ -741,8 +753,16 @@ function renderCards() {
 }
 $('editTvs').onclick = () => { editing = !editing; renderCards(); };
 
+// off = a Roku that reports standby / screen off, or one that doesn't answer at all (powered down at the wall)
+const tvOff = c => !!c.roku && (c.reachable === false || (!!c.power && c.power !== 'PowerOn'));
 function tvInfo() {  // the TV details in the One TV view come from the same cached card
   const cur = targets.find(t => t.id === target) || {};
+  const off = tvOff(cur);
+  $('tvoff').classList.toggle('hide', !off);
+  $('now').classList.toggle('off', off);
+  $('tvctl').classList.toggle('off', off);
+  $('tvoffsub').textContent = cur.reachable === false ? "It isn't answering. Check it has power, then tap Turn on."
+    : st.running ? 'The stream keeps playing behind the black screen.' : 'Turn it on to watch. Playing something also wakes it.';
   $('view-tv').style.setProperty('--tv', tvColour(target));
   $('tvctl').classList.toggle('hide', !cur.roku);
   $('tvhead').classList.toggle('hide', !cur.roku);
