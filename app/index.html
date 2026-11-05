@@ -137,6 +137,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .fav .badge{margin-right:8px}
 #logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .sub.warn{color:var(--warn,#ffb062)}
+.chatrow{display:flex;align-items:center;gap:4px}.chatrow .chathead{flex:1;min-width:0}
 .chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
 .chathead .chev{color:var(--dim);transition:transform .15s}.chathead[aria-expanded=true] .chev{transform:rotate(180deg)}
 #chatbox{margin-top:10px;max-height:320px;overflow-y:auto;overscroll-behavior:contain;font-size:15px;line-height:1.35;-webkit-overflow-scrolling:touch}
@@ -264,7 +265,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
     <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div></div>
 </div>
 <div class="card hide" id="chatcard">
-  <button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span><span class="chev">&#9662;</span></button>
+  <div class="chatrow"><button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span><span class="chev">&#9662;</span></button>
+  <a id="chatpop" class="iconlink hide" target="_blank" rel="noopener" aria-label="Open this chat on the streaming site" title="Open the chat on the site (you can type there if you're logged in)"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a></div>
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
 </div>
 <div id="err" role="status"></div>
@@ -793,6 +795,10 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   const on = (st.source === 'Twitch' || !!kick) && (st.running || st.starting);
   const want = on && chatOpen;
   $('chatcard').classList.toggle('hide', !on);
+  let tw = ''; try { tw = st.source === 'Twitch' ? new URL(st.url).pathname.split('/').filter(Boolean)[0] || '' : ''; } catch (e) {}
+  const pop = kick ? 'https://kick.com/popout/' + encodeURIComponent(kick) + '/chat' : /^\w{3,25}$/.test(tw) ? 'https://www.twitch.tv/popout/' + tw + '/chat' : '';
+  $('chatpop').classList.toggle('hide', !pop);
+  if (pop) $('chatpop').href = pop;
   $('chatbox').classList.toggle('hide', !want);
   $('chatTog').setAttribute('aria-expanded', String(want));
   const key = want ? (kick ? 'kick:' + kick : 'twitch:' + (st.url || '')) : '';
