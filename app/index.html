@@ -152,6 +152,11 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .fav.off{opacity:.62}
 .badge.chip{min-height:0;height:auto;padding:3px 10px;border:0;border-radius:99px;gap:0;display:inline-flex;align-items:center;font:inherit;font-size:12px;font-weight:700;line-height:1.35;cursor:pointer}
 .badge.chip::before{content:"";position:absolute;inset:-10px -3px}  /* a bigger tap area than the small pill */
+.piscreen{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.piscreen b{display:block}.pdot{width:12px;height:12px;border-radius:50%;background:var(--dim);flex:none}.pdot.on{background:var(--ok)}
+.pibtn{width:100%;min-height:56px;font-weight:700;background:var(--card2);color:var(--fg)}
+.pibtn.show{background:var(--tv);color:#0b0e14}
+#pihelp{margin:10px 0 0}
 .sortbtn{margin-left:auto;margin-right:8px;min-height:44px;padding:0 14px;background:none;color:var(--dim);font-size:14px;border-radius:12px}
 .sortbtn[aria-pressed=true]{background:var(--card2,#222a38);color:var(--text,#fff)}
 .fav .mv{position:absolute;right:0;top:0;display:flex}
@@ -199,6 +204,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <rect width="100" height="100" rx="22" fill="#0b0e14"/><rect x="14" y="22" width="72" height="48" rx="12" fill="#131a28" stroke="url(#lg)" stroke-width="6"/>
 <path d="M44 36V56L61 46Z" fill="url(#lg)" stroke="url(#lg)" stroke-width="5" stroke-linejoin="round"/><path d="M38 82H62M50 73V82" stroke="url(#lg)" stroke-width="6" stroke-linecap="round" fill="none"/></symbol>
 <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5.5h14a1.5 1.5 0 011.5 1.5v8a1.5 1.5 0 01-1.5 1.5H11l-4.5 3v-3H5A1.5 1.5 0 013.5 15V7A1.5 1.5 0 015 5.5z"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M4 4l16 16M9.9 5.8A8.6 8.6 0 0112 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 01-3 3.7M6.3 7.6C3.9 9.3 2.5 12 2.5 12s3.5 6.5 9.5 6.5c1.5 0 2.8-.4 4-1M9.9 9.9a3 3 0 004.2 4.2"/></symbol>
 <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.6" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5v5h3.6l5 4.2V5.3L7.6 9.5z" fill="currentColor" stroke="none"/><path d="M16 9.2a4.2 4.2 0 010 5.6M18.8 6.6a8 8 0 010 10.8"/></symbol>
 <symbol id="i-volume-low" viewBox="0 0 24 24"><path d="M4 9.5v5h3.6l5 4.2V5.3L7.6 9.5z" fill="currentColor" stroke="none"/><path d="M16 9.5a3.3 3.3 0 010 5"/></symbol>
@@ -236,11 +243,10 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
     <button id="editTvs" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span>Edit</span></button></div>
   <div id="cards"></div>
   <div class="card hide" id="homebox">
-    <b>Pi screen</b>
-    <button id="homeshell" class="tvrow" role="switch" aria-checked="true" style="margin:10px 0 8px">
-      <div class="grow"><b>Home screen on the TV</b><span class="sub" id="homeshellsub">Checking&hellip;</span></div><span class="sw"></span></button>
-    <button id="desktop" class="danger" style="width:100%">Show the Pi desktop</button>
-    <p class="sub" style="margin:8px 0 0">Stops what is playing and closes the full-screen home screen, so the Pi's own desktop is usable. Streams still open on top when you play something.</p>
+    <div class="piscreen"><i class="pdot" id="pidot" aria-hidden="true"></i>
+      <div class="grow"><b>Remote on the Pi's screen</b><span class="sub" id="pistate">Checking&hellip;</span></div></div>
+    <button id="desktop" class="pibtn"><svg class="ic" aria-hidden="true"><use id="piicon" href="#i-eye-off"/></svg><span id="pilabel">Hide the remote from the TV</span></button>
+    <p class="sub" id="pihelp"></p>
   </div>
 </section>
 
@@ -714,9 +720,15 @@ function renderShell() {
   const text = !s.enabled ? 'Off: the Pi desktop shows between streams. Turning it on restarts anything playing.'
     : s.running ? 'On: this TV stays on the app between streams.'
     : s.error ? "Couldn't start: " + s.error : 'Starting\u2026';
-  [['shellrow', 'shellsub'], ['homeshell', 'homeshellsub']].forEach(([sw, sub]) => {  // the Debug drawer and the home page show the same switch
-    $(sw).setAttribute('aria-checked', String(s.enabled)); $(sub).textContent = text;
-  });
+  $('shellrow').setAttribute('aria-checked', String(s.enabled)); $('shellsub').textContent = text;  // the Debug drawer's switch
+  // the home page: what is showing, and the one button that flips it
+  $('pidot').classList.toggle('on', !!s.enabled && !!s.running);
+  $('pistate').textContent = !s.enabled ? "Hidden: the Pi's own desktop is showing" : s.running ? 'Showing on the TV between streams' : s.error ? "Couldn't start: " + s.error : 'Starting\u2026';
+  $('desktop').classList.toggle('show', !s.enabled);
+  $('piicon').setAttribute('href', s.enabled ? '#i-eye-off' : '#i-eye');
+  $('pilabel').textContent = s.enabled ? 'Hide the remote from the TV' : 'Show the remote on the TV';
+  $('pihelp').textContent = s.enabled ? "Stops what is playing and gives you the Pi's desktop. Streams still open on top when you play something."
+    : 'Puts the remote\u2019s home screen back on the TV between streams.';
 }
 async function loadShell() {
   const cur = targets.find(t => t.id === target) || {};
@@ -728,19 +740,18 @@ async function loadShell() {
   try { shellInfo = await (await fetch('/api/shell')).json(); renderShell(); } catch (e) {}
 }
 $('desktop').onclick = () => busy($('desktop'), async () => {
-  await api('/api/cmd?target=living', 'POST', {action: 'stop'});
-  const r = await api('/api/shell?target=living', 'POST', {enabled: false});
+  const hide = !shellInfo || shellInfo.enabled;
+  if (hide) await api('/api/cmd?target=living', 'POST', {action: 'stop'});  // nothing left playing over the desktop
+  const r = await api('/api/shell', 'POST', {enabled: !hide});
   if (r) { shellInfo = r; renderShell(); }
   poll();
   return r;
 }, 1200);
-const toggleShell = async sw => {
-  const want = sw.getAttribute('aria-checked') !== 'true';
-  const r = await busy(sw, () => api('/api/shell?target=living', 'POST', {enabled: want}));
+$('shellrow').onclick = async () => {
+  const want = $('shellrow').getAttribute('aria-checked') !== 'true';
+  const r = await busy($('shellrow'), () => api('/api/shell', 'POST', {enabled: want}));
   if (r) { shellInfo = r; renderShell(); }
 };
-$('shellrow').onclick = () => toggleShell($('shellrow'));
-$('homeshell').onclick = () => toggleShell($('homeshell'));
 
 fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
 
