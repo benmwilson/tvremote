@@ -90,7 +90,8 @@ input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:var(
 input[type=range]::-moz-range-progress{height:8px;border-radius:4px;background:var(--tv)}
 input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--fg);border:4px solid var(--card)}
 .row3.single{grid-template-columns:minmax(0,1fr)}
-.row3{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,.8fr);gap:8px;margin-top:14px}
+.row3{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.1fr);gap:8px;margin-top:14px}
+.pair{display:flex;gap:8px;min-width:0}.pair button{min-width:0}.pair #stop{flex:1}.pair #refresh{flex:none;width:52px;padding:0}
 select{min-height:52px;padding:0 8px;width:100%;font-size:15px}
 .danger{color:var(--bad)}
 input[type=text]{width:100%;padding:0 14px;min-height:52px}
@@ -165,6 +166,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2v13.6a.9.9 0 001.4.8l10.2-6.8a.9.9 0 000-1.6L9.4 4.4A.9.9 0 008 5.2z" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor" stroke="none"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.6-5.9M20 4v5h-5"/></symbol>
 <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.6" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5v5h3.6l5 4.2V5.3L7.6 9.5z" fill="currentColor" stroke="none"/><path d="M16 9.2a4.2 4.2 0 010 5.6M18.8 6.6a8 8 0 010 10.8"/></symbol>
 <symbol id="i-volume-low" viewBox="0 0 24 24"><path d="M4 9.5v5h3.6l5 4.2V5.3L7.6 9.5z" fill="currentColor" stroke="none"/><path d="M16 9.5a3.3 3.3 0 010 5"/></symbol>
@@ -233,7 +235,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   </div>
   <div class="row3" id="ctlrow"><select id="qual" aria-label="Quality"></select>
     <button id="fav"></button>
-    <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div>
+    <div class="pair"><button id="refresh" aria-label="Refresh the stream" title="Refresh the stream"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+    <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div></div>
 </div>
 <div id="err" role="status"></div>
 
@@ -422,6 +425,7 @@ function render() {
   $('pp').classList.toggle('hide', !up);
   $('volrow').classList.toggle('hide', !up);
   $('ctlrow').classList.toggle('hide', !up && !starting);
+  $('refresh').classList.toggle('hide', !up);
   $('ctlrow').classList.toggle('single', !up && starting);  // starting: just Stop, so you can cancel
   $('fav').classList.toggle('hide', !up);
   $('pp').classList.toggle('paused', !!st.paused);
@@ -573,6 +577,7 @@ $('go').onclick = () => {
   });
 };
 $('link').onkeydown = e => { if (e.key === 'Enter') $('go').click(); };
+$('refresh').onclick = () => busy($('refresh'), () => cmd('restart')).then(() => setTimeout(poll, 1500));
 $('stop').onclick = () => busy($('stop'), () => cmd('stop')).then(poll);
 $('fav').onclick = async () => {
   if (!st.url) return;
