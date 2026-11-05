@@ -228,6 +228,9 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .plat.kick{--c:#53fc18;--c-ink:#000;--c-bg:rgba(83,252,24,.09)}
 .plat.twitch{--c:#9146ff;--c-ink:#fff;--c-bg:rgba(145,70,255,.12)}
 .plat.off{opacity:.7}.plat.off .chip{background:var(--line);color:var(--dim)}
+
+.s-steps{display:flex;gap:6px;justify-content:center;margin:14px 0 6px}.s-steps i{width:34px;height:4px;border-radius:2px;background:var(--line)}.s-steps i.on{background:var(--tv)}
+#view-setup .card{margin-top:10px}.s-err{color:#ff6b6b;min-height:1.2em;margin:0}
 </style>
 </head>
 <body>
@@ -290,6 +293,35 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
   </div>
 </section>
 
+<section id="view-setup" class="hide">
+  <div class="s-steps" id="setupdots" aria-hidden="true"><i></i><i></i><i></i></div>
+  <p class="sub" id="setupcount" style="text-align:center"></p>
+  <div id="setup1" class="card hide">
+    <h2 style="margin:0 0 6px">Create your admin account</h2>
+    <p class="sub" id="setup1text"></p>
+    <form id="setupform" class="s-form" style="margin-top:12px">
+      <input id="suname" placeholder="Username" autocapitalize="none" autocomplete="username" aria-label="Admin username">
+      <input id="supw" type="password" placeholder="Password (6+ characters)" autocomplete="new-password" aria-label="Admin password">
+      <input id="supw2" type="password" placeholder="Repeat the password" autocomplete="new-password" aria-label="Repeat the password">
+      <p class="sub s-err" id="suerr" role="alert"></p>
+      <button class="go">Create admin account</button>
+    </form>
+    <button id="suskip" class="s-wide hide">Keep using the .env password for now</button>
+  </div>
+  <div id="setup2" class="card hide">
+    <h2 style="margin:0 0 6px">Your TVs</h2>
+    <p class="sub">These are the TVs this remote can see right now.</p>
+    <div id="setuptvs" style="margin:8px 0"></div>
+    <p class="sub">Finding, naming and testing TVs from here is coming next. For now they come from your .env.</p>
+    <button id="sunext2" class="go s-wide">Continue</button>
+  </div>
+  <div id="setup3" class="card hide">
+    <h2 style="margin:0 0 6px">You're all set</h2>
+    <p class="sub" id="setupdone"></p>
+    <button id="sufinish" class="go s-wide">Open the remote</button>
+  </div>
+</section>
+
 <section id="view-settings" class="hide">
   <div class="card s-prof">
     <div class="avatar" id="sav" aria-hidden="true">?</div>
@@ -345,6 +377,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
     </div>
     <div class="card hide" id="guests"></div>
 
+    <h3 class="shead">Setup</h3>
+    <button id="rerun" class="s-wide" style="margin:0">Run the setup wizard again</button>
     <h3 class="shead" id="tvhead">TV</h3>
     <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:0">
   <div class="grow"><b>Home screen on the TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
@@ -472,7 +506,7 @@ const hiddenTvs = () => { try { return new Set(JSON.parse(localStorage.getItem('
 const saveHidden = s => { try { localStorage.setItem('hiddenTvs', JSON.stringify([...s])); } catch (e) {} };
 const visibleTvs = () => { const h = hiddenTvs(); return targets.filter(t => !h.has(t.id)); };
 let editing = false;
-const view = () => location.pathname === '/share' ? 'share' : location.hash === '#/settings' ? 'settings' : location.hash.startsWith('#/tv/') ? 'tv' : 'all';
+const view = () => location.pathname === '/share' ? 'share' : location.hash === '#/settings' ? 'settings' : location.hash === '#/setup' ? 'setup' : location.hash.startsWith('#/tv/') ? 'tv' : 'all';
 
 // Run a button's command with feedback: spinner while it is in flight (at least `min` ms so a quick tap is still
 // seen), then a brief confirm or shake. `hold` keeps the spinner a little longer after success for things that
@@ -927,12 +961,12 @@ function renderProfile() {
 
 function personRow(u) {
   const mine = u.name === me.user || (u.owner && me.owner);
-  const canAct = !u.owner && !mine && (me.owner || u.role !== 'admin');
+  const canAct = !u.owner && !u.founder && !mine && (me.owner || u.role !== 'admin');
   const facts = [u.favs + (u.favs === 1 ? ' favourite' : ' favourites'), u.owner ? 'password in .env' : 'logged in ' + seen(u.last_login)].join(' · ');
   const lastDid = u.last ? u.last.text + ' · ' + ago(u.last.ts) : null;
   const row = mk('div', {class: 's-row'},
     mk('div', {class: 'avatar', 'aria-hidden': 'true'}, u.name.slice(0, 1)),
-    mk('div', {class: 'grow'}, mk('b', {}, u.name), ' ', mk('span', {class: 'pill ' + (u.owner ? 'owner' : u.role)}, u.owner ? 'owner' : u.role),
+    mk('div', {class: 'grow'}, mk('b', {}, u.name), ' ', mk('span', {class: 'pill ' + (u.owner || u.founder ? 'owner' : u.role)}, u.owner || u.founder ? 'owner' : u.role),
       mine && !u.owner ? mk('span', {class: 'pill'}, 'you') : null, mk('span', {class: 'sub'}, facts), lastDid ? mk('span', {class: 'sub'}, 'Last: ' + lastDid) : null),
     canAct ? mk('button', {class: 's-more', 'aria-label': 'Actions for ' + u.name, 'aria-expanded': String(openPerson === u.name),
       onclick: () => { openPerson = openPerson === u.name ? null : u.name; renderPeople(); }}, '⋯') : null);
@@ -1040,6 +1074,51 @@ $('invmake').onclick = async e => {
 };
 $('invcopy').onclick = () => { copyText($('invurl')); $('invcopy').textContent = 'Copied'; setTimeout(() => { $('invcopy').textContent = 'Copy'; }, 1500); };
 loadAccounts();
+
+// ---- setup wizard: the admin account first ----
+let setupStep = 1, setupInfo = {};
+function renderSetup() {
+  [1, 2, 3].forEach(n => $('setup' + n).classList.toggle('hide', n !== setupStep));
+  [...$('setupdots').children].forEach((d, i) => d.classList.toggle('on', i < setupStep));
+  $('setupcount').textContent = 'Step ' + setupStep + ' of 3';
+  if (setupStep === 1) {
+    $('setup1text').textContent = setupInfo.password_set
+      ? 'You are signed in with the password from .env (the owner). Create a named admin account to use day to day. The .env password keeps working for scripts, shortcuts and recovery.'
+      : 'This is a new install, so nobody can log in yet. Create the first admin account. It becomes the owner and can add everyone else.';
+    $('suskip').classList.toggle('hide', !setupInfo.password_set);
+  }
+  if (setupStep === 2) {
+    const tvs = (targets || []).map(t => mk('div', {class: 's-row'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, (t.name || '?').slice(0, 1)),
+      mk('div', {class: 'grow'}, mk('b', {}, t.name || t.id), mk('span', {class: 'sub'}, (t.kind === 'pi' ? 'The Pi’s screen' : 'Chromecast') + ' · ' + (t.reachable ? 'online' : 'not found right now')))));
+    $('setuptvs').replaceChildren(...(tvs.length ? tvs : [mk('p', {class: 's-empty'}, 'No TVs found yet.')]));
+  }
+  if (setupStep === 3) $('setupdone').textContent = (setupInfo.created ? 'Your admin account "' + setupInfo.created + '" is ready. ' : 'You can add people and guest links from Settings. ')
+    + 'Everything else is in Settings, behind the gear.';
+}
+async function openSetup() {
+  setupInfo = await fetch('/api/setup').then(r => r.json()).catch(() => ({}));
+  setupStep = setupInfo.has_admin ? 2 : 1;
+  renderSetup();
+}
+$('setupform').onsubmit = async e => {
+  e.preventDefault();
+  $('suerr').textContent = '';
+  if ($('supw').value !== $('supw2').value) { $('suerr').textContent = 'The two passwords don’t match.'; return; }
+  const r = await busy($('setupform').querySelector('button'), () => fetch('/api/setup/admin', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: $('suname').value, password: $('supw').value})}).then(x => x.json()));
+  if (!r) { $('suerr').textContent = 'Couldn’t reach the Pi.'; return; }
+  if (r.ok === false) { $('suerr').textContent = r.error || 'That didn’t work.'; return; }
+  setupInfo = {...setupInfo, has_admin: true, created: r.name}; $('supw').value = ''; $('supw2').value = '';
+  setupStep = 2; renderSetup(); loadAccounts();
+};
+$('suskip').onclick = () => { setupStep = 2; renderSetup(); };
+$('sunext2').onclick = () => { setupStep = 3; renderSetup(); };
+$('sufinish').onclick = async () => {
+  const r = await busy($('sufinish'), () => api('/api/setup/finish', 'POST', {}));
+  if (r && r.ok) location.hash = '#/';
+};
+$('rerun').onclick = () => { location.hash = '#/setup'; };
+fetch('/api/setup').then(r => r.json()).then(j => { if (j.needed && view() !== 'setup') location.hash = '#/setup'; }).catch(() => {});
 
 fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
 
@@ -1346,8 +1425,9 @@ function show() {
       loadFavs(); poll(); loadShell();
     }
   }
-  ['all', 'share', 'tv', 'settings'].forEach(n => $('view-' + n).classList.toggle('hide', n !== v));
+  ['all', 'share', 'tv', 'settings', 'setup'].forEach(n => $('view-' + n).classList.toggle('hide', n !== v));
   $('back').classList.toggle('hide', v !== 'tv' && v !== 'settings');
+  if (v === 'setup') openSetup();
   if (v === 'settings') { loadAccounts(); loadShell(); fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {}); }
   renderCards(); tvInfo();
   if (v === 'all') loadShell();

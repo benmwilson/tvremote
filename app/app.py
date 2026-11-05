@@ -88,7 +88,7 @@ def guard():
         return Response("Cross-site request blocked", 403)
     if request.path == "/play" and request.headers.get("Sec-Fetch-Site") == "cross-site" and not token_ok:
         return Response("Cross-site request blocked", 403)
-    if not PASSWORD or re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
+    if not auth_required() or re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
@@ -103,8 +103,12 @@ def guard():
     a = request.authorization
     wants_page = "text/html" in request.headers.get("Accept", "")
     # a browser page load needs the login cookie: Safari remembers the old password pop-up and would otherwise stay logged in after logout
-    if a and not wants_page and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
-        return None  # curl and scripts
+    if a and not wants_page:  # curl and scripts
+        if PASSWORD and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
+            return None
+        if a.username and accounts.verify(a.username, a.password or ""):
+            g.user = a.username.strip().lower()
+            return None
     if request.path == "/play" and token_ok:
         return None
     if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):  # a browser: show the login page
@@ -157,9 +161,36 @@ def _sess_save(d):
 _revoked = set()  # logged-out tokens, kept in memory too so a failed disk write still ends the session
 
 
+def auth_required():
+    """Login is needed once there is a .env password or any account. A fresh install with neither is open until setup makes the first admin."""
+    return bool(PASSWORD) or bool(accounts.names())
+
+
+_key = {"v": None}
+
+
+def _session_key():
+    if PASSWORD:
+        return PASSWORD.encode()  # a new password voids every session
+    if _key["v"] is None:  # no .env password: a random key kept in /data
+        path = os.path.join(DATA, "session.key")
+        try:
+            with open(path, "rb") as f:
+                _key["v"] = f.read()
+        except OSError:
+            _key["v"] = secrets.token_bytes(32)
+            try:
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "wb") as f:
+                    f.write(_key["v"])
+            except OSError:
+                pass  # sessions then last until the next restart
+    return _key["v"]
+
+
 def _h(tok):
-    # keyed with the password: only hashes are stored (the file can't be used as a cookie) and a new password voids every session
-    return hmac.new(PASSWORD.encode(), tok.encode(), hashlib.sha256).hexdigest()
+    # keyed: only hashes are stored (the file can't be used as a cookie)
+    return hmac.new(_session_key(), tok.encode(), hashlib.sha256).hexdigest()
 
 
 def new_session(user=accounts.OWNER, seconds=None, extra=None):
@@ -256,14 +287,14 @@ input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;f
 @app.route("/login", methods=["GET", "POST"])
 def login():
     nxt = safe_next(request.values.get("next", "/"))
-    if not PASSWORD:
+    if not auth_required():
         return redirect(nxt, 303)
     err = ""
     if request.method == "POST":
         who = request.form.get("username", "").strip().lower()
         if accounts.verify(who, request.form.get("password", "")):  # always runs the slow hash, even for an unknown name
             user = who
-        elif not accounts.exists(who) and hmac.compare_digest(request.form.get("password", "").encode(), PASSWORD.encode()):
+        elif PASSWORD and not accounts.exists(who) and hmac.compare_digest(request.form.get("password", "").encode(), PASSWORD.encode()):
             user = accounts.OWNER  # as before: any other username with the password
         else:
             user = None
@@ -293,7 +324,7 @@ def api_auth():
     if g.user == accounts.GUEST:
         v = _sess_load().get(_h(request.cookies.get("tv_auth", ""))) or {}
         info = {"guest_until": v.get("exp"), "label": v.get("label", "")}
-    return jsonify(required=bool(PASSWORD), user=g.user, owner=g.user == accounts.OWNER, role=accounts.role(g.user),
+    return jsonify(required=auth_required(), user=g.user, owner=accounts.is_owner(g.user), role=accounts.role(g.user),
                    admin=accounts.role(g.user) == "admin", guest=g.user == accounts.GUEST, **info)
 
 
@@ -1540,9 +1571,15 @@ def admin_only():
 
 def may_change(name, own_password=False):
     """Admins manage ordinary accounts; only the owner may reset, demote or remove another admin (no takeover between admins)."""
-    if g.user == accounts.OWNER or not accounts.exists(name) or accounts.role(name) != "admin":
+    if accounts.is_owner(g.user) or not accounts.exists(name) or accounts.role(name) != "admin":
         return True
     return own_password and name == g.user
+
+
+def only_admin(name):
+    """True when `name` is the last admin and there is no .env password to fall back on: removing or demoting them would lock everyone out."""
+    admins = [u["name"] for u in accounts.listing() if u["role"] == "admin"]
+    return not PASSWORD and admins == [name]
 
 
 def refuse():
@@ -1552,7 +1589,7 @@ def refuse():
 @app.get("/api/accounts")
 def accounts_list():
     admin_only()
-    people = [{"name": accounts.OWNER, "role": "admin", "owner": True, "created": None, "last_login": None}] + accounts.listing()
+    people = ([{"name": accounts.OWNER, "role": "admin", "owner": True, "created": None, "last_login": None}] if PASSWORD else []) + accounts.listing()
     return jsonify(users=[{**u, "favs": len(load_favs(u["name"])), "last": activity.last(u["name"])} for u in people])
 
 
@@ -1577,6 +1614,8 @@ def accounts_role():
     data = request.get_json(silent=True) or {}
     if not may_change(str(data.get("name", ""))):
         return refuse()
+    if data.get("role") != "admin" and only_admin(str(data.get("name", ""))):
+        return jsonify(ok=False, error="That's the only admin. Make someone else an admin first."), 400
     try:
         accounts.set_role(str(data.get("name", "")), data.get("role"))
     except ValueError as e:
@@ -1592,6 +1631,8 @@ def accounts_del():
         return jsonify(ok=False, error="You can't remove the account you're signed in with."), 400
     if not may_change(name):
         return refuse()
+    if only_admin(name):
+        return jsonify(ok=False, error="That's the only admin. Make someone else an admin first."), 400
     if accounts.remove(name):
         activity.forget(name)
         drop_user_sessions(name)  # re-creating the name later must not revive old logins
@@ -1651,7 +1692,7 @@ def request_approve(rid):
         return jsonify(ok=False, error="That name is taken. Pick another."), 400
     password = data.get("password") or secrets.token_urlsafe(9)
     role = data.get("role") if data.get("role") in accounts.ROLES else "user"
-    if role == "admin" and g.user != accounts.OWNER:
+    if role == "admin" and not accounts.is_owner(g.user):
         return refuse()
     try:
         accounts.add(name, password, role)
@@ -1782,6 +1823,62 @@ def note_action(resp):
     except Exception:  # remembering what someone did must never break what they did
         pass
     return resp
+
+
+SETUP_FILE = "setup.json"
+_setup_lock = threading.Lock()
+
+
+def setup_done():
+    try:
+        with open(os.path.join(DATA, SETUP_FILE)) as f:
+            return bool(json.load(f).get("done"))
+    except (OSError, ValueError):
+        return False
+
+
+def setup_mark():
+    with open(os.path.join(DATA, SETUP_FILE), "w") as f:
+        json.dump({"done": True, "at": time.time()}, f)
+
+
+@app.get("/api/setup")
+def setup_state():
+    """Does the setup wizard need to run, and where it stands. Only admins (or anyone, on a fresh install with no login yet) see it."""
+    fresh = not auth_required()
+    if not fresh and accounts.role(g.user) != "admin":
+        return jsonify(needed=False)
+    has_admin = any(u["role"] == "admin" for u in accounts.listing())
+    return jsonify(needed=not setup_done() and not has_admin, done=setup_done(), fresh=fresh, has_admin=has_admin,
+                   password_set=bool(PASSWORD), user=g.user if not fresh else None)
+
+
+@app.post("/api/setup/admin")
+def setup_admin():
+    """Step 1: the first admin account. On a fresh install this also logs the new admin in (login is required from now on)."""
+    data = request.get_json(silent=True) or {}
+    with _setup_lock:
+        fresh = not auth_required()
+        if not fresh:
+            admin_only()
+        try:
+            name = accounts.add(data.get("name"), data.get("password"), "admin", founder=not PASSWORD)
+        except ValueError as e:
+            return jsonify(ok=False, error=str(e)), 400
+    r = jsonify(ok=True, name=name)
+    if fresh:
+        r.set_cookie("tv_auth", new_session(name), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
+        activity.note(name, "Set up the admin account")
+    return r
+
+
+@app.post("/api/setup/finish")
+def setup_finish():
+    admin_only()
+    if not PASSWORD and not any(u["role"] == "admin" for u in accounts.listing()):
+        return jsonify(ok=False, error="Create the admin account first."), 400
+    setup_mark()
+    return jsonify(ok=True)
 
 
 @app.delete("/api/favourites")

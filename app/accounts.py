@@ -51,9 +51,15 @@ def role(name):
     return _load().get(name, {}).get("role", "user") if name in _load() else "user"
 
 
+def is_owner(name):
+    """The owner: the .env password's pseudo-account, or the founder (the first admin made by setup when there is no .env password)."""
+    return name == OWNER or bool(_load().get(name, {}).get("founder"))
+
+
 def listing():
     d = _load()
-    return [{"name": n, "role": role(n), "created": d[n].get("created"), "last_login": d[n].get("last_login")} for n in sorted(d)]
+    return [{"name": n, "role": role(n), "created": d[n].get("created"), "last_login": d[n].get("last_login"),
+             "founder": bool(d[n].get("founder"))} for n in sorted(d)]
 
 
 def touch(name):
@@ -88,7 +94,7 @@ def _write(d):
     os.replace(tmp, _file())
 
 
-def add(name, password, new_role=None):
+def add(name, password, new_role=None, founder=False):
     """Create an account (or change its password, keeping its role unless one is given). Raises ValueError for a bad name,
     a short password or an unknown role."""
     name = (name or "").strip().lower()
@@ -102,7 +108,8 @@ def add(name, password, new_role=None):
     with _lock:
         d = _load()
         d[name] = {"salt": salt, "hash": _hash(password, salt), "role": new_role or d.get(name, {}).get("role", "user"),
-                   "created": d.get(name, {}).get("created") or time.time(), "last_login": d.get(name, {}).get("last_login")}
+                   "created": d.get(name, {}).get("created") or time.time(), "last_login": d.get(name, {}).get("last_login"),
+                   "founder": bool(founder) or bool(d.get(name, {}).get("founder"))}
         _write(d)
     return name
 

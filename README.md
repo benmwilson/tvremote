@@ -49,6 +49,14 @@ Remote on the Home Screen: open `http://<pi-ip>:8765` in Safari → Share → Ad
 
 Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose up -d`. The remote then shows a password-only login page (no username) and remembers you for 180 days. The logout icon is at the top right. Each login is a random token kept (hashed) in `/data/sessions.json`; logging out ends it on the Pi, and changing the password logs every phone out. `curl -u :<password>` still works for scripts. A `/play` Shortcut that skips the picker can't show the login page, so end its URL with `&t=<password>`: `http://<pi-ip>:8765/play?u=<encoded>&target=bedroom&t=<password>`. Plain HTTP on your LAN, so it keeps casual users out, not a determined sniffer.
 
+## Accounts, roles and the setup wizard
+
+- **First run:** with no `PASSWORD` and no accounts, the remote is open and sends you straight to the setup wizard. Step 1 creates the first admin account (the "owner"); from then on login is required. Anyone on your LAN can reach the wizard before that, so do it right after the first start. With a `PASSWORD` set, the wizard offers to add a named admin or skip.
+- **Roles:** `admin` (manage people, requests, guest links, Debug) and `user` (use the TVs, own favourites, own Kick link). Only the owner can change other admins. The last admin can't be removed or demoted when there is no `.env` password.
+- **Settings** (the gear): your account and password, Kick and Twitch links, and for admins the people list, access requests from the login page, one-time guest links (control the TVs for a set time, nothing else), and the home-screen switch.
+- **Keep `PASSWORD`?** It's optional, but your Shortcut (`&t=<password>`) and `curl -u :<password>` scripts use it, and it is the way back in if the accounts file is lost. Locked out with no `PASSWORD`? Delete `users.json` from the `tvremote-data` volume and the wizard runs again.
+- **Data:** small JSON files in `/data`, no database: `users.json`, `sessions.json`, `favourites*.json`, `kick_link*.json`, `requests.json`, `invites*.json`, `activity.json`, `setup.json`.
+
 ## Roku TVs, Chromecast and input switching
 
 - Set `ROKU_LIVING` / `ROKU_BEDROOM` (TV addresses) in `.env` to get a TV card with power, volume, input and navigation buttons. On each TV: Settings → System → Advanced system settings → Control by mobile apps → Network access → Permissive.
