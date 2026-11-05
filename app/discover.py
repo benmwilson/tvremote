@@ -84,6 +84,8 @@ def guess(rokus, casts, display, cec_name, cec_phys):
             pool.remove(match)
         elif cec_name:
             living["why"].append(f"The TV on the Pi's HDMI calls itself “{cec_name}”, which matches none of the Rokus found. Pick its Roku, if it has one.")
+        if not match and not cec_name:
+            living["why"].append("The TV on the Pi's HDMI didn't tell us its name, so we can't tell which Roku it is. Turn that TV on and tap Look again, or pick its Roku yourself.")
         port = (cec_phys or "").split(".")[0]
         if port.isdigit() and 1 <= int(port) <= 4:
             living["input"] = f"HDMI{port}"

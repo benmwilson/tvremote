@@ -53,6 +53,12 @@ class Guessing(unittest.TestCase):
         self.assertEqual(g["bedroom"]["roku"], "")  # and two Rokus are left, so it won't pick one
         self.assertIn("pick one", " ".join(g["bedroom"]["why"]).lower())
 
+    def test_a_tv_that_is_off_and_silent_over_hdmi_says_so_and_pairs_nothing(self):
+        g = discover.guess([LIVING, BEDROOM], [CAST], True, None, "1.0.0.0")  # what happened on the real Pi: the living-room TV was off
+        self.assertEqual((g["living"]["roku"], g["bedroom"]["roku"]), ("", ""))
+        self.assertIn("didn't tell us its name", " ".join(g["living"]["why"]))
+        self.assertIn("Look again", " ".join(g["living"]["why"]))
+
     def test_no_screen_and_no_chromecast(self):
         g = discover.guess([LIVING], [], False, None, "1.0.0.0")
         self.assertFalse(g["living"]["enabled"])

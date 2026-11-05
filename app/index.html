@@ -525,6 +525,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <div id="err" role="status"></div>
 
 <h2 id="tvhead">TV</h2>
+<p class="sub hide" id="tvnoroku" style="margin:6px 4px 0">No TV controls here yet (power, volume, input). In Settings, run the setup wizard again and pick this TV's Roku.</p>
 <div class="card hide" id="tvctl">
   <div class="row"><button data-k="PowerOn"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg>On</button>
     <button data-k="PowerOff"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg>Off</button></div>
@@ -1312,9 +1313,17 @@ function tvSlot(t) {
   return box;
 }
 function renderTvSlots() { $('tvslots').replaceChildren(tvSlot('living'), tvSlot('bedroom')); }
-$('tvrescan').onclick = () => { discoverTvs(); };
+$('tvrescan').onclick = () => { tvWarned = false; discoverTvs(); };
+let tvWarned = false;
 $('tvsave').onclick = async () => {
   $('tverr').textContent = '';
+  const bare = ['living', 'bedroom'].filter(t => tvForm[t].enabled && !tvForm[t].roku).map(t => tvForm[t].name || t);
+  if (bare.length && !tvWarned) {  // no Roku means no power, volume, input switching or standby detection: say so before saving
+    tvWarned = true;
+    $('tverr').textContent = bare.join(' and ') + (bare.length > 1 ? ' have' : ' has') + ' no Roku chosen, so there will be no TV controls, input switching or standby detection. Pick one above, or tap Save again to continue without.';
+    return;
+  }
+  tvWarned = false;
   const body = {}; ['living', 'bedroom'].forEach(t => { const {why, ...rest} = tvForm[t]; body[t] = rest; });
   const r = await busy($('tvsave'), () => fetch('/api/targets/config', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).then(x => x.json()));
   if (!r) { $('tverr').textContent = 'Couldn\u2019t reach the Pi.'; return; }
@@ -1540,6 +1549,7 @@ function cardEl(c, onTap, extra) {
     if (n.game) tags.append(el('span', 'sub', n.game));
     if (n.stream) tags.append(el('span', 'badge', n.stream));
   }
+  if (c.reachable && !c.roku) tags.append(el('span', 'sub', 'No TV controls yet: pair its Roku in Settings'));
   const pw = c.reachable ? [POWER[c.power] || c.power, c.input && c.input !== 'Roku' && !c.external ? c.input : null].filter(Boolean).join(' · ') : '';
   if (pw) tags.append(el('span', 'sub', pw));
   if (tags.childNodes.length) b.append(tags);
@@ -1593,6 +1603,7 @@ function tvInfo() {  // the TV details in the One TV view come from the same cac
     : st.running ? 'The stream keeps playing behind the black screen.' : 'Turn it on to watch. Playing something also wakes it.';
   accent();
   $('tvctl').classList.toggle('hide', !cur.roku);
+  $('tvnoroku').classList.toggle('hide', !!cur.roku || !cur.id);
   $('tvhead').classList.toggle('hide', !cur.roku);
   const state = cur.reachable === false ? "can't reach" : POWER[cur.power] || cur.power;
   $('tvhead').textContent = [cur.tv_name || 'TV controls', state, cur.input && cur.input !== 'Roku' ? cur.input : null].filter(Boolean).join(' · ');
