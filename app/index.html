@@ -96,7 +96,7 @@ function render() {
   $('src').textContent = run || st.starting ? (st.source || 'Other') : 'Idle';
   $('src').className = 'badge ' + (st.source || '');
   $('live').classList.toggle('hide', !(run && st.live));
-  $('title').textContent = run ? (st.title || st.url) : st.starting ? 'Starting…' : 'Nothing playing';
+  $('title').textContent = run ? (st.title || st.url) : st.starting ? 'Starting…' : st.error ? 'Playback stopped' : 'Nothing playing';
   let meta = [];
   if (run) {
     if (!st.live && st.position != null) meta.push(fmt(st.position) + (st.duration ? ' / ' + fmt(st.duration) : ''));
@@ -104,6 +104,7 @@ function render() {
     if (st.hwdec) meta.push('hw: ' + st.hwdec);
     if (st.drops != null) meta.push(st.drops + ' dropped');
   }
+  if (!run && st.error) meta.push(st.error);
   $('meta').textContent = meta.join(' · ');
   $('pp').textContent = st.paused ? '▶' : '⏸';
   $('seek').classList.toggle('hide', !run || st.live);

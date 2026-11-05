@@ -56,6 +56,8 @@ Routing lives in the `SOURCES` table at the top of `app/app.py`; a new streamlin
 - **Dropped frames:** `hwdec` must be `v4l2m2m` and the display 1920x1080@60. The entrypoint sets this with `wlr-randr`; dmabuf-wayland doesn't scale, so stream resolution should match the display.
 - **hwdec empty or `no`:** a decoder node isn't passed through or GIDs are wrong. Use numeric GIDs in `.env`, make sure `/dev/video10-19` exist.
 - **TV doesn't switch input:** the entrypoint runs `cec-ctl --playback -o HunnidPi`; check the log for `cec-ctl failed` and that `/dev/cec0` is passed through.
+- **Vimeo:** needs a logged-in session (cookies); not supported out of the box.
+- **Playback stops immediately:** the reason (e.g. `HTTP error 404`, `login required`) shows on the remote and as `error` in `/api/status`.
 - **YouTube fails:** yt-dlp needs a JS runtime (deno is in the image). Rebuild to get the latest yt-dlp.
 - **Permission denied on sockets:** the container runs as uid/gid 1000 to match the host user.
 - The TV remote can't control the Pi (the Roku TV forwards no CEC key presses); the phone is the remote.

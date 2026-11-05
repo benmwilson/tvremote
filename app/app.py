@@ -170,6 +170,19 @@ def start_player(url, quality=None):
     threading.Thread(target=switch_tv_to_pi, daemon=True).start()
 
 
+def last_error():
+    """Last error-looking line from the player log, e.g. 'HTTP error 404 Not Found'."""
+    try:
+        with open(LOG_FILE, errors="replace") as f:
+            lines = f.read()[-4000:].splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if re.search(r"error|failed|logged-in|login|not found|no playable", line, re.I):
+            return re.sub(r"^\[[^\]]*\]\s*(ERROR:\s*)?", "", line.strip())[:200]
+    return None
+
+
 def qualities(url):
     if not url:
         return []
@@ -302,6 +315,8 @@ def api_status():
     else:
         p = state["proc"]
         data["starting"] = bool(p and p.poll() is None)
+        if state["url"] and not data["starting"]:
+            data["error"] = last_error()
     return jsonify(data)
 
 
