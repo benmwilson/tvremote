@@ -305,6 +305,9 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .apps .app img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:var(--line)}
 .apps .app span{font-size:12px;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .apps .note{grid-column:1/-1;margin:6px 2px;color:var(--dim);font-size:14px}
+/* ruler notches over a slider's track, only while it is being dragged (the thumb travels the width minus its own 30px) */
+input[type=range].ruler{--n:10;background-image:repeating-linear-gradient(to right,var(--dim) 0,var(--dim) 1px,transparent 1px,transparent calc(100% / var(--n))),linear-gradient(to left,var(--dim) 0,var(--dim) 1px,transparent 1px);background-repeat:no-repeat;background-position:15px 4px;background-size:calc(100% - 30px) 9px}
+#tvnudge.ruler{--n:20}
 #tvnudge::-webkit-slider-runnable-track{background:var(--line)}#tvnudge::-moz-range-track{background:var(--line)}
 #tvmute.muted{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}
 #tvmute.muted .ic{color:#ff8a8a}
@@ -327,6 +330,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 .wstream{flex:1 1 0;min-width:78px;height:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;border-radius:14px;background:var(--card2,var(--line));position:relative}
 .wstream .av{width:46px;height:46px}.wstream .wn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600}
 .wstream[aria-pressed=true]{box-shadow:inset 0 0 0 2px var(--tv,#6bb2ff)}.wstream .ws{position:absolute;top:6px;right:6px;display:flex;color:var(--tv,#6bb2ff)}.wstream .ws .ic{width:16px;height:16px}
+.wallnote .ni{display:inline-flex;vertical-align:-4px}.wallnote .ni .ic{width:18px;height:18px}
 .wallnote{display:block;width:100%;min-height:44px;margin:12px 0 0;padding:0 14px;border-radius:12px;background:var(--card2,var(--line));font-size:14px;font-weight:600;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wtile .ctl button,.wtile .ctl select,.wtile .top button{background:var(--card)}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff)}
 .wlabel{margin:18px 2px 8px;color:var(--dim);font-size:13px;font-weight:600;letter-spacing:.02em}.wrow{display:flex;align-items:center;gap:10px;margin-top:10px}.wrow .sub{flex:1}
@@ -824,8 +828,14 @@ function render() {
   $('qual').classList.toggle('hide', !up || !$('qual').options.length);  // starting: only Stop
   $('wallnote').classList.toggle('hide', !(st.wall && (up || starting)));
   if (st.wall && (up || starting)) {
-    const sn = st.wall.sound, snd = !sn.length ? 'none' : sn.length > 1 ? sn.length + ' streams' : sn[0] === 0 ? 'this stream' : ((st.wall.tiles.find(t => t.i === sn[0]) || {}).name || 'another stream');
-    $('wallnote').textContent = 'Multi-view \u00b7 ' + (st.wall.tiles.length + 1) + ' streams \u00b7 ' + (up ? 'sound from ' + snd : 'updating') + ' \u203a';
+    // a speaker and the name(s) of whatever has sound on (a muted speaker when nothing does)
+    const sn = st.wall.sound, name = i => i === 0 ? (chanName(st.url || '') || 'this stream') : ((st.wall.tiles.find(t => t.i === i) || {}).name || 'another stream');
+    const note = $('wallnote'), ico = el('span', 'ni');
+    ico.innerHTML = ic(sn.length ? 'volume' : 'mute');
+    note.replaceChildren(document.createTextNode('Multi-view \u00b7 ' + (st.wall.tiles.length + 1) + ' streams \u00b7 '));
+    if (up) note.append(ico, document.createTextNode(' ' + (sn.length ? sn.map(name).join(', ') : 'Muted')));
+    else note.append(document.createTextNode('updating'));
+    note.append(document.createTextNode(' \u203a'));
   }
   $('ctlrow').classList.toggle('single', !up && starting);  // starting: just Stop, so you can cancel
   $('fav').classList.toggle('hide', !up);
@@ -1096,6 +1106,11 @@ async function sendVol(v, final) {
   volBusy = true;
   while (volNext !== null) { const x = volNext; volNext = null; await cmd('volume', x, final ? {final: true} : undefined); }
   volBusy = false;
+}
+for (const id of ['vol', 'tvnudge']) {  // the ruler shows while a finger is on the slider
+  const e = $(id);
+  e.addEventListener('pointerdown', () => e.classList.add('ruler'));
+  ['pointerup', 'pointercancel', 'touchend', 'touchcancel', 'change'].forEach(ev => e.addEventListener(ev, () => e.classList.remove('ruler')));
 }
 $('vol').oninput = () => { dragging = true;
   if (st.muted && +$('vol').value > (st.volume || 0)) { st.muted = false; cmd('mute'); } // dragging up while muted unmutes (once)
