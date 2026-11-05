@@ -26,6 +26,7 @@ class SetupBase(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
         activity.reset()
+        server._fails.clear()
 
 
 class FreshInstall(SetupBase):
@@ -40,21 +41,21 @@ class FreshInstall(SetupBase):
 
     def test_creating_the_admin_logs_them_in_and_locks_the_door(self):
         c = server.app.test_client()
-        r = c.post("/api/setup/admin", json={"name": "Ben", "password": "hunter22"})
+        r = c.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "Ben", "password": "hunter22"})
         self.assertEqual(r.get_json(), {"ok": True, "name": "ben"})
         self.assertIn("tv_auth", r.headers["Set-Cookie"])
         self.assertEqual(c.get("/api/favourites").status_code, 200)  # the new admin is in
         self.assertEqual(c.get("/api/auth").get_json()["user"], "ben")
         stranger = server.app.test_client()
         self.assertEqual(stranger.get("/api/favourites").status_code, 401)  # everyone else now needs to log in
-        self.assertEqual(stranger.post("/api/setup/admin", json={"name": "evil", "password": "hunter22"}).status_code, 401)
+        self.assertEqual(stranger.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "evil", "password": "hunter22"}).status_code, 401)
         self.assertEqual(stranger.get("/api/setup").status_code, 401)
         self.assertFalse(accounts.exists("evil"))
         self.assertEqual(c.post("/api/setup/finish").status_code, 200)
         self.assertFalse(c.get("/api/setup").get_json()["needed"])
 
     def test_a_script_cannot_walk_in_with_an_empty_password(self):
-        server.app.test_client().post("/api/setup/admin", json={"name": "ben", "password": "hunter22"})
+        server.app.test_client().post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "ben", "password": "hunter22"})
         import base64
         c = server.app.test_client()
         for creds in (b":", b"ben:", b"ben:wrong", b"owner:"):
@@ -65,7 +66,7 @@ class FreshInstall(SetupBase):
 
     def test_the_first_admin_is_the_owner_and_the_last_admin_cannot_be_removed(self):
         c = server.app.test_client()
-        c.post("/api/setup/admin", json={"name": "ben", "password": "hunter22"})
+        c.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "ben", "password": "hunter22"})
         users = c.get("/api/accounts").get_json()["users"]
         self.assertEqual([(u["name"], u["founder"]) for u in users], [("ben", True)])  # no ".env owner" row without a .env password
         self.assertEqual(c.patch("/api/accounts", json={"name": "ben", "role": "user"}).status_code, 400)  # the only admin
@@ -77,10 +78,50 @@ class FreshInstall(SetupBase):
         self.assertTrue(accounts.verify("ben", "hunter22"))
         self.assertEqual(c.delete("/api/accounts", json={"name": "amy"}).status_code, 200)
 
+    def test_the_setup_code_host_and_throttle_guard_the_first_admin(self):
+        c = server.app.test_client()
+        bad = c.post("/api/setup/admin", json={"name": "ben", "password": "hunter22", "code": "nope"})
+        self.assertEqual(bad.status_code, 403)
+        self.assertEqual(c.post("/api/setup/admin", json={"name": "ben", "password": "hunter22"}).status_code, 403)  # no code at all
+        self.assertFalse(accounts.exists("ben"))
+        self.assertTrue(c.get("/api/setup").get_json()["needs_code"])
+        body = {"name": "ben", "password": "hunter22", "code": server.SETUP_CODE}
+        # a public name pointing at this machine (DNS rebinding) is refused even with the right code
+        self.assertEqual(c.post("/api/setup/admin", json=body, headers={"Host": "evil.example.com"}).status_code, 403)
+        self.assertFalse(accounts.exists("ben"))
+        self.assertEqual(c.post("/api/setup/admin", json=body, headers={"Host": "192.168.1.138:8765"}).status_code, 200)
+
+    def test_guessing_the_code_is_throttled(self):
+        c = server.app.test_client()
+        for i in range(10):
+            c.post("/api/setup/admin", json={"name": "ben", "password": "hunter22", "code": f"{i:06x}"})
+        right = c.post("/api/setup/admin", json={"name": "ben", "password": "hunter22", "code": server.SETUP_CODE})
+        self.assertEqual(right.status_code, 429)  # even the right code waits out the lockout
+        self.assertFalse(accounts.exists("ben"))
+
+    def test_an_unreadable_accounts_file_never_reopens_the_install(self):
+        server.app.test_client().post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "ben", "password": "hunter22"})
+        with open(os.path.join(self.dir, "users.json"), "w") as f:
+            f.write("{ this is not json")  # damaged
+        c = server.app.test_client()
+        self.assertEqual(c.get("/api/favourites").status_code, 401)  # still closed
+        self.assertFalse(c.get("/api/setup").status_code == 200 and c.get("/api/setup").get_json().get("fresh"))
+        self.assertEqual(c.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "evil", "password": "hunter22"}).status_code, 401)
+
+    def test_failed_script_logins_are_throttled_too(self):
+        import base64
+        server.app.test_client().post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "ben", "password": "hunter22"})
+        c = server.app.test_client()
+        bad = {"Authorization": "Basic " + base64.b64encode(b"ben:wrong").decode()}
+        self.assertEqual([c.get("/api/favourites", headers=bad).status_code for _ in range(10)], [401] * 10)
+        self.assertEqual(c.get("/api/favourites", headers=bad).status_code, 429)
+        good = {"Authorization": "Basic " + base64.b64encode(b"ben:hunter22").decode()}
+        self.assertEqual(c.get("/api/favourites", headers=good).status_code, 429)  # locked out for now, whatever is sent
+
     def test_bad_names_and_passwords_do_not_end_setup(self):
         c = server.app.test_client()
-        self.assertEqual(c.post("/api/setup/admin", json={"name": "owner", "password": "hunter22"}).status_code, 400)
-        self.assertEqual(c.post("/api/setup/admin", json={"name": "ben", "password": "x"}).status_code, 400)
+        self.assertEqual(c.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "owner", "password": "hunter22"}).status_code, 400)
+        self.assertEqual(c.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "ben", "password": "x"}).status_code, 400)
         self.assertEqual(c.get("/api/setup").get_json()["needed"], True)  # still open: nobody was locked out by a typo
 
 
@@ -99,7 +140,7 @@ class WithEnvPassword(SetupBase):
     def test_adding_the_named_admin_ends_the_prompt_and_they_are_not_the_founder(self):
         c = server.app.test_client()
         c.post("/login", data={"password": "owner-pw"})
-        self.assertEqual(c.post("/api/setup/admin", json={"name": "ben", "password": "hunter22"}).status_code, 200)
+        self.assertEqual(c.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "ben", "password": "hunter22"}).status_code, 200)
         self.assertFalse(c.get("/api/setup").get_json()["needed"])
         users = {u["name"]: u for u in c.get("/api/accounts").get_json()["users"]}
         self.assertEqual((users["ben"]["role"], users["ben"]["founder"], "owner" in users), ("admin", False, True))
@@ -110,15 +151,15 @@ class WithEnvPassword(SetupBase):
         owner.post("/login", data={"password": "owner-pw"})
         owner.post("/api/accounts", json={"name": "amy", "password": "secret1", "role": "admin"})
         owner.post("/api/accounts", json={"name": "bo", "password": "secret1", "role": "admin"})
-        self.assertEqual(owner.post("/api/setup/admin", json={"name": "bo", "password": "hijack1"}).status_code, 400)  # exists
+        self.assertEqual(owner.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "bo", "password": "hijack1"}).status_code, 400)  # exists
         self.assertTrue(accounts.verify("bo", "secret1"))
         amy = server.app.test_client()
         amy.post("/login", data={"username": "amy", "password": "secret1"})
-        self.assertEqual(amy.post("/api/setup/admin", json={"name": "bo", "password": "hijack1"}).status_code, 403)  # admin, not owner
-        self.assertEqual(amy.post("/api/setup/admin", json={"name": "newone", "password": "secret1"}).status_code, 403)
+        self.assertEqual(amy.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "bo", "password": "hijack1"}).status_code, 403)  # admin, not owner
+        self.assertEqual(amy.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "newone", "password": "secret1"}).status_code, 403)
         self.assertTrue(accounts.verify("bo", "secret1"))
         self.assertFalse(accounts.exists("newone"))
-        self.assertEqual(owner.post("/api/setup/admin", json={"name": "newone", "password": "secret1"}).status_code, 200)
+        self.assertEqual(owner.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "newone", "password": "secret1"}).status_code, 200)
         self.assertFalse([u for u in accounts.listing() if u["founder"]])  # founder only ever comes from a fresh install
 
     def test_a_normal_user_is_never_prompted(self):
@@ -126,7 +167,7 @@ class WithEnvPassword(SetupBase):
         sam = server.app.test_client()
         sam.post("/login", data={"username": "sam", "password": "secret1"})
         self.assertEqual(sam.get("/api/setup").get_json(), {"needed": False})
-        self.assertEqual(sam.post("/api/setup/admin", json={"name": "x1", "password": "hunter22"}).status_code, 403)
+        self.assertEqual(sam.post("/api/setup/admin", json={"code": server.SETUP_CODE, "name": "x1", "password": "hunter22"}).status_code, 403)
 
 
 if __name__ == "__main__":

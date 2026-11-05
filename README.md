@@ -51,10 +51,10 @@ Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose 
 
 ## Accounts, roles and the setup wizard
 
-- **First run:** with no `PASSWORD` and no accounts, the remote is open and sends you straight to the setup wizard. Step 1 creates the first admin account (the "owner"); from then on login is required. Anyone on your LAN can reach the wizard before that, so do it right after the first start. With a `PASSWORD` set, the wizard offers to add a named admin or skip.
+- **First run:** with no `PASSWORD` and no accounts, the remote is open and sends you straight to the setup wizard. Step 1 creates the first admin account (the "owner"); from then on login is required. The wizard asks for a setup code that is printed in the container's log (`docker logs tvremote`), so only someone with access to the Pi can claim the install, and it only works when you open the remote by its IP address or a `.local` name. With a `PASSWORD` set, the wizard offers to add a named admin or skip.
 - **Roles:** `admin` (manage people, requests, guest links, Debug) and `user` (use the TVs, own favourites, own Kick link). Only the owner can change other admins. The last admin can't be removed or demoted when there is no `.env` password.
 - **Settings** (the gear): your account and password, Kick and Twitch links, and for admins the people list, access requests from the login page, one-time guest links (control the TVs for a set time, nothing else), and the home-screen switch.
-- **Keep `PASSWORD`?** It's optional, but your Shortcut (`&t=<password>`) and `curl -u :<password>` scripts use it, and it is the way back in if the accounts file is lost. Locked out with no `PASSWORD`? Delete `users.json` from the `tvremote-data` volume and the wizard runs again.
+- **Keep `PASSWORD`?** It's optional, but your Shortcut (`&t=<password>`) and `curl -u :<password>` scripts use it, and it is the way back in if the accounts file is lost. Locked out with no `PASSWORD` (or `users.json` is damaged: login stays required rather than opening up)? Delete `users.json` from the `tvremote-data` volume and the wizard runs again. Too many failed logins from one address (10 in 10 minutes) are refused for a while.
 - **Data:** small JSON files in `/data`, no database: `users.json`, `sessions.json`, `favourites*.json`, `kick_link*.json`, `requests.json`, `invites*.json`, `activity.json`, `setup.json`.
 
 ## Roku TVs, Chromecast and input switching

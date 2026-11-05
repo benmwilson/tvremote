@@ -300,6 +300,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
     <h2 style="margin:0 0 6px">Create your admin account</h2>
     <p class="sub" id="setup1text"></p>
     <form id="setupform" class="s-form" style="margin-top:12px">
+      <input id="sucode" class="hide" placeholder="Setup code (from docker logs tvremote)" autocapitalize="none" autocomplete="off" aria-label="Setup code">
       <input id="suname" placeholder="Username" autocapitalize="none" autocomplete="username" aria-label="Admin username">
       <input id="supw" type="password" placeholder="Password (6+ characters)" autocomplete="new-password" aria-label="Admin password">
       <input id="supw2" type="password" placeholder="Repeat the password" autocomplete="new-password" aria-label="Repeat the password">
@@ -1086,6 +1087,7 @@ function renderSetup() {
       ? 'You are signed in with the password from .env (the owner). Create a named admin account to use day to day. The .env password keeps working for scripts, shortcuts and recovery.'
       : 'This is a new install, so nobody can log in yet. Create the first admin account. It becomes the owner and can add everyone else.';
     $('suskip').classList.toggle('hide', !setupInfo.password_set);
+    $('sucode').classList.toggle('hide', !setupInfo.needs_code);  // only a brand-new install asks for the code printed in the log
   }
   if (setupStep === 2) {
     const tvs = (targets || []).map(t => mk('div', {class: 's-row'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, (t.name || '?').slice(0, 1)),
@@ -1105,7 +1107,7 @@ $('setupform').onsubmit = async e => {
   $('suerr').textContent = '';
   if ($('supw').value !== $('supw2').value) { $('suerr').textContent = 'The two passwords don’t match.'; return; }
   const r = await busy($('setupform').querySelector('button'), () => fetch('/api/setup/admin', {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name: $('suname').value, password: $('supw').value})}).then(x => x.json()));
+    body: JSON.stringify({name: $('suname').value, password: $('supw').value, code: $('sucode').value})}).then(x => x.json()));
   if (!r) { $('suerr').textContent = 'Couldn’t reach the Pi.'; return; }
   if (r.ok === false) { $('suerr').textContent = r.error || 'That didn’t work.'; return; }
   setupInfo = {...setupInfo, has_admin: true, created: r.name}; $('supw').value = ''; $('supw2').value = '';

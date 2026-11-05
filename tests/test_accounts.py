@@ -16,6 +16,7 @@ import kick  # noqa: E402
 class AccountsTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
+        server._fails.clear()
         self.addCleanup(shutil.rmtree, self.dir, True)
         for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir),
                   mock.patch.object(server, "FAV_FILE", os.path.join(self.dir, "favourites.json")),

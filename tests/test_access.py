@@ -26,6 +26,7 @@ class AccessTest(unittest.TestCase):
             self.addCleanup(p.stop)
         access._last_by_ip.clear()
         activity.reset()
+        server._fails.clear()
         self.owner = server.app.test_client()
         self.owner.post("/login", data={"password": "owner-pw"})
 

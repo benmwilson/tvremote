@@ -35,6 +35,12 @@ def _hash(password, salt):
     return hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=2 ** 14, r=8, p=1).hex()
 
 
+def initialised():
+    """True once accounts have ever been set up: the file exists, even if it can't be read now. Login stays required then, so a
+    damaged or unreadable file can't turn the install back into an open one."""
+    return os.path.exists(_file())
+
+
 def names():
     return sorted(_load())
 

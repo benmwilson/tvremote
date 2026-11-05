@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import html
+import ipaddress
 import json
 import os
 import re
@@ -104,11 +105,15 @@ def guard():
     wants_page = "text/html" in request.headers.get("Accept", "")
     # a browser page load needs the login cookie: Safari remembers the old password pop-up and would otherwise stay logged in after logout
     if a and not wants_page:  # curl and scripts
+        if _throttled(request.remote_addr):
+            return too_many()
         if PASSWORD and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
             return None
         if a.username and accounts.verify(a.username, a.password or ""):
             g.user = a.username.strip().lower()
             return None
+        _note_fail(request.remote_addr)
+        time.sleep(0.8)  # slows guessing, like the login page
     if request.path == "/play" and token_ok:
         return None
     if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):  # a browser: show the login page
@@ -162,8 +167,33 @@ _revoked = set()  # logged-out tokens, kept in memory too so a failed disk write
 
 
 def auth_required():
-    """Login is needed once there is a .env password or any account. A fresh install with neither is open until setup makes the first admin."""
-    return bool(PASSWORD) or bool(accounts.names())
+    """Login is needed once there is a .env password or accounts have ever been set up. A fresh install with neither is open until setup
+    makes the first admin. An unreadable accounts file counts as set up (fail closed)."""
+    return bool(PASSWORD) or accounts.initialised()
+
+
+_fails = {}  # address -> times of recent failed logins (any kind: the form, a script, the setup code)
+
+
+def _throttled(ip):
+    now = time.time()
+    if len(_fails) > 1000:
+        _fails.clear()
+    recent = [t for t in _fails.get(ip, []) if now - t < 600]
+    _fails[ip] = recent
+    return len(recent) >= 10
+
+
+def _note_fail(ip):
+    _fails.setdefault(ip, []).append(time.time())
+
+
+def _note_ok(ip):
+    _fails.pop(ip, None)
+
+
+def too_many():
+    return Response("Too many failed tries. Wait a few minutes and try again.", 429)
 
 
 _key = {"v": None}
@@ -291,6 +321,8 @@ def login():
         return redirect(nxt, 303)
     err = ""
     if request.method == "POST":
+        if _throttled(request.remote_addr):
+            return too_many()
         who = request.form.get("username", "").strip().lower()
         if accounts.verify(who, request.form.get("password", "")):  # always runs the slow hash, even for an unknown name
             user = who
@@ -299,11 +331,13 @@ def login():
         else:
             user = None
         if user:
+            _note_ok(request.remote_addr)
             accounts.touch(user)
             activity.note(user, "Logged in")
             r = redirect(nxt, 303)
             r.set_cookie("tv_auth", new_session(user), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
             return r
+        _note_fail(request.remote_addr)
         time.sleep(0.8)  # slows guessing
         err = "Wrong username or password"
     return Response(LOGIN_PAGE.replace("__NEXT__", html.escape(nxt, quote=True)).replace("__ERR__", err), 401 if err else 200,
@@ -1825,6 +1859,20 @@ def note_action(resp):
     return resp
 
 
+SETUP_CODE = secrets.token_hex(3)  # printed in the container log while the install is fresh; the wizard asks for it
+
+
+def host_ok():
+    """Is the page being reached by an IP address or a local name? Refuses a public name that points at this machine (DNS rebinding)."""
+    host = request.host
+    h = (host[1:host.index("]")] if host.startswith("[") else host.rsplit(":", 1)[0] if host.count(":") == 1 else host).lower()
+    try:
+        ipaddress.ip_address(h)
+        return True
+    except ValueError:
+        return h == "localhost" or "." not in h or h.endswith((".local", ".lan", ".home.arpa", ".localdomain"))
+
+
 SETUP_FILE = "setup.json"
 _setup_lock = threading.Lock()
 
@@ -1850,7 +1898,7 @@ def setup_state():
         return jsonify(needed=False)
     has_admin = any(u["role"] == "admin" for u in accounts.listing())
     return jsonify(needed=not setup_done() and not has_admin, done=setup_done(), fresh=fresh, has_admin=has_admin,
-                   password_set=bool(PASSWORD), user=g.user if not fresh else None)
+                   password_set=bool(PASSWORD), user=g.user if not fresh else None, needs_code=fresh)
 
 
 @app.post("/api/setup/admin")
@@ -1859,7 +1907,16 @@ def setup_admin():
     data = request.get_json(silent=True) or {}
     with _setup_lock:
         fresh = not auth_required()
-        if not fresh:
+        if fresh:
+            ip = request.remote_addr
+            if not host_ok():
+                return jsonify(ok=False, error="Open the remote by its IP address (or a .local name) to set it up."), 403
+            if _throttled(ip):
+                return too_many()
+            if not hmac.compare_digest(str(data.get("code") or "").strip().lower().encode(), SETUP_CODE.encode()):
+                _note_fail(ip)
+                return jsonify(ok=False, error="That setup code isn't right. It is printed in the container's log: docker logs tvremote"), 403
+        else:
             admin_only()
             if not accounts.is_owner(g.user):
                 return refuse()  # a fresh install, or the owner: never another admin
@@ -1916,5 +1973,7 @@ if __name__ == "__main__":
             threading.Thread(target=tlscallback.make_server(kick.REDIRECT, PORT, DATA).serve_forever, daemon=True).start()
         except Exception as e:  # no openssl or the port is taken: the rest of the app still runs
             print("Kick login listener not started:", e, flush=True)
+    if not auth_required():
+        print(f"FIRST RUN: open the remote and enter this setup code to create the admin account: {SETUP_CODE}", flush=True)
     from waitress import serve
     serve(app, host="0.0.0.0", port=PORT, threads=8)
