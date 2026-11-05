@@ -76,14 +76,17 @@ class WallTest(unittest.TestCase):
         self.assertEqual(w.extras[0]["url"], "https://kick.com/a")
         self.assertIsNone(w.swap(5, "https://kick.com/a"))
 
-    def test_audio_mutes_everything_else(self):
+    def test_sound_is_switched_per_stream_and_only_the_main_one_has_it_to_start_with(self):
         w = wall()
         w.add("https://kick.com/b", "https://kick.com/a")
+        self.assertEqual(w.sound, {0})  # not on by default
         with mock.patch.object(multi.mpvipc, "send") as send:
-            w.set_audio(1, "/tmp/main.sock")
-        send.assert_any_call("/tmp/main.sock", ["set_property", "mute", True])
-        send.assert_any_call(multi._sock(1), ["set_property", "mute", False])
-        self.assertEqual(w.audio, 1)
+            w.set_sound(1, True, "/tmp/main.sock")  # more than one can be heard at once
+            send.assert_called_once_with(multi._sock(1), ["set_property", "mute", False])
+            self.assertEqual(w.sound, {0, 1})
+            w.set_sound(0, False, "/tmp/main.sock")
+        send.assert_called_with("/tmp/main.sock", ["set_property", "mute", True])
+        self.assertEqual(w.sound, {1})
 
     def test_a_picked_quality_changes_the_stream_and_goes_with_it_on_a_swap(self):
         self.assertEqual(multi.quality_for("streamlink", "480"), "480p,360p,160p,worst")
@@ -101,16 +104,20 @@ class WallTest(unittest.TestCase):
     def test_the_sound_follows_its_stream_through_a_swap_and_never_plays_from_two_windows(self):
         w = wall()
         w.add("https://kick.com/b", "https://kick.com/a")
-        w.audio = 1  # the sound was on the small tile (stream b)
+        w.sound = {1}  # the sound was on the small tile (stream b), not on the main one
         self.assertIn("--mute=yes", w.main_args()[0])  # a restarted main window must not add its own sound
         w.swap(1, "https://kick.com/a")  # b becomes the main stream
-        self.assertEqual(w.audio, 0)  # the sound stays with b
+        self.assertEqual(w.sound, {0})  # the sound stays with b
         self.assertNotIn("--mute=yes", w.main_args()[0])
         w.swap(1, "https://kick.com/b")  # and back: the sound goes with b to the small tile
-        self.assertEqual(w.audio, 1)
-        w.audio = 2
+        self.assertEqual(w.sound, {1})
+        w.sound = {0, 1}
+        w.swap(1, "https://kick.com/b")  # both are on: both stay on
+        self.assertEqual(w.sound, {0, 1})
         w.add("https://kick.com/c", "https://kick.com/b")
-        self.assertEqual(w.swap(1, "https://kick.com/b") and w.audio, 2)  # a third tile keeps it
+        w.sound = {2}
+        w.remove(1)  # the tile after the removed one moves up, and keeps its sound
+        self.assertEqual(w.sound, {1})
 
     def test_all_windows_start_together_by_default(self):
         self.assertEqual(multi.STAGGER, 0)

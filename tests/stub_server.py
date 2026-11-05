@@ -33,7 +33,7 @@ def wall():
         return None
     others = [("omie", "Twitch", "480"), ("a_rather_long_channel_name", "Kick", None), ("xqc", "Twitch", "720")]
     host = {"Twitch": "https://www.twitch.tv/", "Kick": "https://kick.com/"}
-    return {"layout": STATE["wall_layout"], "audio": 0, "max": 4, "main_quality": None,
+    return {"layout": STATE["wall_layout"], "sound": [0], "max": 4, "main_quality": None,
             "tiles": [{"i": i, "url": host[src] + nm, "name": nm, "source": src, "running": True, "error": None, "quality": q}
                       for i, (nm, src, q) in enumerate(others[:n - 1], start=1)]}
 
@@ -43,7 +43,7 @@ def wall_debug():
     if not w:
         return None
     rows = [("https://kick.com/chan", "Kick", "auto", 480)] + [(t["url"], t["source"], t["quality"] or "auto", 480) for t in w["tiles"]]
-    return {"layout": w["layout"], "audio": 0, "tiles": [
+    return {"layout": w["layout"], "sound": [0], "tiles": [
         {"i": i, "window": f"tvr-{w['layout']}{len(rows)}-{i + 1}", "url": u, "source": src, "quality": q, "pid": 4000 + i, "alive": True,
          "mpv": {"hwdec-current": "v4l2m2m", "width": 854, "height": h, "container-fps": 30, "frame-drop-count": i, "mute": i != 0, "volume": 100,
                  "demuxer-cache-duration": 7.3}, "error": None, "log": "line one line two"} for i, (u, src, q, h) in enumerate(rows)]}

@@ -741,15 +741,16 @@ function renderWallStrip(show) {
   strip.classList.toggle('hide', !(w && show));
   if (!(w && show)) { stripSig = ''; return; }
   const items = [{i: 0, name: chanName(st.url || '') || st.title || 'Main', url: st.url, source: st.source}, ...w.tiles];
-  const sig = JSON.stringify([items.map(t => [t.url, t.name]), w.audio]);
+  const sig = JSON.stringify([items.map(t => [t.url, t.name]), w.sound]);
   if (sig === stripSig) return;
   stripSig = sig;
   strip.replaceChildren(...items.map(t => {
     const b = el('button', 'wstream'), name = t.i ? t.name : items[0].name;
-    b.setAttribute('aria-pressed', String(w.audio === t.i)); b.setAttribute('aria-label', 'Sound from ' + name);
+    const on = w.sound.includes(t.i);
+    b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', (on ? 'Mute ' : 'Hear ') + name);
     b.append(avatarEl(name, t.url), el('span', 'wn', name));
-    if (w.audio === t.i) { const s = el('span', 'ws'); s.innerHTML = ic('volume'); b.append(s); }
-    b.onclick = () => wallApi({action: 'audio', i: t.i});
+    if (on) { const s = el('span', 'ws'); s.innerHTML = ic('volume'); b.append(s); }
+    b.onclick = () => wallApi({action: 'sound', i: t.i, on: !on});
     return b;
   }));
 }
@@ -823,7 +824,7 @@ function render() {
   $('qual').classList.toggle('hide', !up || !$('qual').options.length);  // starting: only Stop
   $('wallnote').classList.toggle('hide', !(st.wall && (up || starting)));
   if (st.wall && (up || starting)) {
-    const snd = st.wall.audio ? ((st.wall.tiles.find(t => t.i === st.wall.audio) || {}).name || 'another stream') : 'this stream';
+    const sn = st.wall.sound, snd = !sn.length ? 'none' : sn.length > 1 ? sn.length + ' streams' : sn[0] === 0 ? 'this stream' : ((st.wall.tiles.find(t => t.i === sn[0]) || {}).name || 'another stream');
     $('wallnote').textContent = 'Multi-view \u00b7 ' + (st.wall.tiles.length + 1) + ' streams \u00b7 ' + (up ? 'sound from ' + snd : 'updating') + ' \u203a';
   }
   $('ctlrow').classList.toggle('single', !up && starting);  // starting: just Stop, so you can cancel
@@ -1696,10 +1697,10 @@ function renderWall() {
     top.append(el('span', 'badge ' + r.source, r.source || ''), el('span', 'nm', r.name || r.url));
     if (r.i && r.running === false && !r.error) top.append(el('span', 'sub', 'Starting\u2026'));
     if (r.i) { const x = el('button'); setBtn(x, 'x', ''); x.setAttribute('aria-label', 'Remove ' + (r.name || 'this stream') + ' from the screen'); x.onclick = () => wallApi({action: 'remove', i: r.i}); top.append(x); }
-    const on = w.audio === r.i, sound = el('button', 'snd');
+    const on = w.sound.includes(r.i), sound = el('button', 'snd');
     setBtn(sound, on ? 'volume' : 'mute', on ? 'Sound' : 'Muted');
     sound.setAttribute('aria-pressed', String(on)); sound.setAttribute('aria-label', 'Sound from ' + (r.name || 'this stream'));
-    sound.onclick = () => wallApi({action: 'audio', i: r.i});
+    sound.onclick = () => wallApi({action: 'sound', i: r.i, on: !on});
     const q = el('select'); q.setAttribute('aria-label', 'Quality for ' + (r.name || 'this stream'));
     WALL_Q.forEach(([v, label]) => { const o = el('option', null, label); o.value = v; q.append(o); });
     q.value = r.quality || '';
@@ -1785,13 +1786,13 @@ const dbgOpen = new Set();  // which tiles' logs are expanded, kept across the 2
 function renderDbgWall(w) {
   $('d-wall').classList.toggle('hide', !w);
   if (!w) return;
-  fillTable('d-wallsum', {layout: w.layout, streams: w.tiles.length, 'sound from': 'tile ' + (w.audio + 1)});
+  fillTable('d-wallsum', {layout: w.layout, streams: w.tiles.length, 'sound on': w.sound.map(i => 'tile ' + (i + 1)).join(', ') || 'none'});
   $('d-walltiles').replaceChildren(...w.tiles.map(t => {
     const d = document.createElement('details'), m = t.mpv || {};
     d.open = dbgOpen.has(t.i);
     d.ontoggle = () => { d.open ? dbgOpen.add(t.i) : dbgOpen.delete(t.i); };
     const state = t.alive ? (m.height ? m.height + 'p' : 'starting') : (t.error ? 'stopped' : 'not running');
-    d.append(el('summary', null, 'Tile ' + (t.i + 1) + ' \u00b7 ' + (chanName(t.url || '') || t.url || '') + ' \u00b7 ' + (t.source || '') + ' \u00b7 ' + state + (t.i === w.audio ? ' \u00b7 sound' : '')));
+    d.append(el('summary', null, 'Tile ' + (t.i + 1) + ' \u00b7 ' + (chanName(t.url || '') || t.url || '') + ' \u00b7 ' + (t.source || '') + ' \u00b7 ' + state + (w.sound.includes(t.i) ? ' \u00b7 sound' : '')));
     const tb = document.createElement('table');
     Object.entries({window: t.window, url: t.url, quality: t.quality, pid: t.pid, hwdec: m['hwdec-current'], size: m.width ? m.width + '\u00d7' + m.height : null,
       fps: m['container-fps'], dropped: m['frame-drop-count'], buffer_s: m['demuxer-cache-duration'] != null ? Math.round(m['demuxer-cache-duration'] * 10) / 10 : null,

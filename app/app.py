@@ -85,7 +85,8 @@ def target_for(t):
 lock = threading.Lock()
 state = {"proc": None, "url": None, "quality": None, "source": None, "player": None}
 # Several streams on the Pi's screen at once. Tile 0 is the main player above; the others are started by multi.py.
-wall = multi.Wall(lambda url, q, sock, extra: player_cmd(url, q, sock, extra)[:2], lambda url: resolve(url), lambda url: fav_name(url))
+wall = multi.Wall(lambda url, q, sock, extra: player_cmd(url, q, sock, extra)[:2], lambda url: resolve(url), lambda url: fav_name(url),
+                  volume=lambda: settings.get("volume"))
 _qcache = {}
 _live_cache = {}
 
@@ -881,12 +882,16 @@ def api_cmd():
         cmd = fn(data.get("value", 0))
     except (TypeError, ValueError):
         return jsonify(ok=False, error="Bad value"), 400
-    on_wall = wall.active() and action in ("volume", "volume_delta", "mute", "unmute") and wall.audio  # the sound is on another tile
-    r = mpvipc.send(wall.sock(wall.audio, SOCK), cmd) if on_wall else mpv(cmd)
+    on_wall = wall.active() and action in ("volume", "volume_delta", "mute", "unmute")
+    if on_wall:  # the level goes to every window (a tile switched on later is at the same level); mute only to the ones with sound
+        rs = [mpvipc.send(wall.sock(k, SOCK), cmd) for k in (range(wall.count()) if action.startswith("volume") else sorted(wall.sound))]
+        r = rs[0] if rs else {"error": "success"}  # nothing has sound on: nothing to change
+    else:
+        r = mpv(cmd)
     ok = bool(r and r.get("error") == "success")
     if ok and action == "pause":
         osd_paused(bool(prop("pause")))
-    if ok and not on_wall and action in ("volume", "volume_delta") and prop("volume") is not None:
+    if ok and action in ("volume", "volume_delta") and prop("volume") is not None:
         settings["volume"] = prop("volume")
         if data.get("final") or time.time() - _vol_saved["t"] > 2:  # a drag sends many: write the file when it ends, or every few seconds
             _vol_saved["t"] = time.time()
@@ -963,7 +968,7 @@ def _restart_main_quality(label):
 
 @app.post("/api/wall")
 def api_wall():
-    """Several streams on the living-room TV: {action: add|remove|layout|audio|swap|only|quality|clear, url, site, i, layout, quality}."""
+    """Several streams on the living-room TV: {action: add|remove|layout|sound|swap|only|quality|clear, url, site, i, layout, quality}."""
     if tgt():
         return jsonify(ok=False, error="Only the living-room TV can show several streams at once."), 400
     d = request.get_json(silent=True) or {}
@@ -991,8 +996,8 @@ def api_wall():
         wall.layout = d["layout"]
         if wall.active():
             wall_later(wall_relayout)
-    elif act == "audio":
-        wall.set_audio(i, SOCK)
+    elif act == "sound":  # switch one stream's sound on or off, the others as they are
+        wall.set_sound(i, bool(d.get("on")), SOCK)
     elif act == "swap":
         new_main = wall.swap(i, state["url"])
         if not new_main:
@@ -1172,11 +1177,13 @@ def pi_status():
         data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(state["url"] or "")
         data["chat_ok"] = state["source"] == "Twitch" and bool(chat.channel_of(state["url"] or ""))
         data["chat"] = bool(_chat["obj"])
-        if wall.active() and wall.audio:  # volume and mute shown are those of the tile that has the sound
-            for key in ("volume", "muted"):
-                r = mpvipc.send(wall.sock(wall.audio, SOCK), ["get_property", PROPS[key]])
+        if wall.active() and 0 not in wall.sound:  # the main stream is silent: the mute button shows the state of those that are not
+            if not wall.sound:
+                data["muted"] = True
+            else:
+                r = mpvipc.send(wall.sock(min(wall.sound), SOCK), ["get_property", "mute"])
                 if r and r.get("error") == "success":
-                    data[key] = r.get("data")
+                    data["muted"] = r.get("data")
         # live = streamlink, or a stream with no duration
         data["live"] = state["player"] == "streamlink" or data["duration"] is None
     else:
@@ -1817,7 +1824,7 @@ def wall_debug():
         t["mpv"] = {k: (lambda r: r.get("data") if r and r.get("error") == "success" else None)(mpvipc.send(sock, ["get_property", k]))
                     for k in ("hwdec-current", "width", "height", "container-fps", "frame-drop-count", "mute", "volume", "demuxer-cache-duration")} if t["alive"] else None
         out.append(t)
-    return {"layout": wall.layout, "audio": wall.audio, "tiles": out}
+    return {"layout": wall.layout, "sound": sorted(wall.sound), "tiles": out}
 
 
 def is_channel(url):

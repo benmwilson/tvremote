@@ -93,11 +93,11 @@ def _sock(i):
 class Wall:
     """build(url, quality, sock, extra) -> (cmd, quality); resolve(url) -> (source, player); name(url) -> a short label."""
 
-    def __init__(self, build, resolve, name, log_dir="/tmp"):
-        self.build, self.resolve, self.name, self.log_dir = build, resolve, name, log_dir
+    def __init__(self, build, resolve, name, log_dir="/tmp", volume=lambda: None):
+        self.build, self.resolve, self.name, self.log_dir, self.volume = build, resolve, name, log_dir, volume
         self.layout = None
         self.extras = []  # tiles 1..: {"url", "source", "proc", "error"}
-        self.audio = 0  # the tile that has the sound (0 = the main player)
+        self.sound = {0}  # the tiles with sound on: the main stream only, to start with. Any number can be switched on
         self.main_quality = None  # the main tile's picked label (None = Auto)
         self.saved_quality = None  # what the main stream was set to before the wall, put back when it ends
         self.lock = threading.RLock()
@@ -114,7 +114,7 @@ class Wall:
         if not self.active():
             return [], None
         args, width = window_args(self.layout, self.count(), 0)
-        return args + (["--mute=yes"] if self.audio else []), width  # a new window starts with sound: not when another tile has it
+        return args + ([] if 0 in self.sound else ["--mute=yes"]), width  # a new window starts with sound: not when it is switched off
 
     def main_wid(self):
         """The window name the main player should have right now (None when it is full screen)."""
@@ -145,7 +145,7 @@ class Wall:
     def clear(self):
         with self.lock:
             self.stop_windows()
-            self.extras, self.layout, self.audio, self.main_quality = [], None, 0, None
+            self.extras, self.layout, self.sound, self.main_quality = [], None, {0}, None
 
     def _current(self, i, t):
         p = t.get("proc")
@@ -159,7 +159,9 @@ class Wall:
             os.unlink(sock)
         except OSError:
             pass
-        extra = args + ([] if i == self.audio else ["--mute=yes"]) + ["--no-terminal"]
+        extra = args + ([] if i in self.sound else ["--mute=yes"]) + ["--no-terminal"]
+        if self.volume() is not None:
+            extra.append(f"--volume={float(self.volume()):g}")  # the level the main stream has, so switching a tile on is not a jump
         cmd, _q = self.build(t["url"], quality_for(player, t.get("quality")) or cap(player, width), sock, extra)
         log = open(os.path.join(self.log_dir, f"tvremote-tile{i}.log"), "w")
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
@@ -197,12 +199,13 @@ class Wall:
         threading.Thread(target=go, daemon=True).start()
 
     # ---- sound ----
-    def set_audio(self, i, main_sock):
-        """Give tile i the sound (and mute the rest)."""
+    def set_sound(self, i, on, main_sock):
+        """Switch tile i's sound on or off. The others are left as they are: any number of streams can be heard at once."""
         with self.lock:
-            self.audio = i if 0 <= i < self.count() else 0
-            for k in range(self.count()):
-                mpvipc.send(self.sock(k, main_sock), ["set_property", "mute", k != self.audio])
+            if not 0 <= i < self.count():
+                return
+            (self.sound.add if on else self.sound.discard)(i)
+            mpvipc.send(self.sock(i, main_sock), ["set_property", "mute", not on])
 
     # ---- the tile list ----
     def add(self, url, main_url):
@@ -220,7 +223,7 @@ class Wall:
         with self.lock:
             if 1 <= i <= len(self.extras):
                 self._kill(self.extras.pop(i - 1))
-                self.audio = 0
+                self.sound = {k if k < i else k - 1 for k in self.sound if k != i}  # the tiles after it move up one
             if not self.extras:
                 self.layout = None
 
@@ -232,7 +235,8 @@ class Wall:
             t = self.extras[i - 1]
             t["url"], new_main = main_url, t["url"]
             t["quality"], self.main_quality = self.main_quality, t.get("quality")  # a picked quality goes with its stream
-            self.audio = i if self.audio == 0 else 0 if self.audio == i else self.audio  # and so does the sound
+            a, b = 0 in self.sound, i in self.sound  # and so does the sound
+            self.sound = (self.sound - {0, i}) | ({i} if a else set()) | ({0} if b else set())
             t["source"] = self.resolve(main_url)[0]
             return new_main
 
@@ -244,4 +248,4 @@ class Wall:
                        "running": bool(t.get("proc") and t["proc"].poll() is None), "error": t.get("error"),
                        "quality": t.get("quality")}
                       for i, t in enumerate(self.extras, start=1)]
-            return {"layout": self.layout, "audio": self.audio, "tiles": tiles_, "max": MAX_TILES, "main_quality": self.main_quality}
+            return {"layout": self.layout, "sound": sorted(self.sound), "tiles": tiles_, "max": MAX_TILES, "main_quality": self.main_quality}
