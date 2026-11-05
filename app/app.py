@@ -185,7 +185,7 @@ def stop_player():
     state["proc"] = None
 
 
-_chat = {"obj": None, "pref": True}
+_chat = {"obj": None, "pref": False}  # off by default: redrawing the overlay drops about 2 frames/s on the Pi
 
 
 def chat_send(text):
