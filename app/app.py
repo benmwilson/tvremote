@@ -895,15 +895,46 @@ def wall_relayout(main_url=None):
     with lock:
         p = state["proc"]
         if url != state["url"] or state.get("wid") != wall.main_wid() or not (p and p.poll() is None):
-            start_player(url, None if wall.active() else wall.saved_quality, "refresh")
+            start_player(url, multi.quality_for(resolve(url)[1], wall.main_quality) if wall.active() else wall.saved_quality, "refresh")
     if wall.active():
         wall.start_windows()
         screen("playing")  # the names on the background may have changed
 
 
+_detected = {}  # name -> (when, answer): a streamer's sites are looked up at most once a minute
+
+
+@app.get("/api/detect")
+def api_detect():
+    """Which site is this streamer on? Looks the name up on Kick and Twitch together. `pick` is the link to use when it is clear:
+    live on only one of them, or known on only one. When it is live on both (or offline on both), the phone asks which."""
+    name = (request.args.get("name") or "").strip().lower()
+    if not re.fullmatch(r"[a-z0-9_\-]{2,25}", name):
+        return jsonify(ok=False, error="That doesn't look like a channel name."), 400
+    hit = _detected.get(name)
+    if hit and time.time() - hit[0] < 60:
+        return jsonify(hit[1])
+    urls = {"Kick": f"https://kick.com/{name}", "Twitch": f"https://www.twitch.tv/{name}"}
+    found = {}
+    ts = [threading.Thread(target=lambda s=s: found.__setitem__(s, check_live(urls[s])), daemon=True) for s in urls]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join(25)
+    matches = [{"source": s, "url": urls[s], "live": bool(found[s].get("live")), "title": found[s].get("title"),
+                "viewers": found[s].get("viewers")} for s in urls if found.get(s) is not None]
+    live = [m for m in matches if m["live"]]
+    pick = live[0] if len(live) == 1 else matches[0] if len(matches) == 1 else None
+    answer = {"ok": True, "name": name, "matches": matches, "pick": pick["url"] if pick else None}
+    for k in [k for k, v in _detected.items() if time.time() - v[0] > 300]:
+        del _detected[k]
+    _detected[name] = (time.time(), answer)
+    return jsonify(answer)
+
+
 @app.post("/api/wall")
 def api_wall():
-    """Several streams on the living-room TV: {action: add|remove|layout|audio|swap|clear, url, site, i, layout}."""
+    """Several streams on the living-room TV: {action: add|remove|layout|audio|swap|quality|clear, url, site, i, layout, quality}."""
     if tgt():
         return jsonify(ok=False, error="Only the living-room TV can show several streams at once."), 400
     d = request.get_json(silent=True) or {}
@@ -937,6 +968,17 @@ def api_wall():
         if not new_main:
             return jsonify(ok=False, error="Nothing to swap"), 400
         wall_relayout(new_main)
+    elif act == "quality":
+        label = d.get("quality") if d.get("quality") in multi.QUALITIES else None  # anything else is Auto
+        if i == 0:
+            wall.main_quality = label
+            with lock:
+                start_player(state["url"], multi.quality_for(resolve(state["url"])[1], label), "quality")
+        elif 1 <= i <= len(wall.extras):
+            wall.extras[i - 1]["quality"] = label
+            wall.start_windows()  # only this window differs, so only this one restarts
+        else:
+            return jsonify(ok=False, error="No such stream"), 400
     elif act == "clear":
         wall.clear()
         if state["url"]:

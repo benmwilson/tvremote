@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 APP = Path(__file__).resolve().parents[1] / "app"
 SHELL = {"on": True}
-STATE = {"living": "playing", "bedroom": "idle", "play_fail": ""}
+STATE = {"living": "playing", "bedroom": "idle", "play_fail": "", "wall": "0", "wall_layout": "focus"}  # wall=2..4: that many streams on the living-room screen
 INFO = {
     "living": {"name": "Living room", "kind": "pi", "connection": "Pi on HDMI", "brand": "TCL", "model": "55C803", "size": 55,
                "tv_name": "TV One", "power": "PowerOn", "input": "Roku"},
@@ -27,6 +27,17 @@ TITLE = {"living": "chan: a very long stream title that keeps going and going ðŸ
 SOURCE = {"living": "Kick", "bedroom": "YouTube"}
 
 
+def wall():
+    n = int(STATE["wall"] or 0)
+    if n < 2:
+        return None
+    others = [("omie", "Twitch", "480"), ("a_rather_long_channel_name", "Kick", None), ("xqc", "Twitch", "720")]
+    host = {"Twitch": "https://www.twitch.tv/", "Kick": "https://kick.com/"}
+    return {"layout": STATE["wall_layout"], "audio": 0, "max": 4, "main_quality": None,
+            "tiles": [{"i": i, "url": host[src] + nm, "name": nm, "source": src, "running": True, "error": None, "quality": q}
+                      for i, (nm, src, q) in enumerate(others[:n - 1], start=1)]}
+
+
 def status(tv):
     s = STATE[tv]
     if s in ("idle", "down"):
@@ -35,7 +46,9 @@ def status(tv):
             "paused": s == "paused", "position": 83.0, "duration": None if tv == "living" else 634.0,
             "quality": "1080p60,best" if tv == "living" else "1080", "volume": 60, "muted": False, "height": 1080,
             "hwdec": "v4l2m2m" if tv == "living" else "youtube", "drops": 2 if tv == "living" else None,
-            "url": "https://example.com/" + tv, "buffering": s == "buffering", "chat_ok": False}
+            "url": "https://kick.com/chan" if tv == "living" else "https://example.com/" + tv, "buffering": s == "buffering", "chat_ok": False}
+    if tv == "living":
+        base["wall"] = wall()
     if s == "starting":
         return {"running": False, "starting": True, "target": tv, "url": base["url"], "source": SOURCE[tv]}
     if s == "error":

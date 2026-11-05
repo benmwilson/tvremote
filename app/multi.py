@@ -59,6 +59,22 @@ def cap(player, width):
     return "720" if big else "480"
 
 
+QUALITIES = ("1080", "720", "480", "360")  # what a stream's picker offers, besides Auto (the window's size decides)
+
+
+def quality_for(player, label):
+    """The stream quality for a picked label, else None (Auto)."""
+    if label == "1080":  # the decoder's budget is shared: one 1080p60 stream is about all it can do, with others at lower quality
+        return "1080p60,1080p,720p60,720p,480p,worst" if player == "streamlink" else "1080"
+    if label == "720":
+        return "720p60,720p,480p,360p,worst" if player == "streamlink" else "720"
+    if label == "480":
+        return "480p,360p,160p,worst" if player == "streamlink" else "480"
+    if label == "360":
+        return "360p,160p,worst" if player == "streamlink" else "480"  # yt-dlp is limited to 1080/720/480 elsewhere
+    return None
+
+
 def rules_xml():
     """The desktop (labwc) window rules for every layout, count and tile."""
     rules = []
@@ -82,6 +98,7 @@ class Wall:
         self.layout = None
         self.extras = []  # tiles 1..: {"url", "source", "proc", "error"}
         self.audio = 0  # the tile that has the sound (0 = the main player)
+        self.main_quality = None  # the main tile's picked label (None = Auto)
         self.saved_quality = None  # what the main stream was set to before the wall, put back when it ends
         self.lock = threading.RLock()
         self._gen = 0  # a newer start makes an older, still-staggering one stop
@@ -125,11 +142,11 @@ class Wall:
     def clear(self):
         with self.lock:
             self.stop_windows()
-            self.extras, self.layout, self.audio = [], None, 0
+            self.extras, self.layout, self.audio, self.main_quality = [], None, 0, None
 
     def _current(self, i, t):
         p = t.get("proc")
-        return bool(p and p.poll() is None and t.get("started") == t["url"] and t.get("wid") == window_id(self.layout, self.count(), i))
+        return bool(p and p.poll() is None and t.get("started") == t["url"] and t.get("q_started") == t.get("quality") and t.get("wid") == window_id(self.layout, self.count(), i))
 
     def _start(self, i, t):
         source, player = self.resolve(t["url"])
@@ -140,10 +157,10 @@ class Wall:
         except OSError:
             pass
         extra = args + ([] if i == self.audio else ["--mute=yes"]) + ["--no-terminal"]
-        cmd, _q = self.build(t["url"], cap(player, width), sock, extra)
+        cmd, _q = self.build(t["url"], quality_for(player, t.get("quality")) or cap(player, width), sock, extra)
         log = open(os.path.join(self.log_dir, f"tvremote-tile{i}.log"), "w")
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        t.update(source=source, proc=proc, error=None, wid=window_id(self.layout, self.count(), i), started=t["url"])
+        t.update(source=source, proc=proc, error=None, wid=window_id(self.layout, self.count(), i), started=t["url"], q_started=t.get("quality"))
         threading.Thread(target=self._watch, args=(i, t, proc), daemon=True).start()
 
     def _watch(self, i, t, proc):
@@ -211,6 +228,7 @@ class Wall:
                 return None
             t = self.extras[i - 1]
             t["url"], new_main = main_url, t["url"]
+            t["quality"], self.main_quality = self.main_quality, t.get("quality")  # a picked quality goes with its stream
             t["source"] = self.resolve(main_url)[0]
             return new_main
 
@@ -219,6 +237,7 @@ class Wall:
             return None
         with self.lock:
             tiles_ = [{"i": i, "url": t["url"], "name": self.name(t["url"]), "source": t.get("source"),
-                       "running": bool(t.get("proc") and t["proc"].poll() is None), "error": t.get("error")}
+                       "running": bool(t.get("proc") and t["proc"].poll() is None), "error": t.get("error"),
+                       "quality": t.get("quality")}
                       for i, t in enumerate(self.extras, start=1)]
-            return {"layout": self.layout, "audio": self.audio, "tiles": tiles_, "max": MAX_TILES}
+            return {"layout": self.layout, "audio": self.audio, "tiles": tiles_, "max": MAX_TILES, "main_quality": self.main_quality}

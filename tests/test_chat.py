@@ -103,5 +103,31 @@ class Endpoint(unittest.TestCase):
         self.assertEqual(made, ["xqc", "other"])
 
 
+class Detect(unittest.TestCase):
+    def setUp(self):
+        self.client = server.app.test_client()
+        server._detected.clear()
+
+    def ask(self, kick, twitch, name="omie"):
+        answers = {"https://kick.com/" + name: kick, "https://www.twitch.tv/" + name: twitch}
+        with mock.patch.object(server, "check_live", lambda url: answers[url]):
+            return self.client.get("/api/detect?name=" + name).get_json()
+
+    def test_live_on_one_site_picks_it(self):
+        r = self.ask({"live": False}, {"live": True, "title": "hi"})
+        self.assertEqual(r["pick"], "https://www.twitch.tv/omie")
+
+    def test_known_on_only_one_site_picks_it_even_when_offline(self):
+        self.assertEqual(self.ask(None, {"live": False})["pick"], "https://www.twitch.tv/omie")
+
+    def test_live_on_both_or_offline_on_both_asks(self):
+        self.assertIsNone(self.ask({"live": True}, {"live": True}, "a1")["pick"])
+        self.assertIsNone(self.ask({"live": False}, {"live": False}, "a2")["pick"])
+
+    def test_unknown_everywhere_and_bad_names(self):
+        self.assertEqual(self.ask(None, None, "nobody")["matches"], [])
+        self.assertEqual(self.client.get("/api/detect?name=a%20b;rm").status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()

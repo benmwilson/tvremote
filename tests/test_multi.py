@@ -85,6 +85,19 @@ class WallTest(unittest.TestCase):
         send.assert_any_call(multi._sock(1), ["set_property", "mute", False])
         self.assertEqual(w.audio, 1)
 
+    def test_a_picked_quality_changes_the_stream_and_goes_with_it_on_a_swap(self):
+        self.assertEqual(multi.quality_for("streamlink", "480"), "480p,360p,160p,worst")
+        self.assertEqual(multi.quality_for("ytdlp", "720"), "720")
+        self.assertEqual((multi.quality_for("ytdlp", "1080"), multi.quality_for("streamlink", "1080")[:11]), ("1080", "1080p60,108"))
+        self.assertIsNone(multi.quality_for("streamlink", None))
+        self.assertIsNone(multi.quality_for("streamlink", "1080; rm -rf"))
+        w = wall()
+        w.add("https://kick.com/b", "https://kick.com/a")
+        w.extras[0]["quality"], w.main_quality = "720", "360"
+        w.swap(1, "https://kick.com/a")
+        self.assertEqual((w.extras[0]["quality"], w.main_quality), ("360", "720"))
+        self.assertEqual(w.status()["tiles"][0]["quality"], "360")
+
     def test_all_windows_start_together_by_default(self):
         self.assertEqual(multi.STAGGER, 0)
 

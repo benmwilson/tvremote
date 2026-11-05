@@ -144,7 +144,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .sub.warn{color:var(--warn,#ffb062)}
 #chatcard{margin-top:14px;padding:6px 8px 12px 16px}
-#wallcard{margin-top:14px}#walltiles{margin-top:6px}#chattabs{flex-wrap:wrap;margin:2px 8px 6px 0}
+#wallcard{margin-top:14px}#chattabs{flex-wrap:wrap;margin:2px 8px 6px 0}
 #chatcard #chatbox{margin-right:8px}
 .chatrow{display:flex;align-items:center;gap:4px}.chatrow .chathead{flex:1;min-width:0}
 .chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
@@ -309,10 +309,15 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #tvmute.muted{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}
 #tvmute.muted .ic{color:#ff8a8a}
 #tvpower.isoff,#tvpower.isoff .ic{background:rgba(255,107,107,.18);color:#ff8a8a;font-weight:700}#tvpower.isoff .ic{background:none}
-.wseg{display:inline-flex;gap:4px}.wseg button{min-height:36px;padding:0 12px;font-size:14px}.wseg button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
-.wtile{display:flex;align-items:center;gap:8px;padding:6px 0;min-width:0}.wtile .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wtile button{flex:none;width:44px;min-height:44px;padding:0}.wtile button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14}
-.wtile .err{color:#ff8a8a;font-size:13px}.wallfavs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.wallfavs button{min-height:36px;padding:0 12px;font-size:14px;border-radius:99px}
+.wseg{display:inline-flex;gap:6px}.wseg button{min-height:44px;min-width:44px;padding:0 14px;font-size:15px}.wseg button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
+#wallcard{padding:18px}.wh{display:flex;align-items:center;gap:12px}.wh b{display:block;font-size:18px}.wh .sub{display:block;margin-top:2px}
+.wtile{margin-top:12px;padding:12px;border-radius:14px;background:var(--card2,var(--line));min-width:0}.wtile .top{display:flex;align-items:center;gap:10px;min-width:0;min-height:44px}
+.wtile .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.wtile .ctl{display:flex;align-items:center;gap:8px;margin-top:10px}
+.wtile .ctl>*{min-height:44px}.wtile .ctl select{flex:1;min-width:0}.wtile .ctl .snd{flex:none;display:flex;align-items:center;gap:6px;padding:0 14px}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
+.wtile .top button{flex:none;width:44px;min-height:44px;padding:0}.wtile .ctl .ib{flex:none;width:44px;padding:0}.wtile .err{color:#ff8a8a;font-size:13px;margin-top:8px}
+.wtile .ctl button,.wtile .ctl select,.wtile .top button{background:var(--card)}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff)}
+.wlabel{margin:18px 2px 8px;color:var(--dim);font-size:13px;font-weight:600;letter-spacing:.02em}.wrow{display:flex;align-items:center;gap:10px;margin-top:10px}.wrow .sub{flex:1}
+.wallfavs{display:flex;flex-wrap:wrap;gap:8px}.wallfavs button{min-height:40px;padding:0 14px;font-size:14px;border-radius:99px}
 .dbmute{display:flex;gap:8px;margin:6px 0 12px}.dbmute button{flex:1;min-height:44px}
 </style>
 </head>
@@ -321,6 +326,8 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2v13.6a.9.9 0 001.4.8l10.2-6.8a.9.9 0 000-1.6L9.4 4.4A.9.9 0 008 5.2z" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor" stroke="none"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-focus" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="9" rx="1.5"/><rect x="4" y="15.5" width="4.5" height="4.5" rx="1"/><rect x="9.75" y="15.5" width="4.5" height="4.5" rx="1"/><rect x="15.5" y="15.5" width="4.5" height="4.5" rx="1"/></symbol>
 <symbol id="i-swap" viewBox="0 0 24 24"><path d="M5 8h13l-3.5-3.5M19 16H6l3.5 3.5"/></symbol>
 <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.6-5.9M20 4v5h-5"/></symbol>
 <symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4.5H6.5A1.5 1.5 0 005 6v12a1.5 1.5 0 001.5 1.5H10M15 8l4 4-4 4M19 12H9.5"/></symbol>
@@ -548,12 +555,17 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
 <div class="card hide" id="wallcard">
-  <div class="chatrow"><b>Multi-view</b><span class="sub grow" id="wallsub"></span>
-    <span class="wseg hide" id="walllayout"><button data-l="grid">Grid</button><button data-l="focus">Focus</button></span></div>
+  <div class="wh"><div class="grow"><b>Multi-view</b><span class="sub" id="wallsub"></span></div>
+    <span class="wseg hide" id="walllayout"><button data-l="grid" aria-label="Grid layout" title="Grid: equal tiles"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg></button><button data-l="focus" aria-label="Focus layout" title="Focus: one big, the rest below"><svg class="ic" aria-hidden="true"><use href="#i-focus"/></svg></button></span></div>
   <div id="walltiles"></div>
-  <form id="walladd" class="row" style="margin-top:8px"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Add a channel or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 18px">Add</button></form>
-  <div id="wallfavs" class="wallfavs"></div>
-  <button id="wallclear" class="hide" style="margin-top:8px;width:100%">Back to one stream</button>
+  <div id="walladdbox">
+    <div class="wlabel">Add a stream</div>
+    <form id="walladd" class="row"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
+    <p class="sub" id="wallhint" style="margin:10px 2px 0">A name is looked up on Kick and Twitch together.</p>
+    <div id="wallpick" class="wallfavs hide" style="margin-top:10px"></div>
+    <div id="wallfavswrap" class="hide"><div class="wlabel">From your favourites</div><div id="wallfavs" class="wallfavs"></div></div>
+  </div>
+  <button id="wallclear" class="hide" style="margin-top:14px;width:100%">Back to one stream</button>
 </div>
 <div id="err" role="status"></div>
 
@@ -1591,47 +1603,66 @@ $('chatTog').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem(
 // ---- Multi-view (Pi TV only): several streams on the screen at once ----
 const wallApi = async body => { const r = await api('/api/wall', 'POST', body); if (r && r.ok) poll(); return r; };
 let wallSig = '';
+const WALL_Q = [['', 'Auto quality'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']];
 function renderWall() {
   const cur = targets.find(t => t.id === target) || {};
   const show = cur.kind === 'pi' && !!st.running;
   $('wallcard').classList.toggle('hide', !show);
   if (!show) return;
   const w = st.wall;
-  const sig = JSON.stringify([w, st.url, st.title, favList.length]);
   $('wallclear').classList.toggle('hide', !w);
   $('walllayout').classList.toggle('hide', !w);
   if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
-  $('wallsub').textContent = w ? (w.tiles.length + 1) + ' of ' + w.max : 'Watch more than one at once';
+  $('wallsub').textContent = w ? (w.tiles.length + 1) + ' of ' + w.max + ' on screen' : 'Watch more than one at once';
+  const sig = JSON.stringify([w, st.url, st.title, favList.length]);
   if (sig === wallSig) return;
   wallSig = sig;
-  const rows = [{i: 0, name: st.title || st.url || 'Main', source: st.source}, ...(w ? w.tiles : [])];
-  const list = $('walltiles'), onWall = new Set(rows.map(r => r.url || st.url));
-  list.replaceChildren(...(w ? rows : []).map(r => {
-    const row = el('div', 'wtile'), sound = el('button', null), name = el('span', 'nm', r.name || r.url);
-    setBtn(sound, w.audio === r.i ? 'volume' : 'mute', '');
-    sound.setAttribute('aria-pressed', String(w.audio === r.i)); sound.setAttribute('aria-label', 'Sound from ' + (r.name || 'this stream'));
+  const rows = [{i: 0, name: st.title || st.url || 'Main', source: st.source, quality: w ? w.main_quality : null}, ...(w ? w.tiles : [])];
+  const onWall = new Set(rows.map(r => r.url || st.url));
+  $('walltiles').replaceChildren(...(w ? rows : []).map(r => {
+    const tile = el('div', 'wtile'), top = el('div', 'top'), ctl = el('div', 'ctl');
+    top.append(el('span', 'badge ' + r.source, r.source || ''), el('span', 'nm', r.name || r.url));
+    if (r.i) { const x = el('button'); setBtn(x, 'x', ''); x.setAttribute('aria-label', 'Remove ' + (r.name || 'this stream') + ' from the screen'); x.onclick = () => wallApi({action: 'remove', i: r.i}); top.append(x); }
+    const on = w.audio === r.i, sound = el('button', 'snd');
+    setBtn(sound, on ? 'volume' : 'mute', on ? 'Sound' : 'Muted');
+    sound.setAttribute('aria-pressed', String(on)); sound.setAttribute('aria-label', 'Sound from ' + (r.name || 'this stream'));
     sound.onclick = () => wallApi({action: 'audio', i: r.i});
-    row.append(sound, name);
-    if (r.source) row.append(el('span', 'badge ' + r.source, r.source));
-    if (r.error) row.append(el('span', 'err', r.error));
-    if (r.i) {
-      if (w.layout === 'focus') { const sw = el('button'); setBtn(sw, 'swap', ''); sw.setAttribute('aria-label', 'Make this the big one'); sw.onclick = () => wallApi({action: 'swap', i: r.i}); row.append(sw); }
-      const x = el('button'); setBtn(x, 'x', ''); x.setAttribute('aria-label', 'Remove from the screen'); x.onclick = () => wallApi({action: 'remove', i: r.i}); row.append(x);
-    }
-    return row;
+    const q = el('select'); q.setAttribute('aria-label', 'Quality for ' + (r.name || 'this stream'));
+    WALL_Q.forEach(([v, label]) => { const o = el('option', null, label); o.value = v; q.append(o); });
+    q.value = r.quality || '';
+    q.onchange = () => wallApi({action: 'quality', i: r.i, quality: q.value});
+    ctl.append(sound, q);
+    if (r.i && w.layout === 'focus') { const sw = el('button', 'ib'); setBtn(sw, 'swap', ''); sw.setAttribute('aria-label', 'Make this the big one'); sw.title = 'Make this the big one'; sw.onclick = () => wallApi({action: 'swap', i: r.i}); ctl.append(sw); }
+    tile.append(top, ctl);
+    if (r.error) tile.append(el('div', 'err', r.error));
+    return tile;
   }));
   const free = !w || w.tiles.length + 1 < w.max;
-  $('walladd').classList.toggle('hide', !free);
-  $('wallfavs').replaceChildren(...(free ? favList.filter(f => !onWall.has(f.url)).slice(0, 6).map(f => {
-    const b = el('button', null, f.name || f.url); b.onclick = () => busy(b, () => wallApi({action: 'add', url: f.url})); return b;
-  }) : []));
+  $('walladdbox').classList.toggle('hide', !free);
+  const favs = free ? favList.filter(f => !onWall.has(f.url)).slice(0, 8) : [];
+  $('wallfavswrap').classList.toggle('hide', !favs.length);
+  $('wallfavs').replaceChildren(...favs.map(f => { const b = el('button', null, f.name || f.url); b.onclick = () => busy(b, () => wallApi({action: 'add', url: f.url})); return b; }));
 }
 $('walladd').onsubmit = async e => {
   e.preventDefault();
   const v = $('wallurl').value.trim();
   if (!v) return;
-  const r = await busy($('walladd').querySelector('button'), () => wallApi({action: 'add', url: v, site}));
-  if (r && r.ok) $('wallurl').value = '';
+  $('wallpick').classList.add('hide');
+  const add = async url => { const r = await wallApi({action: 'add', url}); if (r && r.ok) $('wallurl').value = ''; return r; };
+  await busy($('walladd').querySelector('button'), async () => {
+    if (!/^[\w-]{2,25}$/.test(v)) return add(v);  // a link: the site is in it
+    const d = await fetch('/api/detect?name=' + encodeURIComponent(v)).then(x => x.json()).catch(() => null);  // a name: which site is it on?
+    if (!d || !d.ok) { err('Couldn\u2019t look that up. Try again, or paste a link.'); return {ok: false}; }
+    if (!d.matches.length) { err('Couldn\u2019t find ' + v + ' on Kick or Twitch. Paste a link if it is somewhere else.'); return {ok: false}; }
+    if (d.pick) return add(d.pick);
+    $('wallpick').replaceChildren(...d.matches.map(m => {  // on both: the person chooses
+      const b = el('button', null, v + ' on ' + m.source + (m.live ? ' (live)' : ' (offline)'));
+      b.onclick = async () => { await busy(b, () => add(m.url)); $('wallpick').classList.add('hide'); };
+      return b;
+    }));
+    $('wallpick').classList.remove('hide');
+    return {ok: true};
+  });
 };
 $('walllayout').onclick = e => { const b = e.target.closest('button[data-l]'); if (b) wallApi({action: 'layout', layout: b.dataset.l}); };
 $('wallclear').onclick = () => busy($('wallclear'), () => wallApi({action: 'clear'}));
