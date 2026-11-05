@@ -22,6 +22,7 @@ class AccessTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir, True)
         for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir),
                   mock.patch.object(server, "FAV_FILE", os.path.join(self.dir, "favourites.json")),
+                  mock.patch.object(server, "RECENT_FILE", os.path.join(self.dir, "recents.json")),
                   mock.patch.object(kick, "DATA", self.dir),
                   mock.patch.object(server.time, "sleep")):
             p.start()
@@ -114,6 +115,17 @@ class AccessTest(unittest.TestCase):
         for path in ("/", "/api/auth", "/api/targets", "/api/favourites", "/api/kick", "/api/shell", "/api/stats"):
             self.assertNotEqual(guest.get(path).status_code, 403, path)  # what the page needs to show the TVs
         self.assertNotEqual(guest.post("/api/cmd", json={"action": "pause"}).status_code, 403)
+
+    def test_a_guest_neither_sees_nor_adds_to_the_recent_list(self):
+        server.remember("https://kick.com/ben-watched-this")
+        self.assertEqual([r["url"] for r in self.owner.get("/api/recents").get_json()], ["https://kick.com/ben-watched-this"])
+        url = self.owner.post("/api/invites", json={"hours": 1}).get_json()["url"]
+        guest = server.app.test_client()
+        guest.post("/" + url.split("/", 3)[3])
+        self.assertEqual(guest.get("/api/recents").get_json(), [])
+        with mock.patch.object(server, "start_player"), mock.patch.object(server, "resolve", return_value=("Kick", "streamlink")),                 mock.patch.object(server, "switch_input"):
+            self.assertEqual(guest.post("/api/play", json={"url": "https://kick.com/guest-picked"}).status_code, 200)
+        self.assertEqual([r["url"] for r in self.owner.get("/api/recents").get_json()], ["https://kick.com/ben-watched-this"])  # unchanged
 
     def test_changing_your_own_password(self):
         accounts.add("sam", "secret1")

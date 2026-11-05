@@ -697,7 +697,9 @@ def load_recents():
 
 
 def remember(url):
-    """Keep the last few links that were played, newest first."""
+    """Keep the last few links that were played, newest first. A guest's plays are not kept (they would show up in everyone else's list)."""
+    if has_request_context() and g.user == accounts.GUEST:
+        return
     try:
         with _files_lock:
             items = [r for r in load_recents() if r.get("url") != url]
@@ -765,6 +767,8 @@ def sleep_loop():
 
 @app.get("/api/recents")
 def api_recents():
+    if g.user == accounts.GUEST:
+        return jsonify([])  # what other people played is not for someone on a guest link
     return jsonify(load_recents())
 
 
