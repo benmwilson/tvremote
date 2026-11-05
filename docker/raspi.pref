@@ -1,0 +1,7 @@
+Package: libavcodec* libavformat* libavutil* libswscale* libswresample* libavfilter* libavdevice* libpostproc* libdrm*
+Pin: origin archive.raspberrypi.com
+Pin-Priority: 1001
+
+Package: *
+Pin: origin archive.raspberrypi.com
+Pin-Priority: 100

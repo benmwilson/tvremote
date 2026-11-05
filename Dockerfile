@@ -1,9 +1,20 @@
 FROM debian:trixie-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      mpv cec-utils v4l-utils wlr-randr python3 python3-venv pipx ca-certificates curl \
-      libpipewire-0.3-0 pipewire-bin \
+# Raspberry Pi repo: its ffmpeg (+rpt) has the v4l2m2m hwdec patches that plain Debian ffmpeg lacks
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+    && curl -fsSL https://archive.raspberrypi.com/debian/raspberrypi.gpg.key \
+       | gpg --dearmor -o /usr/share/keyrings/raspberrypi.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/raspberrypi.gpg] http://archive.raspberrypi.com/debian trixie main" \
+       > /etc/apt/sources.list.d/raspi.list \
     && rm -rf /var/lib/apt/lists/*
+COPY docker/raspi.pref /etc/apt/preferences.d/raspi
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      mpv cec-utils v4l-utils wlr-randr python3 python3-venv pipx procps \
+      libpipewire-0.3-0 pipewire-bin \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-cache policy libavcodec61 \
+    && dpkg -s libavcodec61 | grep -q '^Version:.*rpt'
 
 # Latest streamlink / yt-dlp (apt's yt-dlp comes in via mpv but is too old; venv comes first on PATH)
 RUN python3 -m venv /opt/venv \
