@@ -137,6 +137,15 @@ class Endpoints(unittest.TestCase):
             server.TV_ENABLED["living"] = False
             self.assertEqual([c["id"] for c in self.admin.get("/api/targets").get_json()], ["bedroom"])
 
+    def test_refresh_asks_every_tv_again_and_returns_the_cards(self):
+        server.ROKU_IPS.update(living=LIVING["ip"], bedroom="")
+        with mock.patch.object(server, "fetch_roku") as fetch, mock.patch.object(server.cards, "refresh_now") as again:
+            r = self.admin.post("/api/targets/refresh")
+        self.assertEqual(r.status_code, 200)
+        self.assertIsInstance(r.get_json(), list)
+        fetch.assert_called_once_with("living")  # only TVs that have a Roku
+        again.assert_called_once()
+
     def test_the_roku_test_presses_info_only_and_only_for_a_home_network_address(self):
         with mock.patch.object(roku, "key") as key:
             self.assertEqual(self.admin.post("/api/targets/test", json={"roku": "8.8.8.8"}).status_code, 400)

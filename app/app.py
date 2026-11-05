@@ -137,7 +137,7 @@ SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/se
 GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
              "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
              "/api/shell", "/api/stats", "/api/chat/feed", "/api/sleep"}
-GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/logout"}
+GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/logout"}
 
 
 def guest_blocked():
@@ -1365,6 +1365,18 @@ def api_shell_set():
         else:
             HOME.stop()
     return jsonify(shell_state())
+
+
+@app.post("/api/targets/refresh")
+def api_targets_refresh():
+    """Ask every TV again right now (the cards otherwise refresh in the background every few seconds, Roku details every 15 s)."""
+    ts = [threading.Thread(target=fetch_roku, args=(t,), daemon=True) for t in ROKU_IPS if ROKU_IPS.get(t)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join(6)
+    cards.refresh_now()
+    return api_targets()
 
 
 @app.get("/api/targets")

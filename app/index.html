@@ -342,7 +342,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 
 <section id="view-all" class="hide">
   <div class="bar"><h2 id="allhead">Your TVs</h2>
-    <button id="editTvs" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span>Edit</span></button></div>
+    <span style="display:flex;gap:4px"><button id="refreshTvs" aria-label="Refresh the TVs" title="Refresh the TVs"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg><span>Refresh</span></button>
+    <button id="editTvs" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span>Edit</span></button></span></div>
   <div id="cards"></div>
 </section>
 
@@ -1551,6 +1552,10 @@ function renderCards() {
   box.replaceChildren(...vis.map(c => cardEl(c, t => { location.hash = '#/tv/' + encodeURIComponent(t.id); })));
 }
 $('editTvs').onclick = () => { editing = !editing; renderCards(); };
+$('refreshTvs').onclick = async () => {
+  const r = await busy($('refreshTvs'), () => api('/api/targets/refresh', 'POST', {}));
+  if (Array.isArray(r)) { cardSig = ''; loadTargets(); }
+};
 
 // off = a Roku that reports standby / screen off, or one that doesn't answer at all (powered down at the wall)
 const tvOff = c => !!c.roku && (c.reachable === false || (!!c.power && c.power !== 'PowerOn'));
