@@ -38,6 +38,12 @@ Remote on the Home Screen: open `http://<pi-ip>:8765` in Safari → Share → Ad
 
 Set `PASSWORD=<something>` in `~/tvremote/.env` on the Pi, then `docker compose up -d`. The remote asks for it (any username; Safari can save it). In the Shortcut, end the URL with `&t=<password>` after the encoded link: `http://<pi-ip>:8765/play?u=<encoded>&t=<password>`. Plain HTTP on your LAN, so it keeps casual users out, not a determined sniffer.
 
+## Roku TVs, Chromecast and input switching
+
+- Set `ROKU_LIVING` / `ROKU_BEDROOM` (TV addresses) in `.env` to get a TV card with power, volume, input and navigation buttons. On each TV: Settings → System → Advanced system settings → Control by mobile apps → Network access → Permissive.
+- Set `INPUT_LIVING` / `INPUT_BEDROOM` (e.g. `HDMI1`) and the TV wakes and switches to that input whenever you play on it.
+- The bedroom target is a Chromecast found by mDNS (name configurable in `/data/targets.json`). Pick the TV at the top of the remote, or add `&target=bedroom` to the Shortcut URL.
+
 ## Sources
 
 | Source | Player |

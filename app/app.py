@@ -316,6 +316,20 @@ def play_get():
     return redirect(f"/?target={c.id}" if c else "/", code=303)
 
 
+def switch_input(tid):
+    """Wake the Roku TV and select this target's HDMI input (e.g. TVREMOTE_INPUT_BEDROOM=HDMI2)."""
+    ip, hdmi = ROKU_IPS.get(tid), INPUTS.get(tid)
+    if not (ip and hdmi):
+        return
+    try:
+        if roku.info(ip).get("power") != "PowerOn":
+            roku.key(ip, "PowerOn")
+            time.sleep(6)  # TV needs a few seconds before it accepts an input change
+        roku.key(ip, "Input" + hdmi)
+    except (roku.RokuError, OSError):
+        pass  # best effort: playback already started
+
+
 def play_on(c, url, quality):
     """Start `url` on the Chromecast target `c`, or on the Pi when c is None."""
     if c:
@@ -323,6 +337,7 @@ def play_on(c, url, quality):
     else:
         with lock:
             start_player(url, quality)
+    threading.Thread(target=switch_input, args=(c.id if c else "living",), daemon=True).start()
 
 
 @app.post("/api/play")
@@ -452,6 +467,10 @@ def api_targets():
     for t in out:
         t["roku"] = bool(ROKU_IPS.get(t["id"]))
     return jsonify(out)
+
+
+INPUTS = {"living": os.environ.get("TVREMOTE_INPUT_LIVING", ""),
+          "bedroom": os.environ.get("TVREMOTE_INPUT_BEDROOM", "")}
 
 
 def roku_ip():
