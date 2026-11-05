@@ -258,6 +258,13 @@ class ControlledStreamTest(unittest.TestCase):
             self.post({"action": "volume", "value": 40})
         self.assertEqual([s for s, c in sent if c[0] == "set_property"], [multi._sock(1)])
 
+    def test_the_volume_bar_is_drawn_in_the_controlled_streams_window(self):
+        sent = []
+        with mock.patch.object(self.server, "tgt", return_value=None),                 mock.patch.object(self.server.mpvipc, "send", lambda sock, cmd, timeout=1.0: sent.append((sock, cmd)) or {"error": "success", "data": 40}):
+            self.post({"action": "volume", "value": 40})
+        shown = [s for s, c in sent if c[0] == "show-text"]
+        self.assertEqual(shown, [multi._sock(1)])  # not the first window's
+
     def test_mute_switches_the_controlled_streams_sound(self):
         with mock.patch.object(self.server, "tgt", return_value=None), mock.patch.object(multi.mpvipc, "send") as send:
             self.post({"action": "mute"})  # it had no sound: now it has

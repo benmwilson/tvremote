@@ -974,6 +974,7 @@ def api_cmd():
     on_wall = wall.active() and action in ("volume", "volume_delta", "mute", "unmute")
     if on_wall and action in ("mute", "unmute"):  # the stream the card controls: its sound on or off (the same switch as its speaker)
         wall.set_sound(wall.selected, action == "unmute" or wall.selected not in wall.sound, SOCK)
+        osd_volume(sel_info()[3])
         return jsonify(ok=True)
     if on_wall:  # the level of the stream the card controls only: with several heard at once, each has its own
         r = mpvipc.send(sel_info()[3], cmd)
@@ -988,8 +989,8 @@ def api_cmd():
         if data.get("final") or time.time() - _vol_saved["t"] > 2:  # a drag sends many: write the file when it ends, or every few seconds
             _vol_saved["t"] = time.time()
             save_settings()
-    if ok and action in ("volume", "volume_delta", "mute", "unmute") and sel_info()[3] == SOCK:  # the on-screen level is the main window's
-        osd_volume()
+    if ok and action in ("volume", "volume_delta", "mute", "unmute"):
+        osd_volume(sel_info()[3])  # in the window of the stream being controlled
     return jsonify(ok=ok)
 
 
@@ -1306,11 +1307,16 @@ def volume_text(vol, muted):
     return "Muted" if muted else "Volume %d%%  %s%s" % (v, "█" * (v // 5), "░" * (20 - v // 5))
 
 
-def osd_volume():
-    """Show the volume on the TV for 1.5 s."""
-    vol, muted = prop("volume"), prop("mute")
+def osd_volume(sock=SOCK):
+    """Show the volume on the TV for 1.5 s, in the window whose volume it is (with several streams, each has its own)."""
+    if sock == SOCK:
+        vol, muted = prop("volume"), prop("mute")
+        if vol is not None:
+            mpv(["show-text", volume_text(vol, muted), 1500])
+        return
+    vol, muted = sprop(sock, "volume"), sprop(sock, "mute")
     if vol is not None:
-        mpv(["show-text", volume_text(vol, muted), 1500])
+        mpvipc.send(sock, ["show-text", volume_text(vol, muted), 1500])
 
 
 PROPS = {
