@@ -40,14 +40,22 @@ _live_cache = {}
 
 
 @app.before_request
-def require_password():
-    """Basic auth (any username) when TVREMOTE_PASSWORD is set; /play also takes ?t=<password> for the Shortcut."""
-    if not PASSWORD or request.remote_addr == "127.0.0.1":  # localhost: container healthcheck
+def guard():
+    """CSRF check, then Basic auth when TVREMOTE_PASSWORD is set (/play also takes ?t=<password>)."""
+    token_ok = bool(PASSWORD) and hmac.compare_digest(request.args.get("t", "").encode(), PASSWORD.encode())
+    origin = request.headers.get("Origin")
+    if request.method != "GET" and origin and urlparse(origin).netloc != request.host:
+        return Response("Cross-site request blocked", 403)
+    if request.path == "/play" and request.headers.get("Sec-Fetch-Site") == "cross-site" and not token_ok:
+        return Response("Cross-site request blocked", 403)
+    if not PASSWORD:
+        return None
+    if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
     a = request.authorization
     if a and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
         return None
-    if request.path == "/play" and hmac.compare_digest(request.args.get("t", "").encode(), PASSWORD.encode()):
+    if request.path == "/play" and token_ok:
         return None
     return Response("Password required", 401, {"WWW-Authenticate": 'Basic realm="TV Remote"'})
 
