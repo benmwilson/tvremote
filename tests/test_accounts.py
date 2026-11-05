@@ -76,6 +76,26 @@ class AccountsTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.dir, "favourites.sam.json")))
 
 
+    def test_a_new_password_or_a_removed_and_recreated_name_ends_old_logins(self):
+        owner, _ = self.login("", "owner-pw")
+        owner.post("/api/accounts", json={"name": "sam", "password": "secret1"})
+        sam, _ = self.login("sam", "secret1")
+        self.assertEqual(sam.get("/api/favourites").status_code, 200)
+        owner.post("/api/accounts", json={"name": "sam", "password": "another1"})  # password changed
+        self.assertEqual(sam.get("/api/favourites").status_code, 401)
+        sam, _ = self.login("sam", "another1")
+        owner.delete("/api/accounts", json={"name": "sam"})
+        owner.post("/api/accounts", json={"name": "sam", "password": "another1"})  # same name again
+        self.assertEqual(sam.get("/api/favourites").status_code, 401)
+
+    def test_an_unknown_session_is_nobody_not_the_owner(self):
+        self.assertIsNone(server.session_user("not-a-token"))
+        self.assertIsNone(server.session_user(""))
+        c = server.app.test_client()
+        c.set_cookie("tv_auth", "not-a-token")
+        self.assertEqual(c.get("/api/favourites").status_code, 401)
+
+
 class ChatTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()

@@ -42,6 +42,14 @@ def valid_name(name):
     return bool(re.fullmatch(r"[a-z0-9_-]{2,20}", name or "")) and name != OWNER
 
 
+def _write(d):
+    tmp = _file() + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # hashes are for this app only
+    with os.fdopen(fd, "w") as f:
+        json.dump(d, f)
+    os.replace(tmp, _file())
+
+
 def add(name, password):
     """Create an account (or change its password). Raises ValueError for a bad name or a short password."""
     name = (name or "").strip().lower()
@@ -53,11 +61,7 @@ def add(name, password):
     with _lock:
         d = _load()
         d[name] = {"salt": salt, "hash": _hash(password, salt)}
-        tmp = _file() + ".tmp"
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            json.dump(d, f)
-        os.replace(tmp, _file())
+        _write(d)
     return name
 
 
@@ -66,9 +70,7 @@ def remove(name):
         d = _load()
         if d.pop(name, None) is None:
             return False
-        with open(_file() + ".tmp", "w") as f:
-            json.dump(d, f)
-        os.replace(_file() + ".tmp", _file())
+        _write(d)
     return True
 
 

@@ -92,8 +92,9 @@ def guard():
         return None
     if request.path in ("/login", "/logout"):
         return None
-    if valid_session(request.cookies.get("tv_auth", "")):
-        g.user = session_user(request.cookies.get("tv_auth", ""))
+    who = session_user(request.cookies.get("tv_auth", ""))  # one read of the session: valid and whose, together
+    if who:
+        g.user = who
         return None
     a = request.authorization
     wants_page = "text/html" in request.headers.get("Accept", "")
@@ -156,15 +157,31 @@ def _exp(v):
 
 
 def session_user(tok):
+    """Who a login cookie belongs to ("owner" or an account name), or None when it is not a live session."""
+    if not tok or _h(tok) in _revoked:
+        return None
     v = _sess_load().get(_h(tok))
-    return v["user"] if isinstance(v, dict) else accounts.OWNER
+    if v is None or _exp(v) <= time.time():
+        return None
+    if not isinstance(v, dict):
+        return accounts.OWNER
+    return v["user"] if accounts.exists(v["user"]) else None
 
 
 def valid_session(tok):
-    if not tok or _h(tok) in _revoked:
-        return False
-    v = _sess_load().get(_h(tok), 0)
-    return _exp(v) > time.time() and (not isinstance(v, dict) or accounts.exists(v["user"]))  # a removed account's sessions end
+    return session_user(tok) is not None
+
+
+def drop_user_sessions(name):
+    """End every login of an account (it was removed or its password changed)."""
+    with _sessions_lock:
+        d = _sess_load()
+        gone = [k for k, v in d.items() if isinstance(v, dict) and v.get("user") == name]
+        for k in gone:
+            del d[k]
+            _revoked.add(k)
+        if gone:
+            _sess_save(d)
 
 
 def drop_session(tok):
@@ -204,7 +221,7 @@ def login():
     err = ""
     if request.method == "POST":
         who = request.form.get("username", "").strip().lower()
-        if accounts.exists(who) and accounts.verify(who, request.form.get("password", "")):
+        if accounts.verify(who, request.form.get("password", "")):  # always runs the slow hash, even for an unknown name
             user = who
         elif not accounts.exists(who) and hmac.compare_digest(request.form.get("password", "").encode(), PASSWORD.encode()):
             user = accounts.OWNER  # as before: any other username with the password
@@ -1480,9 +1497,10 @@ def accounts_add():
     owner_only()
     data = request.get_json(silent=True) or {}
     try:
-        accounts.add(data.get("name"), data.get("password"))
+        name = accounts.add(data.get("name"), data.get("password"))
     except ValueError as e:
         return jsonify(ok=False, error=str(e)), 400
+    drop_user_sessions(name)  # a new password signs that account out everywhere
     return accounts_list()
 
 
@@ -1491,6 +1509,7 @@ def accounts_del():
     owner_only()
     name = str((request.get_json(silent=True) or {}).get("name", ""))
     if accounts.remove(name):
+        drop_user_sessions(name)  # re-creating the name later must not revive old logins
         for p in (fav_file(name), kick._path(name)):  # its favourites and Kick link go with it
             try:
                 os.remove(p)
