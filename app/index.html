@@ -330,6 +330,12 @@ const $ = id => document.getElementById(id);
 let site = 'kick', st = {}, dragging = false, qualFor = null, favList = [], targets = [];
 let target = '';  // the TV shown in the One TV view; set by the router
 const TV_COLOURS = ['#62b0ff', '#ff8aa8', '#5ad6b0', '#b3a2ff'];
+// While something plays, the remote takes the site's colour (Kick green, Twitch purple, YouTube red); otherwise the TV's own colour.
+const SRC_COLOURS = {Kick: '#53fc18', Twitch: '#a970ff', YouTube: '#ff3b3b'};
+function accent() {
+  const c = (st.running || st.starting) && SRC_COLOURS[st.source];
+  $('view-tv').style.setProperty('--tv', c || tvColour(target));
+}
 const tvColour = id => TV_COLOURS[Math.max(0, targets.findIndex(t => t.id === id)) % TV_COLOURS.length];
 const ic = n => '<svg class="ic" aria-hidden="true"><use href="#i-' + n + '"/></svg>';
 const setBtn = (b, icon, label) => { b.innerHTML = ic(icon) + (label ? '<span>' + label + '</span>' : ''); };  // static strings only
@@ -426,6 +432,7 @@ const fmt = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600
 
 function render() {
   const run = st.running;
+  accent();
   $('src').textContent = run || st.starting ? (st.source || 'Other') : 'Idle';
   $('src').className = 'badge ' + (st.source || '');
   $('live').classList.toggle('hide', !(run && st.live));
@@ -895,7 +902,7 @@ function tvInfo() {  // the TV details in the One TV view come from the same cac
   $('tvctl').classList.toggle('off', off);
   $('tvoffsub').textContent = cur.reachable === false ? "It isn't answering. Check it has power, then tap Turn on."
     : st.running ? 'The stream keeps playing behind the black screen.' : 'Turn it on to watch. Playing something also wakes it.';
-  $('view-tv').style.setProperty('--tv', tvColour(target));
+  accent();
   $('tvctl').classList.toggle('hide', !cur.roku);
   $('tvhead').classList.toggle('hide', !cur.roku);
   const state = cur.reachable === false ? "can't reach" : POWER[cur.power] || cur.power;
