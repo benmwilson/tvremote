@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """TV Remote: web controller for mpv / streamlink on the Pi."""
+import hashlib
 import hmac
 import html
 import json
 import os
 import re
+import secrets
 import signal
 import socket
 import subprocess
@@ -86,7 +88,7 @@ def guard():
         return None
     if request.path in ("/login", "/logout"):
         return None
-    if hmac.compare_digest(request.cookies.get("tv_auth", "").encode(), session_token().encode()):
+    if valid_session(request.cookies.get("tv_auth", "")):
         return None
     a = request.authorization
     if a and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
@@ -98,9 +100,54 @@ def guard():
     return Response("Password required", 401, {"WWW-Authenticate": 'Basic realm="TV Remote"'})
 
 
-def session_token():
-    """What the login cookie holds: a signature of the password, so changing the password logs everyone out."""
-    return hmac.new(PASSWORD.encode(), b"tvremote-session", "sha256").hexdigest()
+SESSION_DAYS = 180
+_sessions_lock = threading.Lock()
+
+
+def _sess_file():
+    return os.path.join(DATA, "sessions.json")
+
+
+def _sess_load():
+    try:
+        with open(_sess_file()) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _sess_save(d):
+    try:
+        with open(_sess_file() + ".tmp", "w") as f:
+            json.dump(d, f)
+        os.replace(_sess_file() + ".tmp", _sess_file())
+    except OSError:
+        pass  # sessions then last until the next restart
+
+
+def _h(tok):
+    return hashlib.sha256(tok.encode()).hexdigest()  # only hashes are stored, so the file can't be used as a cookie
+
+
+def new_session():
+    """A random token for one login; the server remembers it (hashed) until it expires or the user logs out."""
+    tok = secrets.token_urlsafe(32)
+    with _sessions_lock:
+        d = {k: v for k, v in _sess_load().items() if v > time.time()}
+        d[_h(tok)] = time.time() + SESSION_DAYS * 86400
+        _sess_save(d)
+    return tok
+
+
+def valid_session(tok):
+    return bool(tok) and _sess_load().get(_h(tok), 0) > time.time()
+
+
+def drop_session(tok):
+    with _sessions_lock:
+        d = _sess_load()
+        if d.pop(_h(tok), None) is not None:
+            _sess_save(d)
 
 
 def safe_next(n):
@@ -127,7 +174,7 @@ def login():
     if request.method == "POST":
         if hmac.compare_digest(request.form.get("password", "").encode(), PASSWORD.encode()):
             r = redirect(nxt, 303)
-            r.set_cookie("tv_auth", session_token(), max_age=180 * 86400, httponly=True, samesite="Lax")
+            r.set_cookie("tv_auth", new_session(), max_age=SESSION_DAYS * 86400, httponly=True, samesite="Lax")
             return r
         time.sleep(0.8)  # slows guessing
         err = "Wrong password"
@@ -137,6 +184,7 @@ def login():
 
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
+    drop_session(request.cookies.get("tv_auth", ""))
     r = redirect("/login", 303)
     r.delete_cookie("tv_auth")
     return r

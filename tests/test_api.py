@@ -2,6 +2,8 @@ import os
 import sys
 import tempfile
 import time
+import shutil
+import os
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -412,7 +414,9 @@ class ShellFlow(unittest.TestCase):
 
     def test_login_page_cookie_and_logout(self):
         c = server.app.test_client()
-        with mock.patch.object(server, "PASSWORD", "pw123"), mock.patch.object(server.time, "sleep"):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        with mock.patch.object(server, "PASSWORD", "pw123"), mock.patch.object(server.time, "sleep"), mock.patch.object(server, "DATA", d):
             r = c.get("/", headers={"Accept": "text/html"})
             self.assertEqual((r.status_code, r.headers["Location"].split("?")[0]), (303, "/login"))
             self.assertEqual(c.get("/api/favourites").status_code, 401)  # scripts still get a plain 401
@@ -423,8 +427,12 @@ class ShellFlow(unittest.TestCase):
             self.assertEqual((r.status_code, r.headers["Location"]), (303, "/"))  # no open redirect
             self.assertIn("HttpOnly", r.headers["Set-Cookie"])
             self.assertEqual(c.get("/api/auth").get_json(), {"required": True})  # cookie is now set
+            old = c.get_cookie("tv_auth").value
             c.get("/logout")
             self.assertEqual(c.get("/api/favourites").status_code, 401)
+            c.set_cookie("tv_auth", old)  # a copied cookie is dead after logout
+            self.assertEqual(c.get("/api/favourites").status_code, 401)
+            self.assertNotIn(old, open(os.path.join(d, "sessions.json")).read())  # only hashes on disk
 
     def test_refresh_has_its_own_screen_and_quality_keeps_its_own(self):
         server.state.update(url="https://kick.com/chan", quality="1080p60,best")
