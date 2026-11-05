@@ -152,7 +152,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .chips button[aria-pressed=true]{background:var(--tv);color:#0b0e14;font-weight:700}
 .sleeprow{display:flex;align-items:center;gap:12px}.sleeprow select{flex:1;min-width:0}
 .fav.off{opacity:.62}
-.badge.chip{border:0;font:inherit;font-size:13px;font-weight:700;cursor:pointer;margin-right:6px}
+.badge.chip{min-height:0;height:auto;padding:3px 10px;border:0;border-radius:99px;gap:0;display:inline-flex;align-items:center;font:inherit;font-size:12px;font-weight:700;line-height:1.35;cursor:pointer}
+.badge.chip::before{content:"";position:absolute;inset:-10px -3px}  /* a bigger tap area than the small pill */
 .sortbtn{margin-left:auto;margin-right:8px;min-height:44px;padding:0 14px;background:none;color:var(--dim);font-size:14px;border-radius:12px}
 .sortbtn[aria-pressed=true]{background:var(--card2,#222a38);color:var(--text,#fff)}
 .fav .mv{position:absolute;right:0;top:0;display:flex}
