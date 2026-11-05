@@ -244,6 +244,17 @@ class LiveFacts(unittest.TestCase):
         self.assertEqual((data["game"], data["live_for"]), ("GTA V", 3700))
 
 
+class StreamInfoCache(unittest.TestCase):
+    def test_old_entries_are_dropped_when_a_new_one_is_added(self):
+        server._qcache.clear()
+        self.addCleanup(server._qcache.clear)
+        server._qcache["https://kick.com/old"] = (server.time.time() - 3600, ["720p"], {})
+        out = '{"streams": {"best": {}, "1080p60": {}}, "metadata": {}}'
+        with mock.patch.object(server.subprocess, "run", return_value=mock.Mock(stdout=out)):
+            self.assertEqual(server.sl_info("https://kick.com/new")[0], ["1080p60"])
+        self.assertEqual(list(server._qcache), ["https://kick.com/new"])
+
+
 class YoutubeLiveCheck(unittest.TestCase):
     URL = "https://www.youtube.com/watch?v=abc12345678"
 
@@ -484,17 +495,17 @@ class ShellFlow(unittest.TestCase):
             tok = server.new_session("ben")
             with mock.patch.object(server, "_sess_save"):  # the disk write fails: logout must still work
                 server.drop_session(tok)
-            self.assertFalse(server.valid_session(tok))
+            self.assertIsNone(server.session_user(tok))
             before = len(server._revoked)
             for junk in ("a", "b", "c"):
                 server.drop_session(junk)
             self.assertEqual(len(server._revoked), before)  # unknown tokens are not remembered
             accounts.add("amy", "secret1")
             tok2 = server.new_session("amy")
-            self.assertTrue(server.valid_session(tok2))
+            self.assertEqual(server.session_user(tok2), "amy")
             accounts.remove("amy")  # a removed account's logins end
-            self.assertFalse(server.valid_session(tok2))
-            self.assertFalse(server.valid_session("not-a-token"))
+            self.assertIsNone(server.session_user(tok2))
+            self.assertIsNone(server.session_user("not-a-token"))
 
     def test_refresh_has_its_own_screen_and_quality_keeps_its_own(self):
         server.state.update(url="https://kick.com/chan", quality="1080p60,best")

@@ -55,7 +55,7 @@ def role(name):
         return "admin"
     if name == GUEST:
         return "guest"
-    return _load().get(name, {}).get("role", "user") if name in _load() else "user"
+    return _load().get(name, {}).get("role", "user")  # one read of users.json (this used to read it twice)
 
 
 def is_owner(name):

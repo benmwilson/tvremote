@@ -305,10 +305,6 @@ def drop_guest(gid):
         return bool(gone)
 
 
-def valid_session(tok):
-    return session_user(tok) is not None
-
-
 def drop_user_sessions(name):
     """End every login of an account (it was removed or its password changed)."""
     with _sessions_lock:
@@ -389,8 +385,9 @@ def api_auth():
     if g.user == accounts.GUEST:
         v = _sess_load().get(_h(request.cookies.get("tv_auth", ""))) or {}
         info = {"guest_until": v.get("exp"), "label": v.get("label", "")}
-    return jsonify(required=auth_required(), user=g.user, owner=accounts.is_owner(g.user), role=accounts.role(g.user),
-                   admin=accounts.role(g.user) == "admin", guest=g.user == accounts.GUEST, **info)
+    role = accounts.role(g.user)
+    return jsonify(required=auth_required(), user=g.user, owner=accounts.is_owner(g.user), role=role,
+                   admin=role == "admin", guest=g.user == accounts.GUEST, **info)
 
 
 # ---------- routing ----------
@@ -739,7 +736,10 @@ def sl_info(url):
         streams, meta = [], {}
     order = [s for s in streams if s not in ("worst", "best")][::-1]
     if order:  # don't cache failures
-        _qcache[url] = (time.time(), order, meta)
+        now = time.time()
+        for k in [k for k, v in _qcache.items() if now - v[0] > 600]:
+            del _qcache[k]  # the lookup only trusts 2 minutes, so anything older is dead weight
+        _qcache[url] = (now, order, meta)
     return order, meta
 
 
