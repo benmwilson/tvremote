@@ -678,9 +678,11 @@ def switch_input(tid):
         if info.get("power") != "PowerOn":
             roku.key(ip, "PowerOn")
             time.sleep(6)  # TV needs a few seconds before it accepts an input change
+            fetch_roku(tid)  # so the remote stops saying "off" now, not at the next scheduled look
         elif info.get("app_id") == "tvinput." + hdmi.lower():
             return  # already on it: re-selecting relaunches the input
         roku.key(ip, "Input" + hdmi)
+        fetch_roku(tid)
     except (roku.RokuError, OSError) as e:
         app.logger.warning("Input switch failed for %s (%s, %s): %s", tid, ip, hdmi, e)  # playback already started: best effort, but say why
 

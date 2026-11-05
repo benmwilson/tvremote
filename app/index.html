@@ -1670,7 +1670,7 @@ $('refreshTvs').onclick = async () => {
 const tvOff = c => !!c.roku && (c.reachable === false || (!!c.power && c.power !== 'PowerOn'));
 function tvInfo() {  // the TV details in the One TV view come from the same cached card
   const cur = targets.find(t => t.id === target) || {};
-  const off = tvOff(cur);
+  const off = tvOff(cur) && !st.starting;  // a start wakes the TV: don't call it off while that is happening
   $('tvoff').classList.toggle('hide', !off);
   $('now').classList.toggle('off', off);
   $('tvctl').classList.toggle('off', off);
