@@ -35,7 +35,9 @@ def _tag(xml, name):
 def info(ip):
     xml = _call(ip, "/query/device-info")
     app = re.search(r"<app[^>]*>([^<]+)<", _call(ip, "/query/active-app"))
-    return {"name": _tag(xml, "user-device-name"), "model": _tag(xml, "model-number"),
+    size = _tag(xml, "screen-size")
+    return {"name": _tag(xml, "user-device-name"), "brand": _tag(xml, "vendor-name"),
+            "model": _tag(xml, "model-name"), "size": int(size) if size and size.isdigit() else None,
             "power": _tag(xml, "power-mode"), "app": app.group(1) if app else None}
 
 
