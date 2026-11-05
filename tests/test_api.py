@@ -410,6 +410,22 @@ class ShellFlow(unittest.TestCase):
             time.sleep(0.1)
             off.assert_called_once_with("living")
 
+    def test_login_page_cookie_and_logout(self):
+        c = server.app.test_client()
+        with mock.patch.object(server, "PASSWORD", "pw123"), mock.patch.object(server.time, "sleep"):
+            r = c.get("/", headers={"Accept": "text/html"})
+            self.assertEqual((r.status_code, r.headers["Location"].split("?")[0]), (303, "/login"))
+            self.assertEqual(c.get("/api/favourites").status_code, 401)  # scripts still get a plain 401
+            self.assertEqual(c.get("/api/favourites", headers={"Authorization": "Basic " + __import__("base64").b64encode(b":pw123").decode()}).status_code, 200)
+            self.assertEqual(c.post("/login", data={"password": "nope"}).status_code, 401)
+            self.assertEqual(c.get("/api/favourites").status_code, 401)
+            r = c.post("/login", data={"password": "pw123", "next": "//evil.example"})
+            self.assertEqual((r.status_code, r.headers["Location"]), (303, "/"))  # no open redirect
+            self.assertIn("HttpOnly", r.headers["Set-Cookie"])
+            self.assertEqual(c.get("/api/auth").get_json(), {"required": True})  # cookie is now set
+            c.get("/logout")
+            self.assertEqual(c.get("/api/favourites").status_code, 401)
+
     def test_favourites_can_be_reordered(self):
         favs = [{"name": n, "url": "https://kick.com/" + n, "source": "Kick"} for n in "abc"]
         saved = []

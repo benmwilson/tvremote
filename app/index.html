@@ -132,6 +132,8 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 .fav .fhead b{margin:0;padding:0;min-width:0;flex:1}
 .fav>.iconlink{position:absolute;right:0;bottom:0}
 .fav .badge{margin-right:8px}
+#logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
+.sub.warn{color:var(--warn,#ffb062)}
 .sortbtn{margin-left:auto;margin-right:8px;min-height:44px;padding:0 14px;background:none;color:var(--dim);font-size:14px;border-radius:12px}
 .sortbtn[aria-pressed=true]{background:var(--card2,#222a38);color:var(--text,#fff)}
 .fav .mv{position:absolute;right:0;top:0;display:flex}
@@ -201,7 +203,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
 <header>
   <button id="back" class="hide" aria-label="Back to all TVs"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg>All TVs</button>
   <h1>TV Remote</h1><span class="grow"></span>
-  <span id="dot" role="img" aria-label="Connection to the Pi"></span>
+  <a id="logout" class="hide" href="/logout" aria-label="Log out" title="Log out"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg></a><span id="dot" role="img" aria-label="Connection to the Pi"></span>
 </header>
 
 <section id="view-all" class="hide">
@@ -293,7 +295,7 @@ input[type=text]{width:100%;padding:0 14px;min-height:52px}
     <button id="shellrow" class="tvrow hide" role="switch" aria-checked="true" style="margin:0 0 6px">
   <div class="grow"><b>Home screen on the TV</b><span class="sub" id="shellsub">Checking&hellip;</span></div><span class="sw"></span></button>
     <button id="statsrow" class="tvrow" role="switch" aria-checked="false" style="margin:0 0 6px">
-  <div class="grow"><b>Stats on the TV</b><span class="sub">Dropped frames, buffer and fps in the corner. Redraws every 2 s, so it can cost a frame or two: leave it off for normal watching.</span></div><span class="sw"></span></button>
+  <div class="grow"><b>Stats on the TV</b><span class="sub warn">Warning: this drops frames while it is on. Dropped frames, buffer and fps in the corner, redrawn every 2 s. Use it to diagnose, then switch it off.</span></div><span class="sw"></span></button>
     <h3>Player</h3><table id="d-player"></table>
     <h3>mpv</h3><table id="d-mpv"></table>
     <h3>Versions</h3><table id="d-ver"></table>
@@ -641,6 +643,8 @@ $('shellrow').onclick = async () => {
   const r = await busy($('shellrow'), () => api('/api/shell', 'POST', {enabled: want}));
   if (r) { shellInfo = r; renderShell(); }
 };
+
+fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
 
 // ---- stats on the TV (Pi TV only) ----
 async function loadStats() {

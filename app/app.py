@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """TV Remote: web controller for mpv / streamlink on the Pi."""
 import hmac
+import html
 import json
 import os
 import re
@@ -9,7 +10,7 @@ import socket
 import subprocess
 import threading
 import time
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from flask import Flask, Response, abort, jsonify, send_file, redirect, request, send_from_directory
 
@@ -83,12 +84,67 @@ def guard():
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
+    if request.path in ("/login", "/logout"):
+        return None
+    if hmac.compare_digest(request.cookies.get("tv_auth", "").encode(), session_token().encode()):
+        return None
     a = request.authorization
     if a and hmac.compare_digest((a.password or "").encode(), PASSWORD.encode()):
-        return None
+        return None  # curl and scripts
     if request.path == "/play" and token_ok:
         return None
+    if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):  # a browser: show the login page
+        return redirect("/login?next=" + quote(request.full_path.rstrip("?")), 303)
     return Response("Password required", 401, {"WWW-Authenticate": 'Basic realm="TV Remote"'})
+
+
+def session_token():
+    """What the login cookie holds: a signature of the password, so changing the password logs everyone out."""
+    return hmac.new(PASSWORD.encode(), b"tvremote-session", "sha256").hexdigest()
+
+
+def safe_next(n):
+    return n if n.startswith("/") and not n.startswith("//") else "/"
+
+
+LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0e14"><title>TV Remote login</title>
+<style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0e14;color:#f6f1ee;font:17px -apple-system,system-ui,sans-serif}
+form{width:min(340px,86vw);display:grid;gap:14px}h1{margin:0 0 6px;font-size:28px}
+input,button{font:inherit;min-height:52px;border-radius:14px;border:0;padding:0 16px;box-sizing:border-box;width:100%}
+input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em;margin:0}</style></head>
+<body><form method="post" action="/login"><h1>TV Remote</h1>
+<input type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password" autofocus required>
+<input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button></form></body></html>"""
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    nxt = safe_next(request.values.get("next", "/"))
+    if not PASSWORD:
+        return redirect(nxt, 303)
+    err = ""
+    if request.method == "POST":
+        if hmac.compare_digest(request.form.get("password", "").encode(), PASSWORD.encode()):
+            r = redirect(nxt, 303)
+            r.set_cookie("tv_auth", session_token(), max_age=180 * 86400, httponly=True, samesite="Lax")
+            return r
+        time.sleep(0.8)  # slows guessing
+        err = "Wrong password"
+    return Response(LOGIN_PAGE.replace("__NEXT__", html.escape(nxt, quote=True)).replace("__ERR__", err), 401 if err else 200,
+                    mimetype="text/html", headers={"Cache-Control": "no-store"})
+
+
+@app.route("/logout", methods=["GET", "POST"])
+def logout():
+    r = redirect("/login", 303)
+    r.delete_cookie("tv_auth")
+    return r
+
+
+@app.get("/api/auth")
+def api_auth():
+    return jsonify(required=bool(PASSWORD))
 
 
 # ---------- routing ----------
