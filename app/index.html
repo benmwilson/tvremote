@@ -246,7 +246,13 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
   border-radius:24px 24px 0 0;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
 .dh{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 18px;border-bottom:1px solid var(--line)}
 .dh b{flex:1}.dh span{color:var(--dim);font-size:12px}.dh button{min-height:44px;width:44px;padding:0;background:none}
-.db{overflow:auto;padding:4px 18px 18px;font:12px/1.4 ui-monospace,Menlo,monospace}
+.db{overflow:auto;padding:12px 18px 18px;font:14px/1.4 ui-rounded,"SF Pro Rounded",-apple-system,system-ui,sans-serif}
+.db table,.db pre,#d-walltiles{font:12px/1.4 ui-monospace,Menlo,monospace}
+.dctl{background:var(--bg);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.dctl h4{margin:0;font-size:15px}.dctl .sub{display:block;margin:2px 0 0;font-size:13px}
+.dctl .dbmute{margin:10px 0 0}
+.dctl .tvrow{background:none;padding:0;margin:0;min-height:0;border-radius:0;overflow:visible}.dctl .tvrow::before{display:none}.dctl .tvrow b{font-size:15px}
+.dctl .tvrow[aria-checked=false]{opacity:1}
 .db h3{font:600 12px ui-rounded,system-ui,sans-serif;color:var(--dim);margin:16px 0 4px}
 .db td{padding:1px 8px 1px 0;vertical-align:top;word-break:break-all}.db td:first-child{color:var(--dim);white-space:nowrap}
 .db pre{margin:0;white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow:auto}
@@ -362,6 +368,16 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .apps .app img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:var(--line)}
 .apps .app span{font-size:12px;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .apps .note{grid-column:1/-1;margin:6px 2px;color:var(--dim);font-size:14px}
+.bgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.btile{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px 8px;background:var(--card2,var(--line));border-radius:14px;min-width:0;text-align:center}
+.btile .av{width:64px;height:64px;font-size:22px}
+.btile b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
+.btile .sub{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.btile .bacts{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:6px}
+.btile .bact{display:flex;gap:6px}.btile .bact button{min-height:40px;padding:0 8px;font-size:13px;font-weight:700}
+.btile .bact .bp{flex:1;min-width:0}.btile .bact .bp.Kick{background:#53fc18;color:#000}.btile .bact .bp.Twitch{background:#9146ff;color:#fff}
+.btile .bact .bpadd{flex:none;width:40px;padding:0}
+.bnote{grid-column:1/-1;margin:6px 2px;color:var(--dim);font-size:14px}
 /* ruler notches over a slider's track, only while it is being dragged (the thumb travels the width minus its own 30px) */
 input[type=range].ruler{--n:10;background-image:repeating-linear-gradient(to right,var(--dim) 0,var(--dim) 1px,transparent 1px,transparent calc(100% / var(--n))),linear-gradient(to left,var(--dim) 0,var(--dim) 1px,transparent 1px);background-repeat:no-repeat;background-position:15px 4px;background-size:calc(100% - 30px) 9px}
 .nudgerow{position:relative;margin-top:22px}
@@ -549,9 +565,12 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <button id="kickrow" class="plat kick hide">
         <span class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-kick"/></svg></span>
         <span class="grow"><b>Kick</b><span class="sub" id="kicksub"></span></span><span class="chip" id="kickact">Link</span></button>
-      <div class="plat twitch off">
+      <div class="plat twitch off" id="twitchoff">
         <span class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-twitch"/></svg></span>
-        <span class="grow"><b>Twitch</b><span class="sub">Not available yet.</span></span><span class="chip">Soon</span></div>
+        <span class="grow"><b>Twitch</b><span class="sub">Not set up on this Pi.</span></span><span class="chip">Off</span></div>
+      <button id="twitchrow" class="plat twitch hide">
+        <span class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-twitch"/></svg></span>
+        <span class="grow"><b>Twitch</b><span class="sub" id="twitchsub"></span></span><span class="chip" id="twitchact">Link</span></button>
     </div>
   </div>
 
@@ -694,6 +713,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <p id="heatnote" class="sub warn hide" role="status" style="margin:8px 2px"></p>
   <div id="movedbar" class="card hide" role="status" style="margin:8px 0;display:flex;align-items:center;gap:10px"><span class="grow sub" id="movedtext" style="margin:0"></span><button id="movedgo" type="button">Review TVs</button></div>
   <div id="quick" class="quick hide"><div class="wlabel" id="quickhead">Live now: tap one to play</div><div id="quicklist" class="quickstrip"></div></div>
+  <div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multi-view</span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
   <button id="pp" class="pp" data-a="pause" aria-label="Pause or resume"></button>
   <button id="extpp" class="pp hide" data-k="Play" aria-label="Pause or resume the TV's own app"></button>
   <div class="seekbar hide" id="seekbar"><span id="pos">0:00</span><input type="range" id="seekr" min="0" max="100" step="1" value="0" aria-label="Position"><span id="dur">0:00</span></div>
@@ -742,6 +762,14 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb"><p id="tourtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
     <div class="row"><button id="tourback" type="button">Back</button><button id="tournext" type="button" class="go">Next</button></div></div>
+</dialog>
+<dialog id="browse" class="sheet" aria-labelledby="browsettl">
+  <div class="sh"><div class="grow"><b id="browsettl">Browse live</b><span class="sub" id="browsesub">Kick and Twitch, biggest first</span></div>
+    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb">
+    <div class="wseg" id="browsesite" role="group" aria-label="Site" style="margin-bottom:10px"><button type="button" data-s="" aria-pressed="true">All</button><button type="button" data-s="kick" aria-pressed="false">Kick</button><button type="button" data-s="twitch" aria-pressed="false">Twitch</button></div>
+    <div id="browsegrid" class="bgrid" aria-live="polite"></div>
+  </div>
 </dialog>
 <dialog id="confirm" class="sheet" aria-labelledby="confirmttl">
   <div class="sh"><div class="grow"><b id="confirmttl"></b></div></div>
@@ -819,14 +847,14 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <aside id="drawer" class="hide" aria-label="Debug">
   <div class="dh"><b>Debug</b><span id="dage"></span><button id="dbgClose" aria-label="Close debug"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="db">
-    <button id="statsrow" class="tvrow" role="switch" aria-checked="false" style="margin:0 0 6px">
-  <div class="grow"><b>Stats on the TV</b><span class="sub warn">Warning: this drops frames while it is on. Dropped frames, buffer and fps in the corner, redrawn every 2 s. Use it to diagnose, then switch it off.</span></div><span class="sw"></span></button>
-    <h3>TV mute</h3>
-    <p class="sub" id="d-mutehint" style="margin:0 0 4px"></p>
-    <div class="dbmute"><button id="muteyes" type="button">TV is muted</button><button id="muteno" type="button">Sound is on</button></div>
-    <h3>TV power</h3>
-    <p class="sub" id="d-powerhint" style="margin:0 0 4px"></p>
-    <div class="dbmute"><button id="pwon" type="button">TV is on</button><button id="pwoff" type="button">TV is off</button></div>
+    <div class="dctl"><button id="statsrow" class="tvrow" role="switch" aria-checked="false">
+      <div class="grow"><b>Stats on the TV</b><span class="sub">Dropped frames, buffer and fps in the corner. It costs frames while on, so switch it off after.</span></div><span class="sw"></span></button></div>
+    <div class="dctl"><h4>TV mute</h4>
+      <span class="sub" id="d-mutehint"></span>
+      <div class="dbmute"><button id="muteyes" type="button">Muted</button><button id="muteno" type="button">Sound on</button></div></div>
+    <div class="dctl"><h4>TV power</h4>
+      <span class="sub" id="d-powerhint"></span>
+      <div class="dbmute"><button id="pwon" type="button">On</button><button id="pwoff" type="button">Off</button></div></div>
     <div id="d-wall" class="hide"><h3>Multi-view</h3><table id="d-wallsum"></table><div id="d-walltiles"></div></div>
     <h3>Pi health</h3><table id="d-pi"></table>
     <h3 id="d-h-player">Player</h3><table id="d-player"></table>
@@ -931,15 +959,43 @@ async function kickAvatar(slug) {
     return src;
   } catch (e) { return (avCache[slug] = null); }  // blocked or offline: the initials stay
 }
+const twSlug = url => { try { const u = new URL(url), p = u.pathname.split('/').filter(Boolean);
+  return /(^|\.)twitch\.tv$/.test(u.hostname) && p.length === 1 && /^\w{2,25}$/.test(p[0]) ? p[0].toLowerCase() : null; } catch (e) { return null; } };
+// Twitch pictures come from the Pi (its developer app), asked for in one batch a moment after the cards are drawn.
+const twWait = {}; let twQueue = [], twTimer = null;
+function twitchAvatar(slug) {
+  const k = 'tw:' + slug;
+  if (avCache[k] !== undefined) return Promise.resolve(avCache[k]);
+  try { const c = JSON.parse(localStorage.getItem('av:' + k) || 'null'); if (c && Date.now() - c.t < 7 * 864e5) return Promise.resolve((avCache[k] = c.src)); } catch (e) {}
+  if (!twWait[slug]) {
+    twWait[slug] = new Promise(res => { twQueue.push([slug, res]); });
+    clearTimeout(twTimer); twTimer = setTimeout(twFlush, 60);
+  }
+  return twWait[slug];
+}
+async function twFlush() {
+  const batch = twQueue; twQueue = [];
+  for (let i = 0; i < batch.length; i += 50) {
+    const part = batch.slice(i, i + 50);
+    let map = {};
+    try { map = await (await fetch('/api/twitch/avatars?names=' + part.map(x => x[0]).join(','))).json(); } catch (e) {}
+    part.forEach(([n, res]) => {
+      const src = map[n] || null; avCache['tw:' + n] = src; delete twWait[n];
+      if (src) try { localStorage.setItem('av:tw:' + n, JSON.stringify({t: Date.now(), src})); } catch (e) {}
+      res(src);
+    });
+  }
+}
 function avatarEl(name, url, cls) {
   const a = el('span', 'av' + (cls ? ' ' + cls : ''), initials(name));
   a.style.background = 'hsl(' + hueOf(name) + ' 45% 32%)';
-  const slug = kickSlug(url);
-  if (slug) kickAvatar(slug).then(src => {
+  const slug = kickSlug(url), tw = slug ? null : twSlug(url);
+  const put = src => {
     if (!src) return;
     const i = document.createElement('img'); i.src = src; i.alt = '';
     a.textContent = ''; a.appendChild(i);
-  });
+  };
+  if (slug) kickAvatar(slug).then(put); else if (tw) twitchAvatar(tw).then(put);
   return a;
 }
 // While several streams are on: a picture and name for each, along the top. The one with the sound is outlined; a tap gives it the sound.
@@ -1291,6 +1347,7 @@ document.addEventListener('click', e => {
 });
 function renderQuick() {
   const cur = targets.find(t => t.id === target) || {};
+  $('browsecard').classList.toggle('hide', !(view() === 'tv' && (cur.kind === 'pi' || cur.kind === 'chromecast')));
   const style = qpStyle(), idle = view() === 'tv' && (cur.kind === 'pi' || cur.kind === 'chromecast') && !st.running && !st.starting && style !== 'off';
   const seen = new Set(), items = [];
   const offer = x => { const k = (x.name || x.url).toLowerCase(); if (!seen.has(k)) { seen.add(k); items.push(x); } };
@@ -1655,14 +1712,31 @@ $('kickrow').onclick = async () => {
   const r = await busy($('kickrow'), () => api('/api/kick/unlink', 'POST', {}));
   if (r) { kickInfo = r; renderKick(); }
 };
+var twitchInfo = {};
+function renderTwitch() {
+  chatShow();
+  $('twitchoff').classList.toggle('hide', !!twitchInfo.can_link);
+  $('twitchrow').classList.toggle('hide', !twitchInfo.can_link);
+  $('twitchrow').classList.toggle('linked', !!twitchInfo.name);
+  $('twitchact').textContent = twitchInfo.name ? 'Unlink' : 'Link';
+  $('twitchsub').textContent = twitchInfo.name ? 'Linked as ' + twitchInfo.name + (twitchInfo.can_chat ? '. You can chat from the remote.' : '. To chat as them, unlink and link again.')
+    : 'Log in to chat as yourself from the remote. Your phone may warn about the Pi\u2019s certificate once: choose to continue.';
+}
+$('twitchrow').onclick = async () => {
+  if (!twitchInfo.name) { location.href = '/auth/twitch/start'; return; }
+  const r = await busy($('twitchrow'), () => api('/api/twitch/unlink', 'POST', {}));
+  if (r) { twitchInfo = r; renderTwitch(); }
+};
+fetch('/api/twitch').then(r => r.json()).then(j => { twitchInfo = j; renderTwitch(); }).catch(() => {});
+let chatNow = {kick: null, tw: ''};  // the channel whose chat is showing, for the send box
 $('kicksend').onsubmit = async e => {
   e.preventDefault();
   const text = $('kicktext').value.trim();
   if (!text) return;
-  const r = await busy($('kicksend').querySelector('button'), () => api('/api/kick/chat', 'POST', {channel: kickSlug(st.url || ''), text}));
+  const r = await busy($('kicksend').querySelector('button'), () => chatNow.tw ? api('/api/twitch/chat', 'POST', {channel: chatNow.tw, text}) : api('/api/kick/chat', 'POST', {channel: chatNow.kick || kickSlug(st.url || ''), text}));
   if (r && r.ok) { $('kicktext').value = ''; $('kicktext').focus(); }  // stay in the box so the keyboard stays up for the next one
 };
-$('kickfull').onclick = () => { const k = kickSlug(st.url || ''); if (k) window.open('https://kick.com/popout/' + encodeURIComponent(k) + '/chat', '_blank', 'noopener'); };
+$('kickfull').onclick = () => { const k = chatNow.kick, t = chatNow.tw; if (k) window.open('https://kick.com/popout/' + encodeURIComponent(k) + '/chat', '_blank', 'noopener'); else if (t) window.open('https://www.twitch.tv/popout/' + t + '/chat', '_blank', 'noopener'); };
 fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {});
 
 // ---- settings: your account, linked platforms, and (for admins) people, access requests and guest links ----
@@ -2234,10 +2308,13 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   $('chatpop').classList.toggle('hide', !pop);  // in the header, between the title and the chevron, open or not
   if (pop) $('chatpop').href = pop;
   $('chatbox').classList.toggle('hide', !want);
-  const canSend = KICK_OWN_SEND && want && !!kick && !!(kickInfo || {}).can_chat;  // typing needs a Kick account linked with chat permission
+  chatNow = {kick, tw};
+  const kickSend = KICK_OWN_SEND && want && !!kick && !!(kickInfo || {}).can_chat;  // typing needs a Kick account linked with chat permission
+  const twSend = want && !!tw && !!(twitchInfo || {}).can_chat;  // and a Twitch account linked with it
+  const canSend = kickSend || twSend;
   $('kicksend').classList.toggle('hide', !canSend);
-  $('chatbox').classList.toggle('crop', canSend);
-  if (canSend) $('kicktext').placeholder = 'Chat as ' + kickInfo.name;
+  $('chatbox').classList.toggle('crop', kickSend);  // only Kick's own message bar needs hiding
+  if (canSend) $('kicktext').placeholder = 'Chat as ' + (twSend ? twitchInfo.name : kickInfo.name);
   $('chatTog').setAttribute('aria-expanded', String(want)); $('chatChev').setAttribute('aria-expanded', String(want));
   const key = want ? (kick ? 'kick:' + kick : 'twitch:' + (cur.url || '')) : '';
   if (key === chatKey) return;
@@ -2249,6 +2326,68 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   else { chatPoll(); chatTimer = setInterval(chatPoll, 2000); }
 }
 $('chatTog').onclick = $('chatChev').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem('chatOpen', chatOpen ? '1' : '0'); } catch (e) {} chatShow(); };
+
+// ---- Browse live channels: who is live on Kick and Twitch, tap to play or add to the multi-view ----
+let browseSite = '', browseData = null, browseAt = 0;
+const fmtViewers = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n || 0);
+function browseTiles(rows) {  // one tile per streamer: a name live on both sites is one tile with both buttons
+  const by = new Map();
+  rows.forEach(r => {
+    const k = r.login.toLowerCase();
+    if (!by.has(k)) by.set(k, {name: r.name, avatar: r.avatar, title: r.title, game: r.game, total: 0, plats: []});
+    const t = by.get(k);
+    t.total += r.viewers || 0; t.plats.push({source: r.source, url: r.url, viewers: r.viewers || 0});
+    if (!t.avatar && r.avatar) t.avatar = r.avatar;
+  });
+  return [...by.values()].sort((a, b) => b.total - a.total);
+}
+function browseCanAdd() { const cur = targets.find(t => t.id === target) || {}; return cur.kind === 'pi' && (!!st.running || !!st.starting || !!st.wall); }
+function renderBrowse() {
+  const grid = $('browsegrid');
+  if (!browseData) { grid.replaceChildren(el('p', 'bnote', 'Loading\u2026')); return; }
+  const tiles = browseTiles(browseData.streams), canAdd = browseCanAdd();
+  if (!tiles.length) {
+    const off = browseSite === 'twitch' ? !browseData.twitch : browseSite === 'kick' ? !browseData.kick : !browseData.twitch && !browseData.kick;
+    grid.replaceChildren(el('p', 'bnote', off ? 'That site isn\u2019t set up on this Pi yet.' : 'Nothing came back. Try again in a moment.'));
+    return;
+  }
+  grid.replaceChildren(...tiles.map(t => {
+    const b = el('div', 'btile'), av = el('span', 'av', initials(t.name));
+    av.style.background = 'hsl(' + hueOf(t.name) + ' 45% 32%)';
+    if (t.avatar) { const i = document.createElement('img'); i.src = t.avatar; i.alt = ''; i.loading = 'lazy'; i.referrerPolicy = 'no-referrer'; av.textContent = ''; av.appendChild(i); }
+    b.append(av, el('b', null, t.name), el('span', 'sub', [t.game, fmtViewers(t.total) + ' watching'].filter(Boolean).join(' \u00b7 ')));
+    const acts = el('div', 'bacts');
+    t.plats.forEach(pl => {
+      const row = el('div', 'bact'), go = el('button', 'bp ' + pl.source, '\u25B6 ' + pl.source);
+      go.setAttribute('aria-label', 'Play ' + t.name + ' on ' + pl.source);
+      go.onclick = async () => { const r = await busy(go, () => play(pl.url)); if (r && r.ok) $('browse').close(); };
+      row.append(go);
+      if (canAdd) {
+        const add = el('button', 'bpadd', '+'); add.setAttribute('aria-label', 'Add ' + t.name + ' to the multi-view'); add.title = 'Add to the multi-view';
+        add.onclick = async () => { const r = await busy(add, () => wallPut(pl.url)); if (r && r.ok) { add.textContent = '\u2713'; add.disabled = true; } };
+        row.append(add);
+      }
+      acts.append(row);
+    });
+    b.append(acts);
+    return b;
+  }));
+}
+async function loadBrowse(force) {
+  if (!force && browseData && Date.now() - browseAt < 30000 && browseData.site === browseSite) return renderBrowse();
+  browseData = null; renderBrowse();
+  const r = await fetch('/api/browse' + (browseSite ? '?site=' + browseSite : '')).then(x => x.json()).catch(() => null);
+  if (!$('browse').open) return;
+  browseData = r ? {...r, site: browseSite} : {streams: [], kick: true, twitch: true, site: browseSite}; browseAt = Date.now();
+  renderBrowse();
+}
+$('browseopen').onclick = () => { $('browse').showModal(); loadBrowse(); };
+$('browsesite').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  browseSite = b.dataset.s;
+  document.querySelectorAll('#browsesite button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  loadBrowse();
+};
 
 // ---- Multi-view (Pi TV only): several streams on the screen at once ----
 // The Pi answers at once with how the wall will look, while the windows restart in the background: show that now.
@@ -2646,7 +2785,7 @@ function tvInfo() {  // the TV details in the One TV view come from the same cac
   pb.setAttribute('aria-pressed', String(!isOff));
   pb.setAttribute('aria-label', isOff ? 'Turn the TV on' : 'Turn the TV off');
   $('pwon').setAttribute('aria-pressed', String(!isOff)); $('pwoff').setAttribute('aria-pressed', String(isOff));
-  $('d-powerhint').textContent = 'The button follows what the TV reports. It shows ' + (cur.name || 'this TV') + ' as ' + (isOff ? 'off' : 'on') + (pwOver[cur.id] ? ' (set by hand; it goes back to the TV’s own report when that changes)' : '') + '. Set it here to test. The TV itself is not touched.';
+  $('d-powerhint').textContent = 'Shown as ' + (isOff ? 'off' : 'on') + ' for ' + (cur.name || 'this TV') + (pwOver[cur.id] ? ' (set by hand; goes back to the TV’s own report when that changes)' : ', from what the TV reports') + '. Setting it here only tests the button; the TV isn’t touched.';
   if (pb.dataset.shown !== String(isOff) + (cur.reachable === false)) {  // redraw only on a change, so the spinner isn't wiped
     pb.dataset.shown = String(isOff) + (cur.reachable === false);
     setBtn(pb, 'power', cur.reachable === false ? 'No answer' : isOff ? 'Off' : 'On');
@@ -2789,7 +2928,7 @@ $('muteno').onclick = () => { tvMuted[target] = false; renderTvMute(); };
 function renderTvMute() {
   const m = tvMuted[target] === true, b = $('tvmute');
   const name = (targets.find(t => t.id === target) || {}).name || 'this TV';
-  $('d-mutehint').textContent = 'The TV can’t say whether it is muted, so the button is a guess. Showing ' + name + ' as ' + (m ? 'muted' : 'sound on') + '. If that is wrong, set it here.';
+  $('d-mutehint').textContent = 'The TV can’t report mute, so this is a guess: ' + name + ' is shown as ' + (m ? 'muted' : 'sound on') + '. Correct it here if it’s wrong.';
   $('muteyes').setAttribute('aria-pressed', String(m)); $('muteno').setAttribute('aria-pressed', String(!m));
   b.classList.toggle('muted', m);
   b.setAttribute('aria-pressed', String(m));
