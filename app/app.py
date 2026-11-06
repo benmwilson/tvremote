@@ -456,6 +456,45 @@ def cec_phys():
 
 
 _moved = {"v": None}
+_wall_note = {"text": "", "until": 0.0}  # a short line for the Multi-view sheet ("buddha went offline and was removed")
+OFFLINE_REMOVE_S = 180  # a stream that ended is taken off the multi-view this long after, so the others get its room back
+_off_seen = {}
+
+
+def _offline_loop():
+    """Every 15 s: a stream on the multi-view screen that has been offline for OFFLINE_REMOVE_S is removed (the windows lay out again once). Until
+    then its tile says so and offers Try again, in case it was a blip. A stream that comes back, or is tried again, starts the count again."""
+    while True:
+        time.sleep(15)
+        try:
+            if not wall.active():
+                _off_seen.clear()
+                continue
+            offline = {}
+            if state.get("ended"):
+                offline[0] = wall.main_url or state["url"]
+            for k, t in enumerate(wall.extras, start=1):
+                if t.get("error") == "Went offline" and not (t.get("proc") and t["proc"].poll() is None):
+                    offline[k] = t["url"]
+            now = time.time()
+            for url in [u for u in _off_seen if u not in offline.values()]:
+                del _off_seen[url]
+            for k, url in sorted(offline.items()):
+                first = _off_seen.setdefault(url, now)
+                if now - first < OFFLINE_REMOVE_S:
+                    continue
+                _off_seen.pop(url, None)
+                if k == 0:
+                    new_main = wall.drop_main()
+                    if new_main:
+                        wall_later(wall_relayout, new_main)
+                else:
+                    wall.remove(k)
+                    wall_later(wall_relayout)
+                _wall_note.update(text=f"{fav_name(url)} went offline and was taken off the screen", until=now + 60)
+                break  # one at a time: the numbers shift after a removal
+        except Exception as e:
+            app.logger.info("Offline check failed: %s", e)
 
 
 def compute_moved():
@@ -2673,16 +2712,17 @@ def wall_status():
         w["busy"] = _wall_pending[0] > 0
         chat_refresh()
         w["heat"] = heat["on"]
+        w["note"] = _wall_note["text"] if _wall_note["until"] > time.time() else None
         snap = livewatch.snapshot()
         for t in w["tiles"]:
-            t["live"] = snap.get(t["url"], {}).get("live")
+            t["live"] = False if t.get("error") == "Went offline" else snap.get(t["url"], {}).get("live")  # the player says it ended: believe that over the last check
             t["game"], t["live_for"] = snap.get(t["url"], {}).get("game"), livewatch.live_for(t["url"])
             warm_title(t["url"])  # every stream on the screen gets its title looked up, not only the one being controlled
             t["title"] = stream_title(t["url"])
         # tile 0 is described like the others, so the phone can list every stream the same way
         mu = wall.main_url or state["url"]  # what the wall says the main window plays (the window may still be catching up)
         w["main"] = {"i": 0, "url": mu, "source": route(mu or "")[0], "name": fav_name(mu or ""),
-                     "live": snap.get(mu or "", {}).get("live"), "quality": w["main_quality"],
+                     "live": False if state.get("ended") else snap.get(mu or "", {}).get("live"), "quality": w["main_quality"],
                      "game": snap.get(mu or "", {}).get("game"), "live_for": livewatch.live_for(mu or ""),
                      "title": (warm_title(mu), stream_title(mu))[1],
                      "error": "Went offline" if state.get("ended") else None}
@@ -3496,6 +3536,7 @@ if __name__ == "__main__":
     threading.Thread(target=heat_loop, daemon=True).start()
     threading.Thread(target=_groups_loop, daemon=True).start()
     threading.Thread(target=_moved_loop, daemon=True).start()
+    threading.Thread(target=_offline_loop, daemon=True).start()
     threading.Thread(target=lambda: (inproc.warm(), versions()), daemon=True).start()  # one-time loads and the tool versions, so no tap pays for them
     settings.update(load_settings())
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",

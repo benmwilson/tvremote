@@ -2222,7 +2222,7 @@ function renderWall() {
   $('walllayout').classList.toggle('hide', !w);
   $('wallsync').classList.toggle('hide', !w);
   if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
-  $('wallsub').textContent = syncMsg && Date.now() < syncMsg.until ? syncMsg.text : w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') + (w.heat ? ' \u00b7 Pi running hot: quality lowered' : '') : 'Watch more than one at once';
+  $('wallsub').textContent = syncMsg && Date.now() < syncMsg.until ? syncMsg.text : w && w.note ? w.note : w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') + (w.heat ? ' \u00b7 Pi running hot: quality lowered' : '') : 'Watch more than one at once';
   $('wallcard').classList.toggle('updating', !!(w && w.busy));  // the Pi is changing the windows: a spinner, and the buttons that change them wait
   const sig = JSON.stringify([w, wallReplace, favList.map(f => f.live === true), recentList.map(x => x.live === true)]);
   if (sig === wallSig) return;
@@ -2246,14 +2246,14 @@ function renderWall() {
     q.onchange = () => wallApi({action: 'quality', i: r.i, quality: q.value});
     ctl.append(sound, q);
     tile.append(top);
-    if (r.title) tile.append(el('div', 'sub wt', r.title));  // what they are streaming
-    tile.append(ctl);
+    if (r.title && !r.error) tile.append(el('div', 'sub wt', r.title));  // what they are streaming
+    if (!r.error) tile.append(ctl);  // sound and quality mean nothing for a stream that ended
     const acts = el('div', 'acts');
     const act = (icon, label, title, fn) => { const x = el('button'); x.innerHTML = ic(icon) + '<span>' + label + '</span>'; x.title = title; x.setAttribute('aria-label', label + ': ' + title); x.onclick = fn; acts.append(x); return x; };
     const rp = act('swap', 'Replace', 'put a different stream in this window', () => { wallReplace = wallReplace === r.i ? null : r.i; wallSig = ''; renderWall(); if (wallReplace !== null) $('wallurl').focus(); });
     rp.setAttribute('aria-pressed', String(wallReplace === r.i));
-    if (r.i && w.layout === 'focus') act('enlarge', 'Enlarge', 'swap places with the big window', () => wallApi({action: 'swap', i: r.i}));
-    act('fullscreen', 'Full screen', 'stop multi-view and show only this stream, full screen', () => wallApi({action: 'only', i: r.i}));
+    if (r.i && w.layout === 'focus' && !r.error) act('enlarge', 'Enlarge', 'swap places with the big window', () => wallApi({action: 'swap', i: r.i}));
+    if (!r.error) act('fullscreen', 'Full screen', 'stop multi-view and show only this stream, full screen', () => wallApi({action: 'only', i: r.i}));
     tile.append(acts);
     if (r.error) {  // it ended by itself: say why, and offer to try again (taking it off the screen is the X, which moves the others)
       const e = el('div', 'err', r.error), retry = el('button', null, 'Try again');
