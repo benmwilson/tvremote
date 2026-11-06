@@ -5,7 +5,6 @@ from datetime import datetime
 import hmac
 import html
 import ipaddress
-import socket
 import json
 import os
 import re
@@ -292,23 +291,21 @@ def resolve(url):
     return source, player
 
 
+GUEST_SITES = ("kick.com", "twitch.tv", "youtube.com", "youtu.be")  # what a guest may play: a site, not an address (see below)
+
+
 def guest_link_refused(url):
     """A guest on a one-time link may play things on the TVs, but must not be able to point the Pi at the home network (the router, the NAS,
-    this app on localhost). For a guest: only http(s) links whose every address is public. None when fine (or not a guest), else a sentence.
-    A link that can't be looked up is refused too. Regular accounts are not limited: a movie on the NAS is theirs to play."""
+    this app on localhost). Checking an address once is not enough (a redirect or a DNS answer can change after the check), so a guest is limited
+    to links on the streaming sites this app is for: Kick, Twitch and YouTube. None when fine (or not a guest), else a sentence.
+    Regular accounts are not limited: a movie on the NAS is theirs to play."""
     if not (has_request_context() and getattr(g, "user", None) == accounts.GUEST):
         return None
-    sorry = "Guests can only play links from the public internet."
     p = urlparse(url or "")
-    if p.scheme not in ("http", "https") or not p.hostname:
-        return sorry
-    try:
-        addrs = socket.getaddrinfo(p.hostname, p.port or (443 if p.scheme == "https" else 80), type=socket.SOCK_STREAM)
-        if not addrs or any(not ipaddress.ip_address(a[4][0]).is_global for a in addrs):
-            return sorry
-    except (OSError, ValueError):
-        return sorry
-    return None
+    host = (p.hostname or "").lower()
+    if p.scheme in ("http", "https") and any(host == s or host.endswith("." + s) for s in GUEST_SITES):
+        return None
+    return "Guests can play Kick, Twitch and YouTube links."
 
 
 def normalise(text, site="kick"):
@@ -727,7 +724,8 @@ def warm_addresses():
     rects = multi.tiles(wall.layout, wall.count())
     urls = [wall.main_url] + [t["url"] for t in wall.extras]
     wants = {cap("streamlink", r[2]) for r in rects}
-    for u in urls:
+    wants.add(sl_quality(wall.saved_quality, None))  # and the full-screen quality: removing a stream (or ending the multi-view) leaves one stream
+    for u in urls:                                    # at that quality, which must be ready at once instead of a second's wait for streamlink
         source, player = resolve(u)
         if player != "streamlink" or source == "Twitch":
             continue
@@ -736,6 +734,17 @@ def warm_addresses():
                 stream_url(u, q, low=True)
             except Exception:
                 pass
+
+
+def _rewarm_loop():
+    """Stream addresses are remembered for ADDR_TTL seconds. While a multi-view stays up, refresh them just before they run out, so removing
+    a stream minutes later is as quick as removing it straight away."""
+    while True:
+        threading.Event().wait(ADDR_TTL - 60)
+        try:
+            warm_addresses()
+        except Exception as e:
+            app.logger.info("Couldn't refresh the stream addresses: %s", e)
 
 
 def player_cmd(url, quality, sock, extra=(), default_q=None, direct=False):
@@ -1469,7 +1478,7 @@ def api_move():
     if src not in tvconfig.IDS or dst not in tvconfig.IDS or src == dst or not url:
         return jsonify(ok=False, error="Pick a different TV to move it to."), 400
     if guest_link_refused(url):
-        return jsonify(ok=False, error="Guests can only play links from the public internet."), 403
+        return jsonify(ok=False, error="Guests can play Kick, Twitch and YouTube links."), 403
     if not TV_ENABLED.get(dst) or not TV_ENABLED.get(src):
         return jsonify(ok=False, error="That TV isn't set up to play on."), 400
     same_tv = bool(TV_OF.get(src) and TV_OF.get(src) == TV_OF.get(dst))  # e.g. the Pi and the Chromecast on one TV
@@ -2977,6 +2986,7 @@ if __name__ == "__main__":
     init_tvs(DATA)  # after the Chromecast exists, so its name and device follow the saved TVs
     cards.start()
     livewatch.start()
+    threading.Thread(target=_rewarm_loop, daemon=True).start()
     threading.Thread(target=sleep_loop, daemon=True).start()
     settings.update(load_settings())
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",

@@ -184,6 +184,25 @@ class QuickSecondAddTest(unittest.TestCase):
         self.assertEqual(r[1], 400)
 
 
+class WarmAddressesTest(unittest.TestCase):
+    def test_the_full_screen_address_of_every_stream_is_ready_before_the_wall_shrinks(self):
+        import app as server
+        asked = []
+        server.wall.extras = [{"url": "https://kick.com/b", "proc": None}]
+        server.wall.layout = "grid"
+        server.wall.main_url = "https://kick.com/a"
+        server.wall.saved_quality = None
+        try:
+            with mock.patch.object(server, "resolve", return_value=("Kick", "streamlink")), \
+                    mock.patch.object(server, "stream_url", side_effect=lambda u, q, low=False: asked.append((u, q))):
+                server.warm_addresses()
+        finally:
+            server.wall.clear()
+        # what removing a stream loads: the one that is left, at its full quality (the single-stream default)
+        self.assertIn(("https://kick.com/a", "1080p60,best"), asked)
+        self.assertIn(("https://kick.com/b", "1080p60,best"), asked)
+
+
 class PlayFromAWallTest(unittest.TestCase):
     """Starting something new while several streams are on the screen: the main window goes full screen and loads it in place."""
 

@@ -112,6 +112,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .watch{position:sticky;top:8px;z-index:6;padding:10px;box-shadow:0 10px 28px rgba(0,0,0,.5);margin-top:12px}
 .watchbar{display:flex;align-items:center;gap:8px;margin-bottom:8px}.watchbar b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .watchbar button{flex:none;width:44px;min-height:44px;padding:0;display:grid;place-items:center}.watchbar select{flex:none;max-width:46%;min-height:44px;font-size:15px}
+.quick{margin-top:16px}.quick .wlabel{margin-bottom:8px}.quick .fav{background:var(--card2,rgba(255,255,255,.05))}
 .now.offidle>:not(.tvoff){display:none!important}
 #view-tv.tvonly #now,#view-tv.tvonly #watchcard,#view-tv.tvonly #chatcard,#view-tv.tvonly #wallopencard,#view-tv.tvonly #playsec{display:none!important}
 .now.offidle .tvoff{flex-direction:column;text-align:center;gap:6px;margin:0;padding:26px 18px 22px;background:linear-gradient(160deg,rgba(255,176,98,.16),rgba(255,176,98,.05));border-color:rgba(255,176,98,.28)}
@@ -167,7 +168,9 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #chatcard #chatbox{margin-right:8px}
 .chatpoplink{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:40px;margin:8px 8px 0 0;color:var(--dim);font-size:14px}.chatpoplink .ic{width:16px;height:16px}
 .chathead .chev{font-size:18px;padding:0 8px}
-.chatrow{display:flex;align-items:center;gap:4px}.chatrow .chathead{flex:1;min-width:0}
+.chatrow{display:flex;align-items:center;gap:8px}.chatrow .chathead{flex:1;min-width:0}
+.chatbtn{flex:none;width:44px;height:44px;padding:0;display:grid;place-items:center;border-radius:12px;background:var(--card2,rgba(255,255,255,.06));color:var(--dim);text-decoration:none}
+.chatbtn .ic{width:20px;height:20px}.chatbtn .chev{font-size:18px;transition:transform .15s;display:block}.chatbtn[aria-expanded=true] .chev{transform:rotate(180deg)}
 .chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
 .chathead .chev{color:var(--dim);transition:transform .15s}.chathead[aria-expanded=true] .chev{transform:rotate(180deg)}
 #chatbox iframe{display:block;width:100%;height:340px;border:0;border-radius:12px;background:#0b0e14}
@@ -583,7 +586,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <button class="go" id="invmake">Create a guest link</button>
       <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. It is shown only now, so copy it before you leave this page.</p>
         <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button">Copy</button></div></div>
-      <p class="sub">A guest can play things and control the TVs. They can't change favourites, link accounts or manage people and TVs. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
+      <p class="sub">A guest can play Kick, Twitch and YouTube links and control the TVs. They can't change favourites, link accounts or manage people and TVs. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
     </div>
     <div class="card hide" id="guests"></div>
 
@@ -641,6 +644,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div id="title" class="ttl">Nothing playing</div>
   <div id="game" class="sub hide"></div>
   <div id="meta"></div>
+  <div id="quick" class="quick hide"><div class="wlabel" id="quickhead">Live now</div><div id="quicklist" class="grid list"></div></div>
   <button id="pp" class="pp" data-a="pause" aria-label="Pause or resume"></button>
   <button id="extpp" class="pp hide" data-k="Play" aria-label="Pause or resume the TV's own app"></button>
   <div class="seekbar hide" id="seekbar"><span id="pos">0:00</span><input type="range" id="seekr" min="0" max="100" step="1" value="0" aria-label="Position"><span id="dur">0:00</span></div>
@@ -673,11 +677,13 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <p class="sub" id="watchnote" style="margin:8px 2px 0"></p>
 </div>
 <div class="card hide" id="chatcard">
-  <div class="chatrow"><button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span><span class="chev">&#9662;</span></button>
-</div>
+  <div class="chatrow">
+    <button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span></button>
+    <a id="chatpop" class="chatbtn hide" target="_blank" rel="noopener" aria-label="Open this chat on the site" title="Open this chat on the site (you can type there if you're logged in)"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a>
+    <button id="chatChev" class="chatbtn" type="button" aria-expanded="false" aria-label="Show or hide the chat"><span class="chev" aria-hidden="true">&#9662;</span></button>
+  </div>
   <div id="chattabs" class="wseg hide" role="tablist" aria-label="Which stream's chat"></div>
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
-  <a id="chatpop" class="chatpoplink hide" target="_blank" rel="noopener" title="Open this chat on the site (you can type there if you're logged in)">Open on the site <svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a>
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
 <div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multi-view</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chev">&rsaquo;</span></button></div>
@@ -998,6 +1004,7 @@ function render() {
   const mv = moveInfo();
   $('move').classList.toggle('hide', !up || !mv || !st.url);
   $('watch').classList.toggle('hide', !up || !st.url || me.watch === false);  // an admin can switch it off for guests
+  renderQuick();  // when nothing is playing: who is live, ready to tap
   if (mv) $('movelabel').textContent = mv.label;
   $('pp').classList.toggle('paused', !!st.paused);
   setBtn($('pp'), st.paused ? 'play' : 'pause', st.paused ? 'Paused' : '');
@@ -1138,9 +1145,37 @@ function drawFavs() {
 // A tapped favourite shows a spinner until that stream is playing (or fails, or 30 s pass).
 let favLoading = null;  // {url, t0}
 let favNote = null;  // {url, text, until}: why the last tapped favourite didn't start
-function markFavs() {
+// Quick play: when nothing is playing, whoever is live among the favourites and recents, ready to tap, at the top where the empty "Nothing playing" is.
+let quickSig = '';
+function renderQuick() {
+  const cur = targets.find(t => t.id === target) || {};
+  const idle = view() === 'tv' && (cur.kind === 'pi' || cur.kind === 'chromecast') && !st.running && !st.starting;
+  const seen = new Set(), items = [];
+  const offer = x => { const k = (x.name || x.url).toLowerCase(); if (!seen.has(k)) { seen.add(k); items.push(x); } };
+  if (idle) {
+    favList.filter(f => f.live === true).forEach(f => offer({name: favHead(f), url: f.play_url || f.url, source: (f.links || []).find(l => l.url === (f.play_url || f.url))?.source || f.source, title: f.title, game: f.game, live_for: f.live_for, live: true}));
+    recentList.filter(x => x.live === true).forEach(x => offer({name: x.name, url: x.url, source: x.source, title: x.title, game: x.game, live_for: x.live_for, live: true}));
+  }
+  const shown = items.slice(0, 6), sig = target + '|' + shown.map(x => x.url + (x.title || '')).join('|');
+  $('quick').classList.toggle('hide', !shown.length);
+  if (sig === quickSig) return;
+  quickSig = sig;
+  $('quicklist').replaceChildren(...shown.map(it => {
+    const b = el('div', 'fav'), head = el('div', 'fhead');
+    b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url;
+    head.append(avatarEl(it.name, it.url), el('b', null, it.name), ...titleEl(it));
+    const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
+    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), el('span', 'badge live', 'LIVE'), el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin);
+    b.onclick = () => playFav(it.url);
+    b.onkeydown = e => { if (e.key === 'Enter') playFav(it.url); };
+    return b;
+  }));
   runMarquees();
-  document.querySelectorAll('#favs .fav, #recents .fav').forEach(b => {  // recents get the same spinner and error note
+}
+function markFavs() {
+  renderQuick();
+  runMarquees();
+  document.querySelectorAll('#favs .fav, #recents .fav, #quick .fav').forEach(b => {  // recents and the quick cards get the same spinner and error note
     const n = b.querySelector('.note');
     if (n) n.textContent = favNote && (b.dataset.urls || b.dataset.url).split(' ').includes(favNote.url) && Date.now() < favNote.until ? favNote.text : '';
     const on = !!favLoading && (b.dataset.urls || b.dataset.url).split(' ').includes(favLoading.url);
@@ -1946,14 +1981,14 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
     }));
   }
   const pop = kick ? 'https://kick.com/popout/' + encodeURIComponent(kick) + '/chat' : tw ? 'https://www.twitch.tv/popout/' + tw + '/chat' : '';
-  $('chatpop').classList.toggle('hide', !pop || !want);  // only inside the open chat, well away from the collapse button
+  $('chatpop').classList.toggle('hide', !pop);  // in the header, between the title and the chevron, open or not
   if (pop) $('chatpop').href = pop;
   $('chatbox').classList.toggle('hide', !want);
   const canSend = KICK_OWN_SEND && want && !!kick && !!(kickInfo || {}).can_chat;  // typing needs a Kick account linked with chat permission
   $('kicksend').classList.toggle('hide', !canSend);
   $('chatbox').classList.toggle('crop', canSend);
   if (canSend) $('kicktext').placeholder = 'Chat as ' + kickInfo.name;
-  $('chatTog').setAttribute('aria-expanded', String(want));
+  $('chatTog').setAttribute('aria-expanded', String(want)); $('chatChev').setAttribute('aria-expanded', String(want));
   const key = want ? (kick ? 'kick:' + kick : 'twitch:' + (cur.url || '')) : '';
   if (key === chatKey) return;
   chatKey = key;  // what is showing changed: stop the old feed, clear the box, start the new one
@@ -1963,7 +1998,7 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   if (kick) kickEmbed(kick);
   else { chatPoll(); chatTimer = setInterval(chatPoll, 2000); }
 }
-$('chatTog').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem('chatOpen', chatOpen ? '1' : '0'); } catch (e) {} chatShow(); };
+$('chatTog').onclick = $('chatChev').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem('chatOpen', chatOpen ? '1' : '0'); } catch (e) {} chatShow(); };
 
 // ---- Multi-view (Pi TV only): several streams on the screen at once ----
 // The Pi answers at once with how the wall will look, while the windows restart in the background: show that now.
@@ -2125,9 +2160,6 @@ const syncWall = btn => busy(btn, async () => {  // read each stream's timing an
 });
 $('wallsync').onclick = () => syncWall($('wallsync'));
 $('nowsync').onclick = () => syncWall($('nowsync'));
-  say(r && r.sync ? r.sync.note : 'Couldn\u2019t sync them. Try again.');
-  return r;
-});
 $('walllayout').onclick = e => { const b = e.target.closest('button[data-l]'); if (b) wallApi({action: 'layout', layout: b.dataset.l}); };
 
 // ---- stats on the TV (Pi TV only) ----

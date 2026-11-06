@@ -1,6 +1,5 @@
 import os
 import shutil
-import socket
 import sys
 import tempfile
 import unittest
@@ -14,10 +13,6 @@ import kick  # noqa: E402
 import sessions  # noqa: E402
 import throttle  # noqa: E402
 from helpers import founder_client  # noqa: E402
-
-
-def resolves_to(*ips):
-    return lambda host, port, *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port or 0)) for ip in ips]
 
 
 class Security(unittest.TestCase):
@@ -77,30 +72,26 @@ class Security(unittest.TestCase):
             self.assertIn(r.status_code, (401, 403, 405), path)
 
     # ---- a guest's links can't reach into the home network ----
-    def test_a_guest_cannot_point_the_pi_at_the_home_network(self):
+    def test_a_guest_can_only_play_kick_twitch_and_youtube(self):
         with mock.patch.object(server, "play_on") as play:
-            for bad in ("http://127.0.0.1:8765/api/status", "http://192.168.1.128/video.mp4", "http://[::1]/x", "https://localhost/x"):
-                with mock.patch.object(socket, "getaddrinfo", resolves_to("127.0.0.1" if "127" in bad or "localhost" in bad else "192.168.1.128")):
-                    r = self.guest.post("/api/play", json={"url": bad})
-                self.assertEqual(r.status_code, 403, bad)
+            for bad in ("http://127.0.0.1:8765/api/status", "http://192.168.1.128/video.mp4", "http://[::1]/x", "https://localhost/x",
+                        "https://vimeo.com/123", "https://kick.com.evil.example/x", "https://evilkick.com/x", "ftp://kick.com/x", "file:///etc/passwd",
+                        "http://kick.com@192.168.1.1/x"):
+                r = self.guest.post("/api/play", json={"url": bad})
+                self.assertIn(r.status_code, (400, 403), bad)  # 400: not even a web link; 403: a web link a guest may not play
             play.assert_not_called()
-            with mock.patch.object(socket, "getaddrinfo", resolves_to("151.101.1.1")):
-                self.assertEqual(self.guest.post("/api/play", json={"url": "https://kick.com/capped"}).status_code, 200)
-            play.assert_called_once()
+            for good in ("https://kick.com/capped", "https://www.twitch.tv/xqc", "https://m.youtube.com/watch?v=abc", "https://youtu.be/abc"):
+                self.assertEqual(self.guest.post("/api/play", json={"url": good}).status_code, 200, good)
+            self.assertEqual(play.call_count, 4)
 
     def test_a_guest_cannot_get_there_through_the_shortcut_or_move_either(self):
-        with mock.patch.object(server, "play_on") as play, mock.patch.object(socket, "getaddrinfo", resolves_to("192.168.1.128")):
+        with mock.patch.object(server, "play_on") as play:
             self.guest.get("/play?u=http://nas.local/video.mp4")
             self.assertEqual(self.guest.post("/api/move", json={"from": "living", "to": "bedroom", "url": "http://nas.local/v.mp4"}).status_code, 403)
         play.assert_not_called()
 
-    def test_a_link_that_cannot_be_checked_is_refused_for_a_guest(self):
-        with mock.patch.object(server, "play_on") as play, mock.patch.object(socket, "getaddrinfo", side_effect=OSError("no dns")):
-            self.assertEqual(self.guest.post("/api/play", json={"url": "https://kick.com/capped"}).status_code, 403)
-        play.assert_not_called()
-
     def test_a_regular_user_may_still_play_from_the_home_network(self):
-        with mock.patch.object(server, "play_on") as play, mock.patch.object(socket, "getaddrinfo", resolves_to("192.168.1.128")):
+        with mock.patch.object(server, "play_on") as play:
             self.assertEqual(self.user.post("/api/play", json={"url": "http://192.168.1.128/video.mp4"}).status_code, 200)
         play.assert_called_once()  # a movie on the NAS is a fair thing to play
 
