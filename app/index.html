@@ -986,6 +986,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <p class="sub hide" id="tvnoroku" style="margin:6px 4px 0">No TV controls here yet (power, volume, input). In Settings, run the setup wizard again and pick this TV's Roku.</p>
 <div class="card hide" id="tvctl">
   <div class="row"><button id="tvpower" data-k="PowerOn" aria-pressed="false" aria-label="Turn the TV on" title="Tap to turn the TV on or off. Hold to change what it shows, without touching the TV." style="-webkit-touch-callout:none;-webkit-user-select:none;user-select:none"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg></button></div>
+  <details class="dropnav" id="tvmore" style="margin-top:12px"><summary class="dropsum"><span>Volume, inputs, apps and navigation</span></summary>
   <div class="row"><button data-k="VolumeDown" aria-label="TV volume down"><svg class="ic" aria-hidden="true"><use href="#i-volume-low"/></svg>&minus;</button>
     <button id="tvmute" data-k="VolumeMute" aria-label="Mute the TV" aria-pressed="false" title="Tap to mute or unmute. The TV doesn't report its mute state, so this shows what was last pressed here. Hold to correct what it shows." style="-webkit-touch-callout:none;-webkit-user-select:none;user-select:none"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg></button>
     <button data-k="VolumeUp" aria-label="TV volume up"><svg class="ic" aria-hidden="true"><use href="#i-volume"/></svg>+</button></div>
@@ -1001,6 +1002,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <div class="row"><button data-k="Left" aria-label="Left"><svg class="ic" aria-hidden="true"><use href="#i-left"/></svg></button><button data-k="Select" class="go">OK</button><button data-k="Right" aria-label="Right"><svg class="ic" aria-hidden="true"><use href="#i-right"/></svg></button></div>
     <div class="row"><button data-k="Info" aria-label="Info"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg></button><button data-k="Down" aria-label="Down"><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></button><button data-k="Play" aria-label="Play or pause on the TV"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></button></div>
     </div>
+  </details>
   </details>
 </div>
 
@@ -3697,6 +3699,8 @@ function healthWatch() {
   clearInterval(healthTimer);
   if (view() === 'settings' && me && me.admin) { loadHealth(); healthTimer = setInterval(() => { if (view() === 'settings' && !document.hidden) loadHealth(); else if (view() !== 'settings') clearInterval(healthTimer); }, 4000); }
 }
+try { $('tvmore').open = localStorage.getItem('tvmore') === '1'; } catch (e) {}  // the rest of the TV controls stay folded away unless it was left open
+$('tvmore').addEventListener('toggle', () => { try { localStorage.setItem('tvmore', $('tvmore').open ? '1' : '0'); } catch (e) {} });
 window.addEventListener('hashchange', healthWatch);
 window.addEventListener('hashchange', show);
 window.addEventListener('popstate', show);
