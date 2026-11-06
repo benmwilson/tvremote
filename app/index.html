@@ -350,6 +350,8 @@ html[data-layout=desktop] #view-tv>#tvid{grid-column:1/-1}
 html[data-layout=desktop] #view-tv>#now,html[data-layout=desktop] #view-tv>#watchcard,html[data-layout=desktop] #view-tv>#chatcard,html[data-layout=desktop] #view-tv>#wallopencard,html[data-layout=desktop] #view-tv>#browsecard,html[data-layout=desktop] #view-tv>#tvctl{grid-column:1}
 html[data-layout=desktop] #view-tv>#playsec{grid-column:2;grid-row:2/span 12;margin-top:0}
 html[data-layout=desktop] #playsec .grid.list,html[data-layout=desktop] #favs,html[data-layout=desktop] #recents,html[data-layout=desktop] #groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+html[data-layout=desktop] #view-tv>#now{margin-top:0}
+html[data-layout=desktop] #playsec>h2:first-child{display:none}  /* the Play box sits level with the first card on the left (its placeholder says what it is) */
 html[data-layout=desktop] #view-settings{max-width:780px;margin-left:auto;margin-right:auto}
 html[data-layout=desktop] dialog.sheet{inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(820px,92vw);max-height:86vh;border-radius:22px;animation:none}
 html[data-layout=desktop] dialog.sheet[open]{animation:none}
