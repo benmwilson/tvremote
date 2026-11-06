@@ -121,3 +121,18 @@ class TvsApi(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PiMoved(unittest.TestCase):
+    def test_it_says_so_only_when_the_port_differs_from_the_saved_one(self):
+        tvs = [{"id": "tv1", "name": "Bedroom", "roku": "", "pi": {"input": "HDMI3"}, "chromecast": None}]
+        read = lambda v: mock.patch.dict(server._phys, {"t": server.time.time(), "v": v})  # a fresh reading (or none)
+        with mock.patch.object(server.tvconfig, "load_tvs", return_value=tvs):
+            with read("3.0.0.0"):
+                self.assertIsNone(server.compute_moved())
+            with read("1.0.0.0"):
+                self.assertEqual(server.compute_moved(), {"tv": "Bedroom", "saved": "HDMI 3", "now": "HDMI 1"})
+            with read(None):  # the adapter did not say: no false alarm
+                self.assertIsNone(server.compute_moved())
+        with mock.patch.object(server.tvconfig, "load_tvs", return_value=[]), read("1.0.0.0"):
+            self.assertIsNone(server.compute_moved())

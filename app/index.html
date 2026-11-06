@@ -677,6 +677,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div id="game" class="sub hide"></div>
   <div id="meta"></div>
   <p id="heatnote" class="sub warn hide" role="status" style="margin:8px 2px"></p>
+  <div id="movedbar" class="card hide" role="status" style="margin:8px 0;display:flex;align-items:center;gap:10px"><span class="grow sub" id="movedtext" style="margin:0"></span><button id="movedgo" type="button">Review TVs</button></div>
   <div id="quick" class="quick hide"><div class="wlabel" id="quickhead">Live now: tap one to play</div><div id="quicklist" class="quickstrip"></div></div>
   <button id="pp" class="pp" data-a="pause" aria-label="Pause or resume"></button>
   <button id="extpp" class="pp hide" data-k="Play" aria-label="Pause or resume the TV's own app"></button>
@@ -982,6 +983,8 @@ function render() {
   accent();
   const ext = !run && !st.starting && !st.error ? st.external : null;  // the TV is playing something by itself (its own YouTube app, say)
   $('src').textContent = run || st.starting ? (st.source || 'Other') : ext ? 'On the TV' : 'Idle';
+  const moved = st.pi_moved; $('movedbar').classList.toggle('hide', !moved);  // admins: the Pi is on a different HDMI port than the one saved
+  if (moved) $('movedtext').textContent = 'The Pi looks like it moved: it is on ' + moved.now + ', but ' + moved.tv + ' has it saved on ' + moved.saved + '.';
   const hot = st.heat; $('heatnote').classList.toggle('hide', !hot);  // the Pi is hot: say so, and what it is doing about it
   if (hot) $('heatnote').textContent = 'The Pi is running hot (' + Math.round(hot.temp) + ' °C). ' + (hot.lowered ? 'Picture quality was lowered to cool it down.' : hot.level === 'hot' ? 'Lowering the picture quality.' : 'Frames may drop if it gets hotter.');
   $('src').className = 'badge ' + (run || st.starting ? (st.source || '') : '');
@@ -2393,6 +2396,7 @@ function dbg(open) {
   clearInterval(dbgTimer);
   if (open) { dbgTick(); dbgTimer = setInterval(dbgTick, 2000); }
 }
+$('movedgo').onclick = () => { location.hash = '#/setup'; };
 $('chatTv').onclick = async () => { await cmd('chat', st.chat ? 'off' : 'on'); };
 $('dbgOpen').onclick = () => dbg(true);
 $('dbgClose').onclick = $('scrim').onclick = () => dbg(false);

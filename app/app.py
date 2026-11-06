@@ -455,6 +455,29 @@ def cec_phys():
     return _phys["v"] or CEC_PHYS
 
 
+_moved = {"v": None}
+
+
+def compute_moved():
+    """{tv, saved, now} when the Pi is on a different HDMI port than the one saved for it, else None."""
+    tv = next((t for t in tvconfig.load_tvs(DATA) if t.get("pi")), None)
+    saved = ((tv or {}).get("pi") or {}).get("input") or ""
+    cec_phys()  # refreshes what was read (cached 30 s); only a real reading counts, not the fallback it returns when the adapter says nothing
+    now = discover.phys_input(_phys["v"])
+    return {"tv": tv["name"], "saved": saved.replace("HDMI", "HDMI "), "now": now.replace("HDMI", "HDMI ")} if tv and saved and now and saved != now else None
+
+
+def _moved_loop():
+    """Every minute: is the Pi on the HDMI port that was saved for it? When it was moved to another port or TV the saved TVs are out of date, and the
+    admin is told (a banner with a button to the setup screen). Looked at here, not in a request, because reading the address runs a command."""
+    while True:
+        time.sleep(60)
+        try:
+            _moved["v"] = compute_moved()
+        except Exception as e:
+            app.logger.info("Pi-moved check failed: %s", e)
+
+
 def switch_tv_to_pi():
     if on_input("living"):
         return
@@ -1892,6 +1915,8 @@ def pi_status():
     data = {"running": running, "url": url, "quality": state["quality"] if sock == SOCK else None, "source": source,
             "streamlink": player == "streamlink",
             "wall": wall_status()}  # also while the main window restarts, or the multi-view would vanish for those seconds
+    if _moved["v"] and has_request_context() and accounts.role(g.user) == "admin":
+        data["pi_moved"] = _moved["v"]  # only admins can do something about it
     t = pihealth.temperature()
     if pihealth.level(t) in ("warm", "hot"):  # the phone says so: a hot Pi drops frames and, when very hot, has its pictures lowered
         data["heat"] = {"temp": t, "level": pihealth.level(t), "lowered": heat["on"]}
@@ -3469,6 +3494,7 @@ if __name__ == "__main__":
     threading.Thread(target=sleep_loop, daemon=True).start()
     threading.Thread(target=heat_loop, daemon=True).start()
     threading.Thread(target=_groups_loop, daemon=True).start()
+    threading.Thread(target=_moved_loop, daemon=True).start()
     threading.Thread(target=lambda: (inproc.warm(), versions()), daemon=True).start()  # one-time loads and the tool versions, so no tap pays for them
     settings.update(load_settings())
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
