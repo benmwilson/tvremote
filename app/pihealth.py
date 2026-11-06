@@ -32,16 +32,31 @@ def level(temp):
 
 
 def throttled():
-    """Names of the Pi's throttle flags that are set (empty when fine, None when the kernel does not say)."""
-    for p in _THROTTLE_FILES:
+    """Names of the Pi's problem flags that are set (empty when fine, None when the kernel does not say). This kernel has no get_throttled
+    file, so it uses what it does show: the under-voltage alarm (hwmon rpi_volt) and a CPU clock below its maximum."""
+    flags, known = [], False
+    for p in _THROTTLE_FILES:  # older kernels
         raw = _read(p)
         if raw:
             try:
                 v = int(raw.strip(), 16)
+                return [name for bit, name in THROTTLE_BITS.items() if v >> bit & 1]
             except ValueError:
-                continue
-            return [name for bit, name in THROTTLE_BITS.items() if v >> bit & 1]
-    return None
+                pass
+    for d in ("/sys/class/hwmon/" + n for n in (os.listdir("/sys/class/hwmon") if os.path.isdir("/sys/class/hwmon") else [])):
+        if (_read(d + "/name") or "").strip() == "rpi_volt":
+            known = True
+            if (_read(d + "/in0_lcrit_alarm") or "0").strip() == "1":
+                flags.append("under-voltage")
+    cur, top = cpu_mhz(), _read("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")
+    if cur is not None and top and cur < int(top) // 1000 - 50 and (_read("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor") or "").strip() != "ondemand":
+        flags.append("CPU clock lowered")  # (with the ondemand governor a low clock just means idle)
+    return flags if known or cur is not None else None
+
+
+def cpu_mhz():
+    raw = _read("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
+    return int(raw) // 1000 if raw and raw.strip().isdigit() else None
 
 
 def _cpu_times():
@@ -91,7 +106,7 @@ def snapshot():
     prev, _last["cpu"] = _last.get("cpu"), times
     cpu = round(100 * (times[0] - prev[0]) / (times[1] - prev[1])) if times and prev and times[1] > prev[1] else None
     up = _read("/proc/uptime")
-    return {"temp_c": t, "level": level(t), "throttled": throttled(), "cpu_pct": cpu,
+    return {"temp_c": t, "level": level(t), "throttled": throttled(), "cpu_mhz": cpu_mhz(), "cpu_pct": cpu,
             "load": (_read("/proc/loadavg") or "").split()[:3] or None,
             "mem_total_mb": mem.get("MemTotal"), "mem_available_mb": mem.get("MemAvailable"),
             "swap_used_mb": mem.get("SwapTotal", 0) - mem.get("SwapFree", 0) if "SwapTotal" in mem else None,
