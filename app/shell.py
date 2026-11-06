@@ -79,7 +79,7 @@ def qr_pieces(url, caption="Scan for the remote"):
                 d.append("m %.1f %.1f l %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f" % (
                     a + r, b, a + c - r, b, a + c, b + r, a + c, b + c - r, a + c - r, b + c, a + r, b + c, a, b + c - r, a, b + r))
     dots = r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&}%s{\p0}" % (x0 + q, y0 + q, BG[4:] + BG[2:4] + BG[:2], " ".join(d))  # BG is RGB, ASS wants BGR
-    cap = r"{\an8\pos(%d,%d)\fs28\b1\bord0\shad0\c&H%s&}%s" % (x0 + side // 2, y0 + side + 8, DIM, caption)
+    cap = r"{\an9\pos(%d,%d)\fs28\b1\bord0\shad0\c&H%s&}%s" % (x0 + side, y0 + side + 8, DIM, caption)  # right-aligned to the card's edge: a long caption grows leftwards, never off the screen
     return [card, dots, cap]
 
 

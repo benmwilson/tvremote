@@ -2317,10 +2317,10 @@ def qr_info():
     if qr_guest["url"] and ("/join/" not in qr_guest["url"] or access.invite_id_for_url(qr_guest["url"])):  # a guest link that was used up, revoked or expired is not shown
         return qr_guest["url"], "Scan to join as a guest"
     if settings.get("qr_mode") == "install" and settings.get("install_url"):  # an iCloud share link: scanning offers to add the shortcut to the phone
-        return settings["install_url"], "Scan to add the shortcut to your iPhone"
+        return settings["install_url"], "Scan to add the shortcut"
     if settings.get("qr_mode") == "shortcut" and settings.get("shortcut_url"):
         if settings["shortcut_url"].startswith("shortcuts://"):  # runs a shortcut already on the phone
-            return settings["shortcut_url"], "Scan to run the shortcut on your iPhone"
+            return settings["shortcut_url"], "Scan to run the shortcut"
         return settings["shortcut_url"], "Scan to get the Play on Pi shortcut"
     return f"http://{shell.lan_ip()}:{PORT}", "Scan for the remote"
 
