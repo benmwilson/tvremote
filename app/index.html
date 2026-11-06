@@ -309,6 +309,7 @@ body.chatfull{overflow:hidden}
 .s-danger{color:#ff6b6b}
 input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin:0 2px 0 8px;cursor:pointer;background:var(--dim,#8b93a7);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat}input[type=search]::-webkit-search-cancel-button:hover{background:var(--fg)}
 .qrpick{display:grid;gap:6px}.qrpick button{display:flex;align-items:center;gap:12px;justify-content:flex-start;text-align:left;min-height:52px;padding:8px 14px}.qrpick button.on{outline:2px solid var(--tv,#6bb2ff);outline-offset:-2px}.qrpick .qi .ic{width:22px;height:22px}.qrpick .qc{color:#7be29a}.qrpick b{display:block}.qrpick .sub{display:block;margin:2px 0 0}
+.scat{margin:34px 4px 4px;padding-top:16px;border-top:1px solid var(--line);font-size:20px;font-weight:700;letter-spacing:.2px}#view-settings>.scat:first-child{border-top:0}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}.iconbtn.on{color:#7be29a}.iconbtn .ic{margin:0}
 #tvsadmin{margin-bottom:12px}
 .dd{position:relative;flex:1;min-width:0;width:100%}.ddnative{display:none!important}
@@ -659,6 +660,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 </section>
 
 <section id="view-settings" class="hide">
+  <h2 class="scat">Your account</h2>
   <div class="card s-prof">
     <div class="avatar" id="sav" aria-hidden="true">?</div>
     <div class="grow"><b id="sname">&hellip;</b> <span class="pill" id="srole"></span><span class="sub" id="acctsub"></span></div>
@@ -689,6 +691,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     </div>
   </div>
 
+  <h2 class="scat">On this device</h2>
   <h3 class="shead">Appearance</h3>
   <div class="card s-form">
     <div class="s-cap">Quick play when nothing is playing</div>
@@ -701,38 +704,10 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <p class="sub">These are saved on this device only, so each phone can look different.</p>
   </div>
 
-  <h3 class="shead">How to use this</h3>
-  <div class="card s-form"><button id="tourgo" type="button" class="go">Take the tour</button><button id="onboardgo" type="button" class="s-wide">Set up my phone again</button></div>
-  <div class="card help" id="help">
-    <details open><summary>Play something</summary>
-      <p data-os-only="ios">Copy a link, or tap Share in Kick, Twitch, YouTube or Safari, then run the <b>Play on Pi</b> Shortcut. You pick a TV, and it starts playing there.</p>
-      <p data-os-only="android">Tap Share in Kick, Twitch, YouTube or Chrome, then choose <b>TV Remote</b> in the share list (add it to your Home screen first, below). You pick a TV, and it starts playing there.</p>
-      <p data-os-only="other">Paste a link into the remote, or open <b>/share?u=</b> with a link on this address. On a phone, add the remote to the Home screen and use the Share menu.</p>
-      <p>You can also paste a link or type a channel name on the remote. A bare name looks on Kick; use the buttons to switch to Twitch or a YouTube search.</p></details>
-    <details><summary>Pick a TV</summary>
-      <p>All TVs shows a card for each TV and what it is playing. Tap one to open its remote. Controls only ever act on the TV you opened.</p></details>
-    <details><summary>The remote</summary>
-      <p>Pause, volume, mute and skip back or forward. Skipping is hidden on live streams. Quality changes the picture size; Refresh reloads a stream that has stalled. The power button turns the TV on or off. Stop ends playback.</p></details>
-    <details><summary>Favourites and recents</summary>
-      <p>Tap the star on a stream to save it as a favourite. Recents lists what was played lately. Guests can play from both but can't change favourites.</p></details>
-    <details><summary>Several streams at once</summary>
-      <p>The Pi's own screen can show up to four streams together. Open Multistream on that TV's remote, then add streams. <b>Enlarge</b> makes one big, and <b>Sync</b> lines up the pictures if one is ahead.</p></details>
-    <details><summary>Add it to your Home Screen</summary>
-      <p data-os-only="ios">In Safari, tap Share, then Add to Home Screen. It then opens like an app.</p>
-      <p data-os-only="android">In Chrome, tap the three dots, then Install app (or Add to Home screen). It opens like an app, and it shows up in the Share list so you can send links straight to a TV.</p>
-      <p data-os-only="other">In Chrome or Edge, use the install icon in the address bar to make it an app window.</p></details>
-    <details><summary>Something isn't working</summary>
-      <p><b>Isn't live right now:</b> the channel is offline. <b>Nothing on the TV:</b> check the TV is on and set to the right input, or tap the power button. <b>Stuck or blurry:</b> try Refresh, or pick a lower quality. Still stuck? Tell whoever set this up.</p></details>
-    <details class="adm hide"><summary>Admins: move the Pi or add a TV</summary>
-      <p>Plug the Pi (or a Chromecast) into the new TV and turn that TV on. Under <b>TVs</b> below, tap <b>Change or move a TV</b>. It looks again and suggests which Roku goes with which screen, including which HDMI port the Pi is on. Fix anything that's wrong, use <b>Test the TV</b>, then Save. Roku TVs need <b>Control by mobile apps</b> set to Permissive (Settings, System, Advanced system settings).</p></details>
-    <details class="adm hide"><summary>Admins: people and guest links</summary>
-      <p><b>People:</b> the owner can change other admins; admins manage everyone else. Everyone logs in with a username and password. <b>Access requests</b> from the login page show up here to approve. <b>Guest links</b> let someone play and control the TVs for a set time on a set number of devices; they can't change favourites, link accounts or manage people. Revoke a link any time.</p></details>
-    <details class="adm hide"><summary>Admins: the TV screen and QR code</summary>
-      <p>Between streams the Pi's screen shows a clock and a QR code that opens this remote. The <b>TV screen</b> card lets you hide the remote from the TV or turn the QR code off. If the Pi can't be reached after it moves, power it off and on again.</p></details>
-  </div>
-
   <div id="adminarea" class="hide">
+    <h2 class="scat">People and access</h2>
     <h3 class="shead">People</h3>
+    <p class="sub s-note" style="margin-top:0"><b>Owner</b> is the first admin, made at setup: the only one who can add or change other admins. <b>Admins</b> manage users, guest links, TVs and these settings. <b>Users</b> play, favourite and link their own accounts. <b>Guests</b> come in through a link and can only control the TVs, for a limited time.</p>
     <div class="card" id="people"></div>
     <button id="addperson" class="s-wide" aria-expanded="false">Add a person</button>
     <form id="acctadd" class="card s-form hide">
@@ -762,6 +737,13 @@ body:has(dialog.sheet[open]){overflow:hidden}
     </div>
     <div class="card hide" id="guests"></div>
 
+    <h2 class="scat">TVs and screens</h2>
+    <h3 class="shead">TVs</h3>
+    <div id="tvsadmin" class="s-list"></div>
+    <button id="autosetup" class="s-wide go" style="margin:0 0 8px">Set up automatically</button>
+    <p id="autonote" class="sub s-note" role="status"></p>
+    <button id="rerun" class="s-wide" style="margin:0">Change or move a TV</button>
+    <p class="sub s-note">Moved the Pi to another TV, or added a Chromecast or Roku? Plug it in, turn that TV on, then tap this. It looks again, shows what it found (including which HDMI port the Pi is on) and lets you rename, re-pair and test each TV.</p>
     <h3 class="shead hide" id="pihead">TV screen</h3>
     <div class="card pi-card hide" id="pibox">
       <div class="pi-top">
@@ -794,16 +776,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <div id="qrguestnote" class="hide row" style="align-items:center;margin:0"><span class="sub grow" style="margin:0">A guest link is showing on the TV.</span><button id="qrguestoff" type="button" style="flex:none">Show the normal QR code</button></div>
       </div>
     </div>
-    <h3 class="shead">The app</h3>
-    <div class="card s-form">
-      <button id="restartapp" type="button">Restart the app</button>
-      <p class="sub" id="restartnote">Restarts the container's app (Docker brings it straight back). It stops what is playing on the Pi's screen. Use it if something is stuck.</p>
-    </div>
-    <h3 class="shead hide" id="dockerhead">Docker</h3>
-    <div class="card hide" id="dockerbox">
-      <div id="dockerlist"></div>
-      <p class="sub" id="dockernote" style="margin:8px 4px 0"></p>
-    </div>
+    <h2 class="scat">How the remote behaves</h2>
     <h3 class="shead">What the remote suggests</h3>
     <div class="card s-form" id="sugcard">
       <label class="s-check" style="justify-content:space-between">Only suggest groups that are live<input id="sugglive" type="checkbox" class="tg" role="switch"></label>
@@ -820,12 +793,47 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <label class="s-check" style="justify-content:space-between">Let guests watch on their phone<input id="cfgguests" type="checkbox" class="tg" role="switch"></label>
       <p class="sub">"Watch on phone" shows the TV's stream on the phone, at home only. A bigger picture uses more of the home Wi-Fi.</p>
     </div>
-    <h3 class="shead">TVs</h3>
-    <div id="tvsadmin" class="s-list"></div>
-    <button id="autosetup" class="s-wide go" style="margin:0 0 8px">Set up automatically</button>
-    <p id="autonote" class="sub s-note" role="status"></p>
-    <button id="rerun" class="s-wide" style="margin:0">Change or move a TV</button>
-    <p class="sub s-note">Moved the Pi to another TV, or added a Chromecast or Roku? Plug it in, turn that TV on, then tap this. It looks again, shows what it found (including which HDMI port the Pi is on) and lets you rename, re-pair and test each TV.</p>
+    <h2 class="scat">System</h2>
+    <h3 class="shead">The app</h3>
+    <div class="card s-form">
+      <button id="restartapp" type="button">Restart the app</button>
+      <p class="sub" id="restartnote">Restarts the container's app (Docker brings it straight back). It stops what is playing on the Pi's screen. Use it if something is stuck.</p>
+    </div>
+    <h3 class="shead hide" id="dockerhead">Docker</h3>
+    <div class="card hide" id="dockerbox">
+      <div id="dockerlist"></div>
+      <p class="sub" id="dockernote" style="margin:8px 4px 0"></p>
+    </div>
+  </div>
+
+  <h2 class="scat">Help</h2>
+  <div class="card s-form"><button id="tourgo" type="button" class="go">Take the tour</button><button id="onboardgo" type="button" class="s-wide">Set up my phone again</button></div>
+  <div class="card help" id="help">
+    <details open><summary>Play something</summary>
+      <p data-os-only="ios">Copy a link, or tap Share in Kick, Twitch, YouTube or Safari, then run the <b>Play on Pi</b> Shortcut. You pick a TV, and it starts playing there.</p>
+      <p data-os-only="android">Tap Share in Kick, Twitch, YouTube or Chrome, then choose <b>TV Remote</b> in the share list (add it to your Home screen first, below). You pick a TV, and it starts playing there.</p>
+      <p data-os-only="other">Paste a link into the remote, or open <b>/share?u=</b> with a link on this address. On a phone, add the remote to the Home screen and use the Share menu.</p>
+      <p>You can also paste a link or type a channel name on the remote. A bare name looks on Kick; use the buttons to switch to Twitch or a YouTube search.</p></details>
+    <details><summary>Pick a TV</summary>
+      <p>All TVs shows a card for each TV and what it is playing. Tap one to open its remote. Controls only ever act on the TV you opened.</p></details>
+    <details><summary>The remote</summary>
+      <p>Pause, volume, mute and skip back or forward. Skipping is hidden on live streams. Quality changes the picture size; Refresh reloads a stream that has stalled. The power button turns the TV on or off. Stop ends playback.</p></details>
+    <details><summary>Favourites and recents</summary>
+      <p>Tap the star on a stream to save it as a favourite. Recents lists what was played lately. Guests can play from both but can't change favourites.</p></details>
+    <details><summary>Several streams at once</summary>
+      <p>The Pi's own screen can show up to four streams together. Open Multistream on that TV's remote, then add streams. <b>Enlarge</b> makes one big, and <b>Sync</b> lines up the pictures if one is ahead.</p></details>
+    <details><summary>Add it to your Home Screen</summary>
+      <p data-os-only="ios">In Safari, tap Share, then Add to Home Screen. It then opens like an app.</p>
+      <p data-os-only="android">In Chrome, tap the three dots, then Install app (or Add to Home screen). It opens like an app, and it shows up in the Share list so you can send links straight to a TV.</p>
+      <p data-os-only="other">In Chrome or Edge, use the install icon in the address bar to make it an app window.</p></details>
+    <details><summary>Something isn't working</summary>
+      <p><b>Isn't live right now:</b> the channel is offline. <b>Nothing on the TV:</b> check the TV is on and set to the right input, or tap the power button. <b>Stuck or blurry:</b> try Refresh, or pick a lower quality. Still stuck? Tell whoever set this up.</p></details>
+    <details class="adm hide"><summary>Admins: move the Pi or add a TV</summary>
+      <p>Plug the Pi (or a Chromecast) into the new TV and turn that TV on. Under <b>TVs</b> below, tap <b>Change or move a TV</b>. It looks again and suggests which Roku goes with which screen, including which HDMI port the Pi is on. Fix anything that's wrong, use <b>Test the TV</b>, then Save. Roku TVs need <b>Control by mobile apps</b> set to Permissive (Settings, System, Advanced system settings).</p></details>
+    <details class="adm hide"><summary>Admins: people and guest links</summary>
+      <p><b>People:</b> the owner can change other admins; admins manage everyone else. Everyone logs in with a username and password. <b>Access requests</b> from the login page show up here to approve. <b>Guest links</b> let someone play and control the TVs for a set time on a set number of devices; they can't change favourites, link accounts or manage people. Revoke a link any time.</p></details>
+    <details class="adm hide"><summary>Admins: the TV screen and QR code</summary>
+      <p>Between streams the Pi's screen shows a clock and a QR code that opens this remote. The <b>TV screen</b> card lets you hide the remote from the TV or turn the QR code off. If the Pi can't be reached after it moves, power it off and on again.</p></details>
   </div>
 </section>
 
