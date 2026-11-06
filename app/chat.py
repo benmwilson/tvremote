@@ -1,6 +1,7 @@
 """Twitch chat drawn over the stream on the Pi's screen (mpv osd-overlay).
 Anonymous IRC over TLS: no login and no extra dependency. Twitch only for now.
 shortcut: Kick and YouTube chat are not supported; emotes show as their text names."""
+import json
 import random
 import re
 import textwrap
@@ -9,6 +10,7 @@ import ssl
 import threading
 import time
 from collections import deque
+from urllib.request import Request, urlopen
 
 HOST, PORT = "irc.chat.twitch.tv", 6697
 SHOW_S = 25      # a message stays on screen this long
@@ -46,8 +48,26 @@ def parse(line):
     return (m["name"], m["color"], m["text"]) if m else None
 
 
+HISTORY = "https://recent-messages.robotty.de/api/v2/recent-messages/{}?limit={}"  # the same public service other Twitch clients use for history
+
+
+def recent_lines(channel, limit=40):
+    """The channel's last chat messages as the raw IRC lines (oldest first), so a chat that opens is not empty until someone types. Twitch's own chat
+    connection only delivers what is said after it joins. [] when the service is down or slow: the chat then just starts live."""
+    try:
+        req = Request(HISTORY.format(channel, limit), headers={"User-Agent": "tvremote/1.0"})
+        return [l for l in json.loads(urlopen(req, timeout=5).read()).get("messages", []) if " PRIVMSG " in l][-limit:]
+    except Exception:
+        return []
+
+
 def read_lines(channel, stopped, on_line):
-    """Anonymous Twitch IRC: calls on_line(line) for every line until `stopped` is set; reconnects after a pause."""
+    """Anonymous Twitch IRC: calls on_line(line) for every line until `stopped` is set; reconnects after a pause.
+    The channel's recent history is delivered first, once."""
+    for line in recent_lines(channel):
+        if stopped.is_set():
+            return
+        on_line(line)
     while not stopped.is_set():
         try:
             raw = socket.create_connection((HOST, PORT), timeout=15)

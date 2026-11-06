@@ -186,7 +186,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #wallopencard,#browsecard{margin-top:12px;padding:8px 16px}#playsec{margin-top:6px}#chattabs{flex-wrap:wrap;margin:2px 8px 6px 0}
 #chatcard #chatbox{margin-right:8px}
 .chatpoplink{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:40px;margin:8px 8px 0 0;color:var(--dim);font-size:14px}.chatpoplink .ic{width:16px;height:16px}
-.chathead .chev{font-size:18px;padding:0 8px}
+.chathead .chev{margin:0 8px}
 #chatcomp{margin:8px 8px 0 0}
 #emotesuggest{display:flex;gap:6px;overflow-x:auto;padding:0 0 6px;scrollbar-width:none}#emotesuggest::-webkit-scrollbar{display:none}
 #emotesuggest button{min-height:40px;padding:0 10px;flex:none;font-size:14px;gap:6px}#emotesuggest img{height:26px;max-width:64px;object-fit:contain}
@@ -203,9 +203,9 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .chatrow{display:flex;align-items:center;gap:8px}.chatrow .chathead{flex:1;min-width:0}
 .chatbtn{flex:none;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;box-sizing:border-box;display:grid;place-items:center;border-radius:12px;background:var(--card2);color:var(--dim);text-decoration:none;border:0}
 .chatbtn[aria-pressed=true]{color:var(--fg);box-shadow:inset 0 0 0 2px var(--accent,#9be564)}
-.chatbtn .ic{width:20px;height:20px}.chatbtn .chev{padding:0;font-size:18px;transition:transform .15s;display:block}.chatbtn[aria-expanded=true] .chev{transform:rotate(180deg)}
+.chatbtn .ic{width:20px;height:20px}.chatbtn .chev{margin:0}.chatbtn[aria-expanded=true] .chev{transform:rotate(180deg)}
 .chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
-.chathead .chev{color:var(--dim);transition:transform .15s}.chathead[aria-expanded=true] .chev{transform:rotate(180deg)}
+.chathead[aria-expanded=true] .chev{transform:rotate(180deg)}
 #chatbox iframe{display:block;width:100%;height:340px;border:0;border-radius:12px;background:#0b0e14}
 /* our own box sends the messages, so Kick's message bar (and its Google login, which Google refuses to show inside a frame) is pushed out of view */
 #chatbox.crop{height:340px;overflow:hidden}#chatbox.crop iframe{height:470px}
@@ -287,6 +287,10 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .s-actions form{display:flex;gap:8px;flex:1 1 100%}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
 .s-danger{color:#ff6b6b}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}
+:root{--chev-d:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");--chev-r:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E")}
+.chev,.dropsum::after,.help summary::after,.bfilters summary::after{content:"";display:block;flex:none;box-sizing:content-box;width:16px;height:16px;padding:0;background:#8c97a9;-webkit-mask:var(--chev-d) center/16px no-repeat;mask:var(--chev-d) center/16px no-repeat;font-size:0;transition:transform .15s}
+.chev.r{-webkit-mask-image:var(--chev-r);mask-image:var(--chev-r)}
+details[open]>summary::after{transform:rotate(180deg)}
 .drow{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:8px 4px;background:none;border-radius:12px;text-align:left;justify-content:flex-start}
 .drow+.drow{border-top:1px solid var(--line);border-radius:0}.drow .grow{min-width:0}.drow b{display:block}
 .drow .sub{display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -297,8 +301,6 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .dmono{font:12px/1.4 ui-monospace,Menlo,monospace}
 .dropsum{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:52px;padding:0 14px;border-radius:14px;background:var(--card2);color:var(--fg);cursor:pointer;list-style:none;-webkit-user-select:none;user-select:none;transition:filter .12s}
 .dropsum::-webkit-details-marker{display:none}.dropsum:active{filter:brightness(1.4)}
-.dropsum::after{content:"›";font-size:22px;line-height:1;transition:transform .15s}
-details[open]>.dropsum::after{transform:rotate(90deg)}
 .dropnav>.pad{margin-top:10px}
 #tourbox{position:fixed;left:0;right:0;bottom:0;z-index:60;max-width:560px;margin:0 auto;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:var(--card);border-radius:22px 22px 0 0;box-shadow:0 -10px 34px rgba(0,0,0,.55)}
 #tourbox .tt{display:flex;align-items:center;gap:10px}#tourbox .tt b{flex:1;font-size:17px}#tourbox .sub{font-size:12px;color:var(--dim)}
@@ -310,7 +312,7 @@ body.touring{padding-bottom:260px}
 .s-form{display:grid;gap:10px}.s-form input,.s-form select{font-size:16px;min-height:52px;width:100%;box-sizing:border-box}
 .s-check{display:flex;gap:10px;align-items:center;min-height:44px}.s-check input{width:22px;height:22px;min-height:0;flex:0 0 auto}
 .s-line{display:flex;align-items:center;width:100%;min-height:44px;background:none;color:inherit;text-align:left;padding:0;gap:10px}.s-line b{flex:1}
-.s-line[aria-expanded=true] .chev{transform:rotate(180deg)}.s-line .chev{color:var(--dim);transition:transform .15s}
+.s-line[aria-expanded=true] .chev{transform:rotate(180deg)}
 .s-out{display:flex;gap:8px}.s-out input{flex:1;min-width:0}.s-out button{flex:0 0 auto;padding:0 18px}
 .s-note{margin:8px 6px 0}.s-empty{color:var(--dim);margin:0;padding:4px 0}
 .s-ok{color:#7be29a;margin:0;overflow-wrap:anywhere}
@@ -388,7 +390,7 @@ body.touring{padding-bottom:260px}
 #view-settings .s-note{margin:10px 6px 0}
 .help details{border-top:1px solid var(--line,rgba(255,255,255,.08))}.help details:first-child{border-top:0}
 .help summary{cursor:pointer;padding:14px 4px;min-height:44px;font-weight:600;list-style:none;display:flex;align-items:center;justify-content:space-between}
-.help summary::-webkit-details-marker{display:none}.help summary::after{content:"\25BE";color:var(--dim)}.help details[open] summary::after{transform:rotate(180deg)}
+.help summary::-webkit-details-marker{display:none}
 .help p{margin:0 4px 12px;color:var(--dim);line-height:1.5;font-size:15px}.help p b{color:inherit}
 .s-actions{padding-bottom:6px}
 
@@ -591,7 +593,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <a class="s-link" id="signout" href="/logout">Sign out</a>
   </div>
   <div class="card hide" id="pwcard">
-    <button class="s-line" id="pwopen" aria-expanded="false"><b>Change password</b><span class="chatbtn"><span class="chev">&#9662;</span></span></button>
+    <button class="s-line" id="pwopen" aria-expanded="false"><b>Change password</b><span class="chatbtn"><span class="chev"></span></span></button>
     <form id="pwform" class="hide s-form">
       <input id="pwcur" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password">
       <input id="pwnew" type="password" placeholder="New password (6+ characters)" autocomplete="new-password" aria-label="New password">
@@ -802,7 +804,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span></button>
     <button id="chatTv" class="chatbtn hide" type="button" aria-pressed="false" aria-label="Show this chat on the TV" title="Show this chat on the TV (the picture moves over to make room)"><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg></button>
     <a id="chatpop" class="chatbtn hide" target="_blank" rel="noopener" aria-label="Open this chat on the site" title="Open this chat on the site (you can type there if you're logged in)"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a>
-    <button id="chatChev" class="chatbtn" type="button" aria-expanded="false" aria-label="Show or hide the chat"><span class="chev" aria-hidden="true">&#9662;</span></button>
+    <button id="chatChev" class="chatbtn" type="button" aria-expanded="false" aria-label="Show or hide the chat"><span class="chev" aria-hidden="true"></span></button>
   </div>
   <div id="chattabs" class="wseg hide" role="tablist" aria-label="Which stream's chat"></div>
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
@@ -818,7 +820,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   </div>
   <button id="chatlink" type="button" class="hide" style="margin:8px 8px 0 0;width:calc(100% - 8px)">Link Twitch to chat as yourself</button>
 </div>
-<div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multistream</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
+<div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multistream</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev r"></span></span></button></div>
 <dialog id="tvapps" class="sheet" aria-labelledby="tvappsttl">
   <div class="sh"><div class="grow"><b id="tvappsttl">TV apps</b><span class="sub" id="tvappssub">Tap one to open it on the TV</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -869,7 +871,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button data-k="InputHDMI2"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>2</button>
     <button data-k="InputHDMI3"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>3</button></div>
   <div class="sleeprow" style="margin-top:12px"><select id="sleepsel" aria-label="Sleep timer"><option value="">Sleep timer: off</option><option value="15">Stop in 15 min</option><option value="30">Stop in 30 min</option><option value="60">Stop in 1 hour</option><option value="90">Stop in 90 min</option><option value="0">Cancel timer</option></select></div>
-  <button id="appsopen" type="button" aria-haspopup="dialog" style="width:100%;margin-top:12px;justify-content:space-between"><span>TV apps</span><span class="chev" aria-hidden="true">&rsaquo;</span></button>
+  <button id="appsopen" type="button" aria-haspopup="dialog" style="width:100%;margin-top:12px;justify-content:space-between"><span>TV apps</span><span class="chev r" aria-hidden="true"></span></button>
   <details class="dropnav" style="margin-top:12px"><summary class="dropsum"><span>TV navigation</span></summary>
     <div class="pad">
     <div class="row"><button data-k="Home" aria-label="Home"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></button><button data-k="Up" aria-label="Up"><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button><button data-k="Back" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button></div>
@@ -879,7 +881,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   </details>
 </div>
 
-<div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multistream</span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
+<div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multistream</span></span><span class="chatbtn"><span class="chev r"></span></span></button></div>
 <div id="playsec">
 <h2>Play something</h2>
 <div class="card">
@@ -1704,7 +1706,7 @@ async function loadDocker() {
     const b = el('button', 'drow'), dot = el('i', 'sdot ' + c.state), g = el('div', 'grow');
     b.type = 'button'; dot.setAttribute('aria-hidden', 'true');
     g.append(el('b', null, c.name + (c.self ? ' (this app)' : '')), el('span', 'sub', c.image + ' \u00b7 ' + c.status));
-    b.append(dot, g, el('span', 'chev', '\u203a'));
+    b.append(dot, g, el('span', 'chev r'));
     b.onclick = () => openDocker(c.name);
     list.append(b);
   });

@@ -54,11 +54,20 @@ class PhoneViewing(unittest.TestCase):
         self.assertEqual(g.get("/api/watch").status_code, 403)
         self.assertTrue(self.admin.get("/api/auth").get_json()["watch"])  # an admin always may
 
-    def test_watch_says_when_nothing_is_playing_and_never_sends_twitch(self):
+    def test_watch_says_when_nothing_is_playing(self):
         self.assertEqual(self.admin.get("/api/watch").status_code, 409)
-        with mock.patch.dict(server.state, {"url": "https://www.twitch.tv/xqc"}), \
-                mock.patch.object(server, "resolve", return_value=("Twitch", "streamlink")):
-            self.assertEqual(self.admin.get("/api/watch").status_code, 422)
+
+    def test_twitch_gets_the_ad_free_relay_not_the_streams_own_address(self):
+        with mock.patch.dict(server.state, {"url": "https://www.twitch.tv/xqc"}),                 mock.patch.object(server, "resolve", return_value=("Twitch", "streamlink")),                 mock.patch.object(server, "stream_url", return_value="https://usher.example/xqc.m3u8"), mock.patch.object(server, "sprop", return_value=None):
+            j = self.admin.get("/api/watch").get_json()
+        self.assertTrue(j["ok"] and j["live"] and j["kind"] == "hls")
+        self.assertRegex(j["url"], r"^/watch/[\w-]+\.m3u8$")  # ours, never Twitch's own address: that one carries the ads
+        self.assertNotIn("usher.example", j["url"])
+        self.assertIsNotNone(server.twitchads.get(j["url"][len("/watch/"):-len(".m3u8")]))
+
+    def test_the_relay_playlist_needs_a_known_token_and_no_login(self):
+        anon = server.app.test_client()
+        self.assertEqual(anon.get("/watch/not-a-real-token.m3u8").status_code, 404)  # reachable without logging in, but only with a real token
 
     def test_a_live_stream_gets_its_own_address_at_the_chosen_size(self):
         self.admin.post("/api/config", json={"phone_quality": 480})

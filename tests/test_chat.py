@@ -1,4 +1,6 @@
+import json
 import sys
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -167,3 +169,26 @@ class KickFeedTests(unittest.TestCase):
         self.assertEqual([m for _, m in k.msgs], [("Al", "#FF0000", "first"), ("Bo", "#00FF00", "KEKW second")])
         self.assertEqual(calls[0], "omie")
         self.assertTrue(calls[1].startswith("89448/messages?_="))
+
+
+class History(unittest.TestCase):
+    LINES = ["@display-name=A;color=#FF0000;emotes= :a!a@a.tmi.twitch.tv PRIVMSG #chan :first", "@display-name=B;emotes= :b!b@b.tmi.twitch.tv PRIVMSG #chan :second"]
+
+    def test_recent_history_is_delivered_before_the_live_chat_and_only_once(self):
+        got, stopped = [], threading.Event()
+
+        def refuse(*a, **k):
+            stopped.set()  # the live connection fails: the history must already be in
+            raise OSError("no network")
+        with mock.patch.object(chat, "recent_lines", return_value=self.LINES), mock.patch.object(chat.socket, "create_connection", refuse):
+            chat.read_lines("chan", stopped, got.append)
+        self.assertEqual(got, self.LINES)
+
+    def test_a_dead_history_service_means_a_live_only_chat(self):
+        with mock.patch.object(chat, "urlopen", side_effect=OSError("down")):
+            self.assertEqual(chat.recent_lines("chan"), [])
+
+    def test_only_chat_messages_are_kept(self):
+        body = json.dumps({"messages": [":tmi.twitch.tv NOTICE #c :hi"] + self.LINES}).encode()
+        with mock.patch.object(chat, "urlopen", return_value=mock.Mock(read=lambda: body)):
+            self.assertEqual(chat.recent_lines("chan"), self.LINES)

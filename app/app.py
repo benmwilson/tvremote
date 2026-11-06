@@ -46,6 +46,7 @@ import store
 import throttle
 import kick
 import twitch
+import twitchads
 import dockerctl
 import emotes
 import mpvipc
@@ -130,7 +131,7 @@ def guard():
         if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):
             return redirect("/", 303)
         return Response(json.dumps({"ok": False, "error": "Finish the setup first."}), 403, mimetype="application/json")
-    if re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
+    if re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/watch/[\w-]+\.m3u8|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
@@ -524,6 +525,26 @@ def chat_send(text):
     return bool(r and r.get("error") == "success")
 
 
+_fs = {"at": 0.0}
+
+
+def ensure_full_window(now=None):
+    """Sometimes after a stream restarts the player's window stays 1280x720 although it says it is fullscreen (it is never resized), and the picture
+    then sits small inside the space made for it. When the window is not the screen's size, ask for fullscreen again. At most every 5 seconds."""
+    now = time.time() if now is None else now
+    if now - _fs["at"] < 5:
+        return False
+    _fs["at"] = now
+    d = prop("osd-dimensions")
+    if not isinstance(d, dict) or not d.get("w") or (d["w"], d["h"]) == (1920, 1080):
+        return False  # fine, or the player isn't answering
+    app.logger.info("Player window is %sx%s, not 1920x1080: asking for fullscreen again", d["w"], d["h"])
+    mpv(["set_property", "fullscreen", False])
+    time.sleep(0.4)
+    mpv(["set_property", "fullscreen", True])
+    return True
+
+
 def chat_column_send(text):
     """The chat column: the stream moves over (a quarter of the screen is freed on the right, and the picture sits at the top) and two windows fill
     the space: the chat on the right and a 'now playing' bar under the picture, on one shared background.
@@ -544,6 +565,7 @@ def chat_column_send(text):
             return False  # the stream's player is not up yet: the chat tries again in a moment
         mpv(["set_property", "video-align-y", -1])  # the picture at the top of its space; the bar goes underneath
         _chat["col"] = True
+    ensure_full_window()
     url, src = state["url"] or "", state["source"] or "Twitch"
     if not (bar.running() or bar.open()) or not bar.update(chat.ass_bar(fav_name(url), stream_title(url) or "", src)):
         return False
@@ -1896,10 +1918,25 @@ def api_config_set():
     return jsonify(ok=True, **phone_settings())
 
 
+@app.get("/watch/<token>.m3u8")
+def watch_playlist(token):
+    """A Twitch stream's playlist without the ads, for the phone's own player. The unguessable token is the login (the phone's video player
+    may not send the page's cookie), and it only exists for a stream an account asked to watch."""
+    relay = twitchads.get(token)
+    if not relay:
+        abort(404)
+    try:
+        text = relay.playlist()
+    except Exception as e:
+        app.logger.warning("Twitch watch playlist: %s", e)
+        return Response("", 502)
+    return Response(text, mimetype="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/api/watch")
 def api_watch():
     """The address of what this TV is playing, so the phone can play it itself (home network only: the address is the stream's own).
-    Twitch is left out: its ad filter only works inside the Pi's player. Starts at the TV's position for a video."""
+    Twitch goes through twitchads (a playlist with the ads taken out). Starts at the TV's position for a video."""
     cfg = phone_settings()
     if g.user == accounts.GUEST and not cfg["phone_guests"]:
         return jsonify(ok=False, error="Watching on the phone is switched off for guests."), 403
@@ -1918,8 +1955,13 @@ def api_watch():
     try:
         source, player = resolve(url)
         if source == "Twitch":
-            return jsonify(ok=False, error="Twitch streams can't play on the phone yet (the ads can't be filtered out there)."), 422
-        if player == "streamlink":
+            q = f"{h}p60,{h}p,480p,best"
+
+            def fresh():  # the stream's signed address expired: ask streamlink again
+                _addr_cache.pop((url, q), None)
+                return stream_url(url, q)
+            addr, kind = f"/watch/{twitchads.create(stream_url(url, q), hlsproxy._get, fresh)}.m3u8", "hls"
+        elif player == "streamlink":
             addr, kind = stream_url(url, f"{h}p60,{h}p,480p,best"), "hls"
         else:
             fmt = f"b[vcodec^=avc1][height<={h}][ext=mp4]/b[ext=mp4][height<={h}]/b[ext=mp4]"
