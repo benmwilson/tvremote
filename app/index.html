@@ -1758,7 +1758,7 @@ async function loadAccess() {
 async function loadSettings() {
   me = await fetch('/api/auth').then(r => r.json()).catch(() => ({}));
   renderProfile();
-  if (me.admin) await Promise.all([loadPeople(), loadAccess(), loadConfig()]);
+  if (me.admin) await Promise.all([loadPeople(), loadAccess(), loadConfig(), loadTvsAdmin()]);
 }
 async function loadConfig() {  // app settings an admin can change; more (and per-role permissions) can be added here
   const c = await fetch('/api/config').then(r => r.json()).catch(() => null);
