@@ -183,7 +183,11 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .sub.warn{color:var(--warn,#ffb062)}
 #chatcard{margin-top:12px;padding:6px 16px 12px 16px}
-#wallopencard,#browsecard{margin-top:12px;padding:8px 16px}#playsec{margin-top:6px}#chattabs{flex-wrap:wrap;margin:2px 8px 6px 0}
+#wallopencard,#browsecard{margin-top:12px;padding:8px 16px}#playsec{margin-top:6px}#chattabs{display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:3px 2px}#chattabs::-webkit-scrollbar{display:none}
+#chattabs button{position:relative;flex:none;width:38px;min-width:0;min-height:0;height:38px;padding:0;border-radius:50%;background:none;box-shadow:0 0 0 2px transparent;transition:box-shadow .15s}
+#chattabs button .av{width:34px;height:34px;font-size:12px}
+#chattabs button[aria-pressed=true]{box-shadow:0 0 0 2px var(--site,var(--tv,#62b0ff))}#chattabs button[data-site=kick]{--site:#53fc18}#chattabs button[data-site=twitch]{--site:#a970ff}
+#chattabs .tvbadge{position:absolute;right:-5px;bottom:-5px;width:18px;height:18px;border-radius:50%;background:var(--card);display:grid;place-items:center;box-shadow:0 0 0 2px var(--card)}#chattabs .tvbadge .ic{width:11px;height:11px;stroke:var(--tv,#62b0ff)}
 #chatcard #chatbox{margin-right:0}
 .chatpoplink{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:40px;margin:8px 8px 0 0;color:var(--dim);font-size:14px}.chatpoplink .ic{width:16px;height:16px}
 .chathead .chev{margin:0 8px}
@@ -199,7 +203,6 @@ body.chatfull{overflow:hidden}
 #chatcard.full #chatcomp{flex:none}
 #chatcard.full #emotepick{display:flex;flex-direction:column;height:min(46vh,360px);animation:sheetup .2s ease-out}
 #chatcard.full #emotegrid{flex:1;max-height:none}
-#chatcard.full #chattabs{margin-right:0}
 #emotesuggest,.sugg{display:flex;gap:6px;overflow-x:auto;padding:0 0 6px;scrollbar-width:none}#emotesuggest::-webkit-scrollbar,.sugg::-webkit-scrollbar{display:none}
 #emotesuggest button,.sugg button{min-height:40px;padding:0 12px;flex:none;font-size:14px;gap:6px}#emotesuggest img{height:26px;max-width:64px;object-fit:contain}.sugg button small{color:var(--dim);font-size:12px}
 #emotepick{background:var(--bg);border-radius:14px;padding:8px;margin:0 0 8px}
@@ -454,7 +457,7 @@ input[type=range].ruler{--n:10;background-image:repeating-linear-gradient(to rig
 #tvmute.muted .ic{color:#ff8a8a}
 #tvpower.isoff,#tvpower.isoff .ic{color:var(--dim);font-weight:700}#tvpower.isoff .ic{background:none}
 .wseg{display:inline-flex;gap:6px}.wseg button{min-height:44px;min-width:44px;padding:0 14px;font-size:15px}.wseg button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
-#chattabs button[aria-pressed=true][data-site=kick]{background:#53fc18}#chattabs button[aria-pressed=true][data-site=twitch]{background:#a970ff}
+
 /* a sheet: a popup that slides up from the bottom (a native <dialog>, so focus, Esc and the backdrop come for free) */
 dialog.sheet{position:fixed;inset:auto 0 0 0;margin:0 auto;width:min(100%,560px);max-width:none;max-height:90vh;max-height:90dvh;border:0;border-radius:22px 22px 0 0;background:var(--card);color:var(--fg,#f6f1ee);padding:0;overflow:hidden}
 dialog.sheet[open]{display:flex;flex-direction:column;animation:sheetup .22s ease-out}
@@ -837,11 +840,11 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <div class="card hide" id="chatcard">
   <div class="chatrow">
     <button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span></button>
+    <div id="chattabs" class="hide" role="tablist" aria-label="Which stream's chat to read here"></div>
     <button id="chatTv" class="chatbtn hide" type="button" aria-pressed="false" aria-label="Show this chat on the TV" title="Show this chat on the TV (the picture moves over to make room)"><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg></button>
     <a id="chatpop" class="chatbtn hide" target="_blank" rel="noopener" aria-label="Open this chat on the site" title="Open this chat on the site (you can type there if you're logged in)"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a>
     <button id="chatChev" class="chatbtn" type="button" aria-expanded="false" aria-label="Open or close the chat"><span class="chev r" aria-hidden="true"></span></button>
   </div>
-  <div id="chattabs" class="wseg hide" role="tablist" aria-label="Which stream's chat"></div>
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
   <div id="chatcomp" class="hide">
     <div id="emotesuggest" class="hide" role="listbox" aria-label="Emote suggestions"></div>
@@ -2672,21 +2675,29 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   const cur = tabs.find(t => t.i === chatTab) || {}, kick = cur.kick || null, tw = cur.tw || '';
   $('chatcard').classList.toggle('hide', !on);
   $('chatcard').classList.toggle('full', want); document.body.classList.toggle('chatfull', want);
-  const bar = $('chattabs'), sig = tabs.map(t => t.i + ':' + (t.kick || t.tw)).join('|') + '@' + chatTab;
+  // Several streams: a picture for each in the header. Tapping one chooses which chat is read here; the small TV mark is the one on the TV.
+  const onTv = st.chat_pref && st.wall ? st.chat_tv : -1;
+  const bar = $('chattabs'), sig = tabs.map(t => t.i + ':' + (t.kick || t.tw)).join('|') + '@' + chatTab + '#' + onTv;
   bar.classList.toggle('hide', tabs.length < 2);
   if (bar.dataset.sig !== sig) {
     bar.dataset.sig = sig;
     bar.replaceChildren(...tabs.map(t => {
-      const b = el('button', null, t.kick || t.tw);
-      b.dataset.site = t.kick ? 'kick' : 'twitch';  // the selected tab takes the site's own colour
+      const name = t.kick || t.tw, b = el('button');
+      b.type = 'button'; b.dataset.site = t.kick ? 'kick' : 'twitch';
+      b.title = name; b.setAttribute('aria-label', 'Read the chat of ' + name + (t.i === onTv ? ' (on the TV)' : ''));
       b.setAttribute('role', 'tab'); b.setAttribute('aria-pressed', String(t.i === chatTab));
+      b.append(avatarEl(name, t.url));
+      if (t.i === onTv) { const m = el('span', 'tvbadge'); m.innerHTML = ic('tv'); b.append(m); }
       b.onclick = () => { chatTab = t.i; chatShow(); };
       return b;
     }));
   }
   const pop = kick ? 'https://kick.com/popout/' + encodeURIComponent(kick) + '/chat' : tw ? 'https://www.twitch.tv/popout/' + tw + '/chat' : '';
   $('chatTv').classList.toggle('hide', !(st.chat_ok || st.chat_pref));  // chat on the TV: for the controlled stream, one or several on the Pi's screen
-  $('chatTv').setAttribute('aria-pressed', String(!!st.chat_pref));  // on means asked for, even while the controlled stream has no chat
+  const tvHere = !!st.chat_pref && (!st.wall || st.chat_tv === chatTab);  // the chat on the TV is the one being read here
+  $('chatTv').setAttribute('aria-pressed', String(tvHere));
+  const tvTip = tvHere ? 'Stop showing the chat on the TV' : st.chat_pref ? 'Switch the TV to this chat' : 'Show this chat on the TV (the picture moves over to make room)';
+  $('chatTv').title = tvTip; $('chatTv').setAttribute('aria-label', tvTip);
   $('chatpop').classList.toggle('hide', !pop);  // in the header, between the title and the chevron, open or not
   if (pop) $('chatpop').href = pop;
   $('chatbox').classList.toggle('hide', !want);
@@ -3125,7 +3136,11 @@ function dbg(open) {
   if (open) { dbgTick(); dbgTimer = setInterval(dbgTick, 2000); }
 }
 $('movedgo').onclick = () => { location.hash = '#/setup'; };
-$('chatTv').onclick = async () => { await cmd('chat', st.chat_pref ? 'off' : 'on'); };
+$('chatTv').onclick = async () => {
+  const tvHere = !!st.chat_pref && (!st.wall || st.chat_tv === chatTab);
+  await (tvHere ? cmd('chat', 'off') : cmd('chat', 'on', st.wall ? {index: chatTab} : {}));  // in a multistream the chat on screen is the one being read here
+  setTimeout(poll, 600);
+};
 $('dbgOpen').onclick = () => dbg(true);
 $('dbgClose').onclick = $('scrim').onclick = () => dbg(false);
 

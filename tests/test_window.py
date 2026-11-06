@@ -49,6 +49,38 @@ class ChatSenders(unittest.TestCase):
             self.assertEqual([c[0] for c in w.calls], ["update", "overlay", "update"], send.__name__)
 
 
+class TvChatPick(unittest.TestCase):
+    """In a multistream the chat on the TV is the one picked for it, not only whichever stream is being controlled."""
+
+    def wall(self, selected):
+        extras = [{"url": "https://kick.com/bee", "source": "Kick"}, {"url": "https://www.twitch.tv/cee", "source": "Twitch"}]
+        return (mock.patch.object(server.wall, "layout", "grid"), mock.patch.object(server.wall, "extras", extras), mock.patch.object(server.wall, "main_url", "https://kick.com/aye"),
+                mock.patch.object(server.wall, "selected", selected), mock.patch.dict(server.state, {"url": "https://kick.com/aye", "source": "Kick", "proc": object()}))
+
+    def run_with(self, selected, tv_i):
+        ps = self.wall(selected)
+        for p in ps:
+            p.start()
+            self.addCleanup(p.stop)
+        server._chat["tv_i"] = tv_i
+        self.addCleanup(lambda: server._chat.__setitem__("tv_i", None))
+        with mock.patch.object(server, "resolve", side_effect=lambda u: ("Kick" if "kick" in u else "Twitch", "streamlink")):
+            return server.chat_window(), server.chat_channel()
+
+    def test_it_follows_the_controlled_stream_until_one_is_picked(self):
+        self.assertEqual(self.run_with(2, None), (2, ("cee", "Twitch")))
+
+    def test_a_picked_window_wins_over_the_controlled_one(self):
+        self.assertEqual(self.run_with(2, 1), (1, ("bee", "Kick")))
+        self.assertEqual(self.run_with(2, 0), (0, ("aye", "Kick")))
+
+    def test_a_pick_that_no_longer_exists_falls_back_to_the_controlled_stream(self):
+        self.assertEqual(self.run_with(1, 7), (1, ("bee", "Kick")))
+
+    def test_one_stream_is_always_window_zero(self):
+        self.assertEqual(server.chat_window(), 0)
+
+
 class HeatWarning(unittest.TestCase):
     def setUp(self):
         server._warned["at"] = 0.0

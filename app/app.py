@@ -516,7 +516,7 @@ def stop_player():
     chat_stop()
 
 
-_chat = {"obj": None, "pref": False, "col": False, "win": None, "bar": None, "key": None}  # off by default
+_chat = {"obj": None, "pref": False, "col": False, "win": None, "bar": None, "key": None, "tv_i": None}  # off by default. tv_i: which window of a multistream the TV shows the chat of (None: the one being controlled)
 
 
 def chat_send(text):
@@ -598,9 +598,22 @@ def chat_stop():
         c.stop()
 
 
+def chat_window():
+    """The window (0 = the main one) whose chat the TV shows: the one picked for it, else the one the remote controls. Always 0 with one stream."""
+    if not wall.active():
+        return 0
+    i = _chat.get("tv_i")
+    return i if isinstance(i, int) and 0 <= i <= len(wall.extras) else wall.selected
+
+
 def chat_channel():
-    """(channel, source) of the stream whose chat the TV would show, or (None, None): the one the remote controls."""
-    url, source = sel_info()[:2]
+    """(channel, source) of the stream whose chat the TV would show, or (None, None): the one picked for the TV, else the one the remote controls."""
+    if wall.active() and chat_window() != wall.selected:
+        i = chat_window()
+        t = wall.extras[i - 1] if i else {"url": wall.main_url or state["url"], "source": state["source"]}
+        url, source = t["url"], t.get("source") or resolve(t["url"])[0]
+    else:
+        url, source = sel_info()[:2]
     return (chat.channel_of(url or ""), source) if source in ("Twitch", "Kick") and (state["proc"] or wall.active()) else (None, None)
 
 
@@ -608,6 +621,8 @@ def chat_sync():
     """Match the chat to what is playing: a live Twitch or Kick channel with chat switched on. One stream: the picture moves over and the chat and a
     now-playing bar fill the space. Several: the windows make room (the chat layouts) and the strip shows the controlled stream's chat."""
     chat_stop()
+    if not wall.active():
+        _chat["tv_i"] = None  # a pick belongs to the streams that were on the screen
     ch, source = chat_channel()
     _chat["key"] = (ch, source, wall.active(), bool(_chat["pref"]))
     if wall.active():
@@ -1398,6 +1413,9 @@ def api_cmd():
             start_player(state["url"], data.get("quality") or state["quality"], "quality" if data.get("quality") else "refresh")
         return jsonify(ok=True)
     if action == "chat":
+        idx = data.get("index")  # a multistream: which window's chat goes on the TV (the chat stays on or off as asked)
+        if isinstance(idx, int) and not isinstance(idx, bool):
+            _chat["tv_i"] = idx if idx >= 0 else None
         _chat["pref"] = data.get("value") != "off"
         if _chat["pref"]:
             chat_lower_quality()
@@ -2028,6 +2046,7 @@ def pi_status():
         data["chat_ok"] = source in ("Twitch", "Kick") and bool(chat.channel_of(url or ""))
         data["chat"] = bool(_chat["obj"])
         data["chat_pref"] = bool(_chat["pref"])
+        data["chat_tv"] = chat_window()  # the window whose chat is on the TV (or would be)
         if wall.active():  # the mute button is the controlled stream's sound switch
             data["muted"] = wall.selected not in wall.sound
         # live = streamlink, or a stream with no duration
