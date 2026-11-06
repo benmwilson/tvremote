@@ -274,6 +274,17 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .s-actions form{display:flex;gap:8px;flex:1 1 100%}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
 .s-danger{color:#ff6b6b}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}
+.dropsum{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:52px;padding:0 14px;border-radius:14px;background:var(--card2);color:var(--fg);cursor:pointer;list-style:none;-webkit-user-select:none;user-select:none;transition:filter .12s}
+.dropsum::-webkit-details-marker{display:none}.dropsum:active{filter:brightness(1.4)}
+.dropsum::after{content:"›";font-size:22px;line-height:1;transition:transform .15s}
+details[open]>.dropsum::after{transform:rotate(90deg)}
+.dropnav>.pad{margin-top:10px}
+#tourbox{position:fixed;left:0;right:0;bottom:0;z-index:60;max-width:560px;margin:0 auto;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:var(--card);border-radius:22px 22px 0 0;box-shadow:0 -10px 34px rgba(0,0,0,.55)}
+#tourbox .tt{display:flex;align-items:center;gap:10px}#tourbox .tt b{flex:1;font-size:17px}#tourbox .sub{font-size:12px;color:var(--dim)}
+#tourbox p{margin:4px 0 12px;color:var(--dim);font-size:15px;line-height:1.45;min-height:3em}
+body.touring{padding-bottom:260px}
+.tour-hl{outline:3px solid var(--tv,#6bb2ff)!important;outline-offset:4px;border-radius:14px;animation:tourpulse 1.4s ease-in-out infinite}
+@keyframes tourpulse{50%{outline-offset:8px}}
 .s-wide{display:block;width:100%;min-height:52px;margin-top:10px}
 .s-form{display:grid;gap:10px}.s-form input,.s-form select{font-size:16px;min-height:52px;width:100%;box-sizing:border-box}
 .s-check{display:flex;gap:10px;align-items:center;min-height:44px}.s-check input{width:22px;height:22px;min-height:0;flex:0 0 auto}
@@ -661,11 +672,18 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <p class="sub" id="pistate">Checking&hellip;</p>
       <button id="desktop" class="pibtn"><svg class="ic" aria-hidden="true"><use id="piicon" href="#i-eye-off"/></svg><span id="pilabel">Hide the remote from the TV</span></button>
       <p class="sub" id="pihelp"></p>
-      <label class="s-check" style="justify-content:space-between">Show a QR code for the remote on the TV<input id="qrtoggle" type="checkbox" class="tg" role="switch"></label>
-      <select id="qrmode" aria-label="What the QR code opens" style="font-size:16px;min-height:52px">
-        <option value="remote">QR opens the remote</option><option value="shortcut">QR opens the iPhone shortcut</option></select>
-      <input id="shortcuturl" placeholder="Shortcut iCloud link (https://www.icloud.com/shortcuts/…)" aria-label="The Play on Pi shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off">
-      <p class="sub hide" id="qrguestnote">A guest link is showing on the TV. <button id="qrguestoff" type="button">Show the normal QR code</button></p>
+    </div>
+    <h3 class="shead hide" id="qrhead">QR code on the TV</h3>
+    <div class="card s-form hide" id="qrbox">
+      <label class="s-check" style="justify-content:space-between">Show a QR code between streams<input id="qrtoggle" type="checkbox" class="tg" role="switch"></label>
+      <div class="s-form" id="qropts">
+        <div><div class="s-cap">What it opens</div>
+          <select id="qrmode" aria-label="What the QR code opens"><option value="remote">This remote</option><option value="shortcut">The iPhone shortcut</option></select></div>
+        <div id="qrshortcut" class="hide"><div class="s-cap">Shortcut link</div>
+          <input id="shortcuturl" placeholder="https://www.icloud.com/shortcuts/&hellip;" aria-label="The Play on Pi shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"></div>
+        <p class="sub" id="qrhelp"></p>
+        <div id="qrguestnote" class="hide row" style="align-items:center;margin:0"><span class="sub grow" style="margin:0">A guest link is showing on the TV.</span><button id="qrguestoff" type="button" style="flex:none">Show the normal QR code</button></div>
+      </div>
     </div>
     <h3 class="shead">The app</h3>
     <div class="card s-form">
@@ -815,7 +833,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button data-k="InputHDMI3"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>3</button></div>
   <div class="sleeprow" style="margin-top:12px"><select id="sleepsel" aria-label="Sleep timer"><option value="">Sleep timer: off</option><option value="15">Stop in 15 min</option><option value="30">Stop in 30 min</option><option value="60">Stop in 1 hour</option><option value="90">Stop in 90 min</option><option value="0">Cancel timer</option></select></div>
   <button id="appsopen" type="button" aria-haspopup="dialog" style="width:100%;margin-top:12px;justify-content:space-between"><span>TV apps</span><span class="chev" aria-hidden="true">&rsaquo;</span></button>
-  <details style="margin-top:12px"><summary style="min-height:44px;line-height:44px;color:var(--dim)">TV navigation</summary>
+  <details class="dropnav" style="margin-top:12px"><summary class="dropsum"><span>TV navigation</span></summary>
     <div class="pad">
     <div class="row"><button data-k="Home" aria-label="Home"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></button><button data-k="Up" aria-label="Up"><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button><button data-k="Back" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button></div>
     <div class="row"><button data-k="Left" aria-label="Left"><svg class="ic" aria-hidden="true"><use href="#i-left"/></svg></button><button data-k="Select" class="go">OK</button><button data-k="Right" aria-label="Right"><svg class="ic" aria-hidden="true"><use href="#i-right"/></svg></button></div>
@@ -847,12 +865,12 @@ body:has(dialog.sheet[open]){overflow:hidden}
 
 <p id="dbgrow" class="hide" style="text-align:center;margin-top:26px"><button id="dbgOpen" style="min-height:44px;background:none;color:var(--dim);font-size:14px"><svg class="ic" aria-hidden="true"><use href="#i-terminal"/></svg>Debug</button></p>
 </section>
-<dialog id="tour" class="sheet" aria-labelledby="tourttl">
-  <div class="sh"><div class="grow"><b id="tourttl"></b><span class="sub" id="toursub"></span></div>
-    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
-  <div class="sb"><p id="tourtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
-    <div class="row"><button id="tourback" type="button">Back</button><button id="tournext" type="button" class="go">Next</button></div></div>
-</dialog>
+<div id="tourbox" class="hide" role="dialog" aria-live="polite" aria-labelledby="tourttl">
+  <div class="tt"><b id="tourttl"></b><span class="sub" id="toursub"></span>
+    <button id="tourclose" type="button" class="iconbtn" aria-label="End the tour" title="End the tour"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <p id="tourtext"></p>
+  <div class="row"><button id="tourback" type="button">Back</button><button id="tournext" type="button" class="go">Next</button></div>
+</div>
 <dialog id="confirm" class="sheet" aria-labelledby="confirmttl">
   <div class="sh"><div class="grow"><b id="confirmttl"></b></div></div>
   <div class="sb"><p id="confirmtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
@@ -1565,23 +1583,54 @@ function confirmSheet(title, text, yes, danger) {
     d.showModal();
   });
 }
-// Tour: a few steps, one at a time. The text is the Help section's own (kept short), so there is one thing to keep up to date.
+// Tour: a floating guide that opens the right screen for each step, scrolls to the thing it talks about and outlines it.
+// `when` is added to the text if the thing is not on screen right now (it only appears in some states).
 const TOUR = [
-  ['Play something', 'Copy a link, or tap Share in Kick, Twitch or YouTube, then run the “Play on Pi” Shortcut. Or paste a link or type a channel name in the box on the remote.'],
-  ['Pick a TV', 'The first screen has a card for each TV. Tap one to open its remote. Controls only act on the TV you opened.'],
-  ['The remote', 'Pause, volume, mute, skip and quality. Refresh reloads a stalled stream. The power button turns the TV on or off. Stop ends playback.'],
-  ['Favourites and recents', 'Tap the star on a stream to keep it. Recents lists what you watched lately; the LIVE badge shows who is on now.'],
-  ['Several streams', 'On the Pi’s screen you can watch up to four streams at once. Open Multistream, add streams, and use Enlarge to make one big.'],
-  ['Add it to your Home Screen', 'In Safari tap Share, then Add to Home Screen. It then opens like an app.'],
-  ['That’s it', 'Stuck? The Help section below has more. Tap Take the tour any time to see this again.']];
-let tourI = 0;
-function tourShow() {
-  $('tourttl').textContent = TOUR[tourI][0]; $('tourtext').textContent = TOUR[tourI][1]; $('toursub').textContent = 'Step ' + (tourI + 1) + ' of ' + TOUR.length;
-  $('tourback').disabled = !tourI; $('tournext').textContent = tourI === TOUR.length - 1 ? 'Done' : 'Next';
+  {t: 'Pick a TV', x: 'The first screen has a card for each TV and what it is playing. Tap one to open its remote. Controls only act on the TV you opened.', view: 'all', sel: '#cards .tvcard'},
+  {t: 'Play something', x: 'Paste a link, type a channel name or search here. A bare name looks on Kick; the buttons below switch to Twitch or YouTube. From your phone you can also share a link to the \u201cPlay on Pi\u201d Shortcut.', view: 'tv', sel: '#link'},
+  {t: 'Favourites', x: 'Tap the star on a stream to keep it here. The LIVE badge shows who is on now, and greyed ones are offline.', view: 'tv', sel: '#favs', when: 'Nothing is saved yet: tap the star on a stream to add one.'},
+  {t: 'Recents', x: 'What you watched lately. Offline channels are greyed out.', view: 'tv', sel: '#recents', when: 'It fills up as you play things.'},
+  {t: 'TV controls', x: 'Volume, mute, power and the TV\u2019s HDMI inputs, for the TV you opened.', view: 'tv', sel: '#tvctl'},
+  {t: 'TV apps', x: 'Open the TV\u2019s own apps (YouTube, Netflix and so on) from here.', view: 'tv', sel: '#appsopen', when: 'Only TVs with a Roku have apps.'},
+  {t: 'Browse live channels', x: 'See who is live on Kick and Twitch. Search, filter and sort, then play one or add it to the multistream.', view: 'tv', sel: '#browsecard'},
+  {t: 'Multistream', x: 'Watch up to four streams at once on the Pi\u2019s screen. Open it, add streams, and use Enlarge to make one big.', view: 'tv', sel: '#wallopencard', when: 'It appears while a stream plays on the Pi\u2019s screen.'},
+  {t: 'Chat', x: 'Read the chat of the Twitch or Kick channel that is playing. Link your account in Settings to type in Twitch chat, or show the chat on the TV.', view: 'tv', sel: '#chatcard', when: 'It appears while a Twitch or Kick channel plays.'},
+  {t: 'Link your accounts', x: 'Link Kick or Twitch here to chat as yourself.', view: 'settings', sel: '#platforms', when: 'Guests can\u2019t link accounts.'},
+  {t: 'Help and Home Screen', x: 'More answers live here. To use this like an app, open it in Safari, tap Share, then Add to Home Screen.', view: 'settings', sel: '#help'},
+  {t: 'That\u2019s it', x: 'Tap Take the tour any time to see this again.', view: 'settings', sel: '#tourgo'}];
+let tourI = 0, tourHome = '', tourEl = null, tourSeq = 0, tourSteps = TOUR;
+const tourOpen = () => !$('tourbox').classList.contains('hide');
+function tourTv() { const t = targets.find(x => x.id === target) || targets.find(x => x.kind === 'pi' || x.kind === 'chromecast') || targets[0]; return t ? t.id : ''; }
+function tourClear() { if (tourEl) { tourEl.classList.remove('tour-hl'); tourEl = null; } }
+async function tourShow() {
+  const seq = ++tourSeq, s = tourSteps[tourI], last = tourI === tourSteps.length - 1;
+  tourClear();
+  $('tourttl').textContent = s.t; $('toursub').textContent = (tourI + 1) + ' of ' + tourSteps.length;
+  $('tourback').disabled = !tourI; $('tournext').textContent = last ? 'Done' : 'Next';
+  if (s.view && view() !== s.view) {
+    location.hash = s.view === 'all' ? '#/' : s.view === 'settings' ? '#/settings' : '#/tv/' + encodeURIComponent(tourTv());
+    await new Promise(r => setTimeout(r, 500));  // the screen draws itself
+  }
+  if (seq !== tourSeq || !tourOpen()) return;  // a newer step, or the tour ended, while the screen changed
+  const e = s.sel ? document.querySelector(s.sel) : null, on = !!(e && e.getClientRects().length);
+  $('tourtext').textContent = on || !s.when ? s.x : s.x + ' (' + s.when + ')';
+  if (on) { tourEl = e; e.classList.add('tour-hl'); e.scrollIntoView({block: 'center', behavior: 'smooth'}); }
 }
-$('tourgo').onclick = () => { tourI = 0; tourShow(); $('tour').showModal(); };
+function tourEnd() {
+  tourSeq++; tourClear();
+  $('tourbox').classList.add('hide'); document.body.classList.remove('touring');
+  if (view() !== (tourHome === '#/settings' ? 'settings' : tourHome.startsWith('#/tv/') ? 'tv' : 'all') || tourHome !== location.hash) location.hash = tourHome || '#/';
+}
+$('tourgo').onclick = () => {
+  tourHome = location.hash; tourI = 0;
+  tourSteps = tourTv() ? TOUR : TOUR.filter(s => s.view !== 'tv');  // no TV set up: skip the steps that need one
+  $('tourbox').classList.remove('hide'); document.body.classList.add('touring');
+  tourShow();
+};
 $('tourback').onclick = () => { if (tourI) { tourI--; tourShow(); } };
-$('tournext').onclick = () => { if (tourI < TOUR.length - 1) { tourI++; tourShow(); } else $('tour').close(); };
+$('tournext').onclick = () => { if (tourI < tourSteps.length - 1) { tourI++; tourShow(); } else tourEnd(); };
+$('tourclose').onclick = tourEnd;
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && tourOpen()) tourEnd(); });
 $('restartapp').onclick = async () => {
   if (!await confirmSheet('Restart the app?', 'It stops what is playing on the Pi’s screen and the remote is unavailable for a few seconds.', 'Restart', true)) return;
   const r = await api('/api/restart', 'POST', {});
@@ -1671,8 +1720,14 @@ function renderShell() {
     : s.error ? 'Couldn\u2019t start: ' + s.error : 'Starting\u2026';
   $('desktop').classList.toggle('show', !s.enabled);
   $('qrtoggle').checked = s.qr !== false;
-  $('qrmode').value = s.qr_mode || 'remote';
+  const mode = s.qr_mode || 'remote';
+  $('qrmode').value = mode;
   if (document.activeElement !== $('shortcuturl')) $('shortcuturl').value = s.shortcut_url || '';
+  $('qrshortcut').classList.toggle('hide', mode !== 'shortcut');
+  $('qropts').classList.toggle('hide', s.qr === false);
+  $('qrhelp').textContent = mode === 'shortcut'
+    ? (s.shortcut_url ? 'Scanning opens the shortcut\u2019s iCloud page, so a phone can add \u201cPlay on Pi\u201d.' : 'Paste the shortcut\u2019s iCloud link above. Until then the QR code opens this remote.')
+    : 'Scanning opens this remote.';
   $('qrguestnote').classList.toggle('hide', !s.qr_guest);
   $('invtv').classList.toggle('hide', !targets.some(t => t.kind === 'pi'));
   $('piicon').setAttribute('href', s.enabled ? '#i-eye-off' : '#i-eye');
@@ -1684,6 +1739,8 @@ async function loadShell() {
   const pi = targets.some(t => t.kind === 'pi');
   $('pibox').classList.toggle('hide', !pi);
   $('pihead').classList.toggle('hide', !pi);
+  $('qrbox').classList.toggle('hide', !pi);
+  $('qrhead').classList.toggle('hide', !pi);
   loadStats();
   if (!pi) return;
   try { shellInfo = await (await fetch('/api/shell')).json(); renderShell(); } catch (e) {}
@@ -1829,10 +1886,14 @@ function personRow(u) {
 function renderPeople() { $('people').replaceChildren(...people.flatMap(personRow)); }
 
 function requestRow(r) {
-  const form = mk('form', {class: 's-actions hide', style: 'padding-left:0'},
-    mk('input', {value: r.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '').slice(0, 20), 'aria-label': 'Account name', autocapitalize: 'none'}),
-    mk('input', {type: 'password', placeholder: 'Password (blank = make one)', autocomplete: 'new-password', 'aria-label': 'Password'}),
-    mk('button', {class: 'go'}, 'Create account'));
+  const form = mk('form', {class: 's-form hide', style: 'flex:1 0 100%;border-top:1px solid var(--line);padding-top:12px;margin-top:4px'},
+    mk('div', {}, mk('div', {class: 's-cap'}, 'Account name'),
+      mk('input', {value: r.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '').slice(0, 20), 'aria-label': 'Account name', autocapitalize: 'none', autocorrect: 'off'})),
+    mk('div', {}, mk('div', {class: 's-cap'}, 'Password'),
+      mk('input', {type: 'password', placeholder: 'Leave blank to make one', autocomplete: 'new-password', 'aria-label': 'Password'}),
+      mk('p', {class: 'sub', style: 'margin:6px 2px 0'}, 'A made-up password is shown once after you create the account. Tell them it.')),
+    mk('div', {class: 'row', style: 'margin:0'}, mk('button', {class: 'go'}, 'Create account'),
+      mk('button', {type: 'button', onclick: () => form.classList.add('hide')}, 'Cancel')));
   const result = mk('p', {class: 's-ok hide', role: 'status'});
   form.onsubmit = async e => {
     e.preventDefault();
