@@ -298,6 +298,7 @@ body.chatfull{overflow:hidden}
 .s-actions form{display:flex;gap:8px;flex:1 1 100%}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
 .s-danger{color:#ff6b6b}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}
+#tvsadmin{margin-bottom:12px}
 .dd{position:relative;flex:1;min-width:0;width:100%}.ddnative{display:none!important}
 .ddbtn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:52px;padding:0 16px;text-align:left;font-size:16px;background:var(--card2);border-radius:14px}
 .ddbtn>span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2425,6 +2426,7 @@ async function loadTvsAdmin() {
       ...(ccIn ? [field('HDMI input the Chromecast is on', ccIn)] : []), mk('div', {class: 's-out'}, save, cancel, del), msg);
     const facts = dl([['Roku address', t.roku || 'Not set'], ['Pi on', t.pi ? (hdmiText(t.pi.input) || 'Input not switched') : ''],
       ['Chromecast on', t.chromecast ? (hdmiText(t.chromecast.input) || 'Input not switched') : '']]);
+    facts.style.gridTemplateColumns = '124px 1fr';  // the same label width in every card, so the values line up down the page
     const setOpen = open => { editor.classList.toggle('hide', !open); facts.classList.toggle('hide', open); pencil.setAttribute('aria-pressed', String(open)); };
     const pencil = iconBtn('pencil', 'Edit ' + t.name, '', () => setOpen(editor.classList.contains('hide')));
     cancel.onclick = () => { name.value = t.name; ip.value = t.roku || ''; if (piIn) piIn.value = t.pi.input || ''; if (ccIn) ccIn.value = t.chromecast.input || ''; msg.textContent = ''; setOpen(false); };
