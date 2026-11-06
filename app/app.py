@@ -1142,6 +1142,9 @@ def api_cmd():
     if action == "restart":
         if not state["url"]:
             return jsonify(ok=False, error="Nothing to restart"), 400
+        if data.get("quality") and state.get("hot") and state["proc"]:  # changing in place: say so on the TV, with a wheel until it plays
+            before = state.get("started")
+            osd_swap(stream_label(data["quality"]), ready=lambda: _picture_changed_since(before))
         with lock:
             start_player(state["url"], data.get("quality") or state["quality"], "quality" if data.get("quality") else "refresh")
         return jsonify(ok=True)
@@ -1325,6 +1328,9 @@ def tile_retry():
 
 
 def _restart_main_quality(label):
+    if state.get("hot") and state["proc"]:
+        before = state.get("started")
+        osd_swap(label or "Auto", ready=lambda: _picture_changed_since(before))
     with lock:
         start_player(state["url"], multi.quality_for(resolve(state["url"])[1], label), "quality")
 
@@ -1409,6 +1415,7 @@ def api_wall():
             wall_later(_restart_main_quality, label)
         elif 1 <= i <= len(wall.extras):
             wall.extras[i - 1]["quality"] = label
+            osd_swap(label or "Auto", sock=wall.sock(i, SOCK))  # in that window, for a moment
             wall_later(reconcile_job)  # only this window differs: it loads the new quality in place, or restarts alone
         else:
             return jsonify(ok=False, error="No such stream"), 400
@@ -1537,6 +1544,31 @@ def osd_volume(sock=SOCK):
     vol, muted = sprop(sock, "volume"), sprop(sock, "mute")
     if vol is not None:
         mpvipc.send(sock, ["show-text", volume_text(vol, muted), 1500])
+
+
+def osd_swap(label, sock=SOCK, ready=None, max_s=8.0):
+    """While a stream changes quality in place, show "Switching to 720p" with a turning wheel on the Pi's screen (the same on-screen text the volume
+    bar uses), then "Quality: 720p" for a moment. `ready()` says the new picture is playing; without it the wheel turns for 2.5 s. Runs in the
+    background, never blocks the change, and a window that has gone away just stops it. Returns the thread."""
+    def run():
+        frames, t0, i = "\u25d0\u25d3\u25d1\u25d2", time.time(), 0
+        while time.time() - t0 < (max_s if ready else 2.5):
+            r = mpvipc.send(sock, ["show-text", f"{frames[i % 4]}  Switching to {label}", 700])
+            if r is None:
+                return  # no window to draw on
+            i += 1
+            time.sleep(0.25)
+            if ready and time.time() - t0 > 0.6 and ready():
+                break
+        mpvipc.send(sock, ["show-text", f"Quality: {label}", 1500])
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return t
+
+
+def _picture_changed_since(started):
+    """True once the player has started the new stream (a change in place stamps `started`) and is actually playing it."""
+    return state.get("started") != started and prop("core-idle") is False and prop("time-pos") is not None
 
 
 PROPS = {

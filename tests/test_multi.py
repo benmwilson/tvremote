@@ -184,6 +184,28 @@ class QuickSecondAddTest(unittest.TestCase):
         self.assertEqual(r[1], 400)
 
 
+class QualityOsdTest(unittest.TestCase):
+    def test_a_wheel_and_text_show_while_the_quality_changes_then_the_result(self):
+        import app as server
+        sent, polls = [], [0]
+        def ready():
+            polls[0] += 1
+            return polls[0] >= 2  # the new picture is playing after a moment
+        with mock.patch.object(server.mpvipc, "send", side_effect=lambda sock, cmd, *a: sent.append(cmd) or {"error": "success"}), \
+                mock.patch.object(server.time, "sleep"), mock.patch.object(server.time, "time", side_effect=[0.0, 0.1] + [1.0] * 40):
+            server.osd_swap("720p", ready=ready).join(5)
+        texts = [c[1] for c in sent if c[0] == "show-text"]
+        self.assertTrue(texts[0].endswith("Switching to 720p"))
+        self.assertEqual(texts[-1], "Quality: 720p")
+        self.assertGreaterEqual(len({t[0] for t in texts[:-1]}), 1)  # a wheel frame in front of the words
+
+    def test_it_stops_quietly_when_there_is_no_window_to_draw_on(self):
+        import app as server
+        with mock.patch.object(server.mpvipc, "send", return_value=None) as send:
+            server.osd_swap("720p").join(5)
+        self.assertEqual(send.call_count, 1)  # tried once, then gave up: no "Quality" message to nowhere
+
+
 class WarmAddressesTest(unittest.TestCase):
     def test_the_full_screen_address_of_every_stream_is_ready_before_the_wall_shrinks(self):
         import app as server

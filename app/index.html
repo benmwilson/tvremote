@@ -112,7 +112,9 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .watch{position:sticky;top:8px;z-index:6;padding:10px;box-shadow:0 10px 28px rgba(0,0,0,.5);margin-top:12px}
 .watchbar{display:flex;align-items:center;gap:8px;margin-bottom:8px}.watchbar b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .watchbar button{flex:none;width:44px;min-height:44px;padding:0;display:grid;place-items:center}.watchbar select{flex:none;max-width:46%;min-height:44px;font-size:15px}
-.quick{margin-top:16px}.quick .wlabel{margin-bottom:8px}
+body.no-titles .ftitle{display:none}
+body.no-marquee .ftitle.mq{text-overflow:ellipsis}body.no-marquee .ftitle.mq>span{animation:none}
+.quick{margin-top:16px}.quick .wlabel{margin-bottom:8px}.quick .fav{background:var(--card2,rgba(255,255,255,.05))}
 .quickstrip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}  /* the same tiles as the multi-view strip */
 .quickstrip .wstream{cursor:pointer;overflow:hidden;padding:12px 4px}.quickstrip .wstream .av{width:48px;height:48px}
 .wstream.loading{pointer-events:none}.wstream.loading::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:40%;background:var(--tv,var(--fg));animation:slide 1.2s ease-in-out infinite}
@@ -537,6 +539,18 @@ body:has(dialog.sheet[open]){overflow:hidden}
     </div>
   </div>
 
+  <h3 class="shead">Appearance</h3>
+  <div class="card s-form">
+    <div class="s-cap">Quick play when nothing is playing</div>
+    <div class="row seg" id="qpseg" role="group" aria-label="Quick play style">
+      <button type="button" data-qp="tiles">Picture tiles</button><button type="button" data-qp="cards">Cards</button><button type="button" data-qp="off">Off</button></div>
+    <p class="sub">Who is live among your favourites and recents, ready to tap.</p>
+    <label class="s-check" style="justify-content:space-between">Show what each stream is called<input id="apptitles" type="checkbox" class="tg" role="switch"></label>
+    <label class="s-check" style="justify-content:space-between">Scroll long titles<input id="appmarquee" type="checkbox" class="tg" role="switch"></label>
+    <label class="s-check" style="justify-content:space-between">Match the site’s colour while playing<input id="appcolour" type="checkbox" class="tg" role="switch"></label>
+    <p class="sub">These are saved on this device only, so each phone can look different.</p>
+  </div>
+
   <h3 class="shead">How to use this</h3>
   <div class="card help" id="help">
     <details open><summary>Play something</summary>
@@ -792,7 +806,7 @@ function accent() {
   let c = (st.running || st.starting || st.wall) && SRC_COLOURS[st.source];
   if (c) accentHold = {c, at: Date.now()};
   else if (accentHold.c && Date.now() - accentHold.at < 6000 && !st.error && st.url) c = accentHold.c;  // a window restarting for a moment keeps its colour instead of flashing to the TV's
-  $('view-tv').style.setProperty('--tv', c || tvColour(target));
+  $('view-tv').style.setProperty('--tv', (appPref('colour') && c) || tvColour(target));  // the site's colour, unless this device switched that off
 }
 const tvColour = id => TV_COLOURS[Math.max(0, targets.findIndex(t => t.id === id)) % TV_COLOURS.length];
 const ic = n => '<svg class="ic" aria-hidden="true"><use href="#i-' + n + '"/></svg>';
@@ -1150,21 +1164,50 @@ let favLoading = null;  // {url, t0}
 let favNote = null;  // {url, text, until}: why the last tapped favourite didn't start
 // Quick play: when nothing is playing, whoever is live among the favourites and recents, ready to tap, at the top where the empty "Nothing playing" is.
 let quickSig = '';
+const qpStyle = () => { try { const v = localStorage.getItem('qpStyle'); return v === 'cards' || v === 'off' ? v : 'tiles'; } catch (e) { return 'tiles'; } };  // per device
+const appPref = k => { try { return localStorage.getItem('app:' + k) !== '0'; } catch (e) { return true; } };  // all on unless switched off
+function applyAppearance() {
+  document.body.classList.toggle('no-titles', !appPref('titles'));
+  document.body.classList.toggle('no-marquee', !appPref('marquee'));
+  document.body.classList.toggle('no-colour', !appPref('colour'));
+  [['titles', 'apptitles'], ['marquee', 'appmarquee'], ['colour', 'appcolour']].forEach(([k, id]) => { const e = $(id); if (e) e.checked = appPref(k); });
+  if (typeof accent === 'function') accent();
+}
+[['titles', 'apptitles'], ['marquee', 'appmarquee'], ['colour', 'appcolour']].forEach(([k, id]) => {
+  $(id).onchange = () => { try { localStorage.setItem('app:' + k, $(id).checked ? '1' : '0'); } catch (e) {} applyAppearance(); };
+});
+function paintQp() { document.querySelectorAll('#qpseg button').forEach(b => b.classList.toggle('on', b.dataset.qp === qpStyle())); }
+document.addEventListener('click', e => {
+  const b = e.target.closest('#qpseg button'); if (!b) return;
+  try { localStorage.setItem('qpStyle', b.dataset.qp); } catch (x) {}
+  paintQp(); quickSig = ''; renderQuick();
+});
 function renderQuick() {
   const cur = targets.find(t => t.id === target) || {};
-  const idle = view() === 'tv' && (cur.kind === 'pi' || cur.kind === 'chromecast') && !st.running && !st.starting;
+  const style = qpStyle(), idle = view() === 'tv' && (cur.kind === 'pi' || cur.kind === 'chromecast') && !st.running && !st.starting && style !== 'off';
   const seen = new Set(), items = [];
   const offer = x => { const k = (x.name || x.url).toLowerCase(); if (!seen.has(k)) { seen.add(k); items.push(x); } };
   if (idle) {
     favList.filter(f => f.live === true).forEach(f => offer({name: favHead(f), url: f.play_url || f.url, source: (f.links || []).find(l => l.url === (f.play_url || f.url))?.source || f.source, title: f.title, game: f.game, live_for: f.live_for, live: true}));
     recentList.filter(x => x.live === true).forEach(x => offer({name: x.name, url: x.url, source: x.source, title: x.title, game: x.game, live_for: x.live_for, live: true}));
   }
-  const shown = items.slice(0, 6), sig = target + '|' + shown.map(x => x.url + (x.title || '')).join('|');
+  const shown = items.slice(0, 6), sig = style + '|' + target + '|' + shown.map(x => x.url + (x.title || '')).join('|');
   $('quick').classList.toggle('hide', !shown.length);
   if (sig === quickSig) return;
   quickSig = sig;
-  $('quicklist').replaceChildren(...shown.map(it => {  // a tile like the ones along the top of a multi-view: picture, name, site and LIVE
-    const b = el('div', 'wstream'), tags = el('span', 'wtags');
+  $('quicklist').className = style === 'cards' ? 'grid list' : 'quickstrip';
+  $('quicklist').replaceChildren(...shown.map(it => {
+    if (style === 'cards') {  // the list style: one row per stream, with its title beside the name
+      const b = el('div', 'fav'), head = el('div', 'fhead');
+      b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url;
+      head.append(avatarEl(it.name, it.url), el('b', null, it.name), ...titleEl(it));
+      const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
+      b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), el('span', 'badge live', 'LIVE'), el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin);
+      b.onclick = () => playFav(it.url);
+      b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
+      return b;
+    }
+    const b = el('div', 'wstream'), tags = el('span', 'wtags');  // the tile style: picture, name, site and LIVE, like the strip along the top of a multi-view
     b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url; b.setAttribute('aria-label', 'Play ' + it.name + (it.title ? ': ' + it.title : ''));
     if (it.title) b.title = it.title;
     tags.append(el('span', 'badge ' + (it.source || ''), it.source || 'Other'), el('span', 'badge live', 'LIVE'));
@@ -1173,13 +1216,14 @@ function renderQuick() {
     b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
     return b;
   }));
+  markFavs();
   runMarquees();
 }
 function markFavs() {
   renderQuick();
   runMarquees();
   document.querySelectorAll('#quick .wstream').forEach(b => { const on = !!favLoading && b.dataset.url === favLoading.url; b.classList.toggle('loading', on); b.setAttribute('aria-busy', String(on)); });
-  document.querySelectorAll('#favs .fav, #recents .fav').forEach(b => {  // recents get the same spinner and error note
+  document.querySelectorAll('#favs .fav, #recents .fav, #quick .fav').forEach(b => {  // recents and the quick cards get the same spinner and error note
     const n = b.querySelector('.note');
     if (n) n.textContent = favNote && (b.dataset.urls || b.dataset.url).split(' ').includes(favNote.url) && Date.now() < favNote.until ? favNote.text : '';
     const on = !!favLoading && (b.dataset.urls || b.dataset.url).split(' ').includes(favLoading.url);
@@ -2446,7 +2490,7 @@ function show() {
   ['all', 'share', 'tv', 'settings', 'setup'].forEach(n => $('view-' + n).classList.toggle('hide', n !== v));
   $('back').classList.toggle('hide', v !== 'tv' && v !== 'settings');
   if (v === 'setup') openSetup();
-  if (v === 'settings') { loadAccounts(); loadShell(); fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {}); }
+  if (v === 'settings') { applyAppearance(); paintQp(); loadAccounts(); loadShell(); fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {}); }
   renderCards(); tvInfo();
   if (v === 'all') loadShell();
   if (v === 'share') renderPicker();
