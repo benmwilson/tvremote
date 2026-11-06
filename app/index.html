@@ -494,7 +494,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
 .wlabel{margin:18px 2px 8px;color:var(--dim);font-size:13px;font-weight:600;letter-spacing:.02em}.wrow{display:flex;align-items:center;gap:10px;margin-top:10px}.wrow .sub{flex:1}
 .pickrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .pickc{display:flex;flex-direction:column;align-items:flex-start;gap:6px;height:auto;min-height:0;padding:14px;text-align:left;border-radius:16px;background:var(--card2)}
-.pickc .pi{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:var(--c);color:var(--c-ink);margin-bottom:4px}.pickc .pi svg{width:22px;height:22px;fill:currentColor}
+.pickc .ptop{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.pickc .pi{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--c);color:var(--c-ink)}.pickc .pi svg{width:16px;height:16px;fill:currentColor}
 .pickc b{font-size:17px}.pickc .sub{font-size:13px}.pickc .on{color:#ff6b6b;font-weight:700}
 .pickc.kick{--c:#53fc18;--c-ink:#000}.pickc.twitch{--c:#9146ff;--c-ink:#fff}
 .wallfavs button .pico{display:inline-block;width:14px;height:14px;margin-right:7px;vertical-align:-2px;fill:currentColor}.wallfavs button .pico.kick{color:#53fc18}.wallfavs button .pico.twitch{color:#a970ff}
@@ -1604,7 +1605,10 @@ function pickCards(name, matches, choose) {
     const sub = el('span', 'sub');
     if (m.live) { sub.append(el('span', 'on', 'LIVE')); if (m.viewers) sub.append(document.createTextNode(' \u00b7 ' + Number(m.viewers).toLocaleString() + ' watching')); }
     else sub.textContent = 'Offline';
-    b.append(pi, el('b', null, m.source), sub);
+    const av = avatarEl(name, m.url), top = el('span', 'ptop');  // their profile picture, the site's logo beside it
+    av.style.cssText = 'width:44px;height:44px;font-size:15px';
+    top.append(av, pi);
+    b.append(top, el('b', null, m.source), sub);
     b.setAttribute('aria-label', 'Use ' + name + ' from ' + m.source + (m.live ? ', live' : ', offline'));
     b.onclick = () => choose(m, b);
     return b;
