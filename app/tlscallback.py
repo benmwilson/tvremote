@@ -8,7 +8,7 @@ import ssl
 import subprocess
 from urllib.parse import parse_qs, urlencode, urlparse
 
-PATH = "/auth/kick/callback"
+PATHS = {"/auth/kick/callback": "kick", "/auth/twitch/callback": "twitch"}  # which site's login a redirect belongs to
 
 
 def ensure_cert(data_dir, host):
@@ -25,7 +25,7 @@ def ensure_cert(data_dir, host):
 def make_server(redirect, http_port, data_dir):
     """redirect: the registered https URL (host and port come from it); returns the server, not yet serving."""
     u = urlparse(redirect)
-    target = f"http://{u.hostname}:{http_port}/auth/kick/done?"
+    base = f"http://{u.hostname}:{http_port}/auth/"
 
     class H(http.server.BaseHTTPRequestHandler):
         timeout = 10
@@ -37,13 +37,13 @@ def make_server(redirect, http_port, data_dir):
 
         def do_GET(self):
             p = urlparse(self.path)
-            if p.path != PATH:
+            if p.path not in PATHS:
                 self.send_error(404)
                 return
             q = parse_qs(p.query)
             keep = {k: q[k][0] for k in ("code", "state", "error") if k in q}  # nothing else is forwarded
             self.send_response(303)
-            self.send_header("Location", target + urlencode(keep))
+            self.send_header("Location", f"{base}{PATHS[p.path]}/done?" + urlencode(keep))
             self.send_header("Content-Length", "0")
             self.end_headers()
 

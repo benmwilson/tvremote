@@ -196,3 +196,19 @@ def check(slug):
         pass
     return {"live": True, "game": (ch.get("category") or {}).get("name"), "title": ch.get("stream_title"),
             "uptime_s": up, "viewers": st.get("viewer_count")}
+
+
+def live_now(first=24):
+    """Who is live right now, biggest first, in the same shape as twitch.live_now. [] when it can't be fetched."""
+    if not enabled():
+        return []
+    try:
+        req = Request("https://api.kick.com/public/v1/livestreams?" + urlencode({"limit": max(1, min(int(first), 100)), "sort": "viewer_count"}),
+                      headers={"Authorization": "Bearer " + _app_token()})
+        rows = json.loads(_open(req)).get("data") or []
+    except Exception as e:
+        print("Kick live list:", describe(e), flush=True)
+        _token["value"] = None
+        return []
+    return [{"login": r["slug"], "name": r["slug"], "title": r.get("stream_title"), "game": (r.get("category") or {}).get("name"),
+             "viewers": r.get("viewer_count"), "avatar": r.get("profile_picture"), "thumb": r.get("thumbnail")} for r in rows if r.get("slug")]

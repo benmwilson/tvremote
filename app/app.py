@@ -51,6 +51,7 @@ import sessions
 import store
 import throttle
 import kick
+import twitch
 import mpvipc
 import multi
 import pihealth
@@ -169,7 +170,7 @@ SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/se
 # later) is refused, so a new endpoint is closed to guests until it is listed here on purpose.
 GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
              "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
-             "/api/shell", "/api/stats", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch", "/api/detect"}  # /api/watch checks the guest setting itself
+             "/api/shell", "/api/stats", "/api/browse", "/api/twitch/avatars", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch", "/api/detect"}  # /api/watch checks the guest setting itself
 GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/api/roku/launch", "/logout"}
 
 
@@ -2850,6 +2851,10 @@ def check_live(url):
         r = kick.check(chat.channel_of(url))
         if r is not None:
             return r  # the official API; on a failure fall through to streamlink
+    if route(url)[0] == "Twitch" and twitch.enabled():
+        r = twitch.check(chat.channel_of(url))
+        if r is not None:
+            return r
     j = run_streamlink_json(url)
     if j is None:
         return None
@@ -3144,6 +3149,73 @@ def kick_unlink():
     return kick_state()
 
 
+@app.get("/api/twitch")
+def twitch_state():
+    return jsonify(can_link=twitch.can_link(), name=twitch.linked(g.user), can_chat=twitch.can_chat(g.user))
+
+
+@app.get("/auth/twitch/start")
+def twitch_start():
+    if not twitch.can_link():
+        return Response("Twitch login is not set up (TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET and KICK_REDIRECT in .env).", 404)
+    return redirect(twitch.link_url(g.user), 303)
+
+
+@app.get("/auth/twitch/done")
+def twitch_done():
+    """Where the https listener sends the browser back to, with Twitch's one-time code."""
+    try:
+        if request.args.get("error"):
+            raise ValueError(request.args["error"])
+        twitch.link_finish(request.args.get("code"), request.args.get("state"), g.user)
+        return redirect("/?twitch=linked#/settings", 303)
+    except Exception as e:
+        print("Twitch link failed:", twitch.describe(e), flush=True)
+        return redirect("/?twitch=failed#/settings", 303)
+
+
+@app.post("/api/twitch/unlink")
+def twitch_unlink():
+    twitch.unlink(g.user)
+    return twitch_state()
+
+
+@app.post("/api/twitch/chat")
+def twitch_chat():
+    data = request.get_json(silent=True) or {}
+    login = str(data.get("channel", "")).strip("/").lower()
+    try:
+        if not re.fullmatch(r"\w{2,25}", login):
+            raise ValueError("No channel.")
+        twitch.send_chat(g.user, login, data.get("text"))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    return jsonify(ok=True)
+
+
+@app.get("/api/twitch/avatars")
+def twitch_avatars():
+    """Profile pictures for Twitch channel names (?names=a,b,c), so the cards show the streamer's own picture."""
+    names = [n for n in request.args.get("names", "").lower().split(",") if re.fullmatch(r"\w{2,25}", n)][:50]
+    return jsonify({n: u["avatar"] for n, u in twitch.users(names).items() if u.get("avatar")})
+
+
+@app.get("/api/browse")
+def api_browse():
+    """Who is live now on Kick and Twitch (?site=kick|twitch, ?n=), each with the picture, title, game and viewers, ready to play or add to a multi-view."""
+    site = request.args.get("site", "")
+    try:
+        n = max(1, min(int(request.args.get("n", 24)), 50))
+    except ValueError:
+        n = 24
+    out = []
+    for name, fn, base in (("Kick", kick.live_now, "https://kick.com/"), ("Twitch", twitch.live_now, "https://www.twitch.tv/")):
+        if site and site.lower() != name.lower():
+            continue
+        out += [{**r, "source": name, "url": base + r["login"]} for r in fn(n)]
+    return jsonify(streams=out, kick=kick.enabled(), twitch=twitch.enabled())
+
+
 @app.post("/api/kick/chat")
 def kick_chat():
     data = request.get_json(silent=True) or {}
@@ -3232,7 +3304,7 @@ def accounts_del():
     if accounts.remove(name):
         activity.forget(name)
         drop_user_sessions(name)  # re-creating the name later must not revive old logins
-        for p in (fav_file(name), kick._path(name)):  # its favourites and Kick link go with it
+        for p in (fav_file(name), kick._path(name), twitch._path(name)):  # its favourites and site links go with it
             try:
                 os.remove(p)
             except OSError:
@@ -3475,7 +3547,7 @@ def setup_code_error(data):
 
 def adopt_open_data(name):
     """The favourites and Kick link made before accounts existed belong to the owner: give them to the founder (once)."""
-    for old, new in ((FAV_FILE, fav_file(name)), (kick._path(accounts.OWNER), kick._path(name))):
+    for old, new in ((FAV_FILE, fav_file(name)), (kick._path(accounts.OWNER), kick._path(name)), (twitch._path(accounts.OWNER), twitch._path(name))):
         if os.path.exists(old) and not os.path.exists(new):
             os.replace(old, new)
 
@@ -3596,9 +3668,9 @@ if __name__ == "__main__":
                        favs=lambda: [(f.get("name") or "")[:28] for f in load_favs()][:5])
     if settings["shell"]:
         threading.Thread(target=HOME.start, daemon=True).start()
-    if kick.can_link():
+    if kick.can_link() or twitch.can_link():
         try:
-            threading.Thread(target=tlscallback.make_server(kick.REDIRECT, PORT, DATA).serve_forever, daemon=True).start()
+            threading.Thread(target=tlscallback.make_server(kick.REDIRECT or twitch.REDIRECT, PORT, DATA).serve_forever, daemon=True).start()
         except Exception as e:  # no openssl or the port is taken: the rest of the app still runs
             print("Kick login listener not started:", e, flush=True)
     if not auth_required():
