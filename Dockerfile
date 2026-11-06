@@ -15,14 +15,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-cache policy libavcodec61 \
     && dpkg -s libavcodec61 | grep -q '^Version:.*rpt'
 
-# Versions are pinned (what runs on the Pi, 2026-11-06) so a rebuild changes nothing by surprise. streamlink and yt-dlp break when sites
-# change: bump them with  docker compose build --build-arg YTDLP_VERSION=<new> --build-arg STREAMLINK_VERSION=<new>  and edit the defaults.
-# (apt's yt-dlp comes in via mpv but is too old; the venv comes first on PATH)
-ARG STREAMLINK_VERSION=8.6.3
-ARG YTDLP_VERSION=2026.10.26
+# Every package, and everything they pull in, is pinned in requirements.lock (what runs on the Pi, 2026-11-06), so a rebuild changes nothing by surprise.
+# streamlink and yt-dlp break when sites change: bump them with
+#   docker compose build --build-arg YTDLP_VERSION=<new> --build-arg STREAMLINK_VERSION=<new>
+# and, once the new ones work, put the same versions in requirements.lock. (apt's yt-dlp comes in via mpv but is too old; the venv comes first on PATH.)
+ARG STREAMLINK_VERSION=
+ARG YTDLP_VERSION=
+COPY requirements.lock /tmp/requirements.lock
 RUN python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir flask==3.1.3 waitress==3.0.2 streamlink==${STREAMLINK_VERSION} "yt-dlp[default,curl-cffi]==${YTDLP_VERSION}" \
-       deno==2.9.8 pychromecast==14.1.1 segno==1.6.6
+    && /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.lock \
+    && if [ -n "$STREAMLINK_VERSION" ]; then /opt/venv/bin/pip install --no-cache-dir "streamlink==$STREAMLINK_VERSION"; fi \
+    && if [ -n "$YTDLP_VERSION" ]; then /opt/venv/bin/pip install --no-cache-dir "yt-dlp[default,curl-cffi]==$YTDLP_VERSION"; fi
 ENV PATH=/opt/venv/bin:$PATH
 
 # uid/gid 1000 so the host's Wayland and PipeWire sockets accept us
