@@ -819,8 +819,8 @@ def sl_info(url):
 def display_title(url):
     """Streamlink sources: 'author: title' from metadata, else the channel name (never the raw URL)."""
     meta = (_qcache.get(url) or (0, 0, {}))[2]
-    parts = [meta.get("author"), meta.get("title")]
-    return ": ".join(p for p in parts if p) or fav_name(url)
+    title = meta.get("title") or livewatch.snapshot().get(url or "", {}).get("title")  # its details may be missing or expired: the live check keeps the last title
+    return ": ".join(p for p in (meta.get("author"), title) if p) or fav_name(url)
 
 
 # ---------- favourites ----------
@@ -1009,7 +1009,7 @@ def api_recents():
         return jsonify([])  # what other people played is not for someone on a guest link
     livewatch.poke()
     snap = livewatch.snapshot()
-    return jsonify([{**r, "live": e.get("live"), "game": e.get("game"), "live_for": livewatch.live_for(r.get("url") or ""), "last_live": e.get("last_live")}
+    return jsonify([{**r, "live": e.get("live"), "game": e.get("game"), "title": e.get("title"), "live_for": livewatch.live_for(r.get("url") or ""), "last_live": e.get("last_live")}
                     for r in load_recents() for e in [snap.get(r.get("url"), {})]])
 
 
@@ -1593,8 +1593,6 @@ def pi_status():
         if player == "streamlink":
             warm_title(url)
             data["title"] = display_title(url)
-            if data["title"] == fav_name(url) and facts.get("title"):  # no details yet: what the live check saw
-                data["title"] = f"{data['title']}: {facts['title']}"
         data["stalls"], data["stall_s"] = state.get("stalls", 0), round(state.get("stall_s", 0))
         data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(url or "")
         data["chat_ok"] = source == "Twitch" and bool(chat.channel_of(url or ""))
@@ -2404,14 +2402,14 @@ def favs_get():
         links = []
         for l in fav_links(f):
             e = snap.get(l["url"], {})
-            links.append({**l, "live": e.get("live"), "game": e.get("game"), "last_live": e.get("last_live"),
+            links.append({**l, "live": e.get("live"), "game": e.get("game"), "title": e.get("title"), "last_live": e.get("last_live"),
                           "checked": e.get("checked"), "live_for": livewatch.live_for(l["url"])})
         top = next((l for l in links if l["live"]), links[0])  # the site they are live on, else the first
         states = [l["live"] for l in links]
         seen = [l["last_live"] for l in links if l["last_live"]]
         out.append({**f, "links": links, "play_url": top["url"],
                     "live": True if any(s is True for s in states) else False if all(s is False for s in states) else None,
-                    "game": top["game"], "last_live": max(seen) if seen else None, "checked": top["checked"], "live_for": top["live_for"]})
+                    "game": top["game"], "title": top["title"], "last_live": max(seen) if seen else None, "checked": top["checked"], "live_for": top["live_for"]})
     return jsonify(out)
 
 

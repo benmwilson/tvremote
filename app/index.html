@@ -193,6 +193,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .fav.drag{position:relative;z-index:2;box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .fav:not(.drag){transition:transform .15s}
 .fav .livenote{display:block;margin-top:4px;font-size:13px}
+.fav .ftitle{display:block;margin-top:6px;font-size:14px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .fav .note{display:block;color:var(--warn);font-size:13px;margin-top:4px}
 .fav .note:empty{display:none}
 .fav .starting{display:none;font-size:13px;color:var(--dim)}
@@ -290,6 +291,10 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .wz-test{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.wz-test button{min-height:44px;padding:0 16px}.wz-test span{font-size:13px;color:var(--dim);flex:1 1 140px}
 .wz-why{border-left:3px solid var(--tv,#62b0ff);background:rgba(98,176,255,.07);border-radius:0 10px 10px 0;padding:10px 12px;font-size:13px;line-height:1.45;color:var(--dim)}
 .wz-why b{display:block;color:#8cc4ff;font-size:12px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px}.wz-why p{margin:2px 0}
+.wz-plugs-h{font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);margin-top:4px}
+.wz-plug{border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;gap:12px;min-width:0}.wz-plug.on{border-color:rgba(98,176,255,.45);background:rgba(98,176,255,.05)}
+.wz-ok{color:#7be29a;font-size:13px}.wz-slot .pill{align-self:start;background:rgba(255,176,98,.18);color:#ffb062}
+.wz-test .danger{margin-left:auto}
 .wz-bar{position:sticky;bottom:0;display:flex;gap:10px;padding:14px 0 10px;margin-top:8px;background:linear-gradient(to top,var(--bg,#0b0e14) 70%,transparent)}
 .wz-bar button{flex:1;min-height:54px}.wz-bar .go{flex:1.6}
 .wz-done{text-align:center;display:grid;justify-items:center;gap:10px;padding:28px 18px}
@@ -475,7 +480,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     </div>
     <div id="tvslots"></div>
     <p class="s-err" id="tverr" role="alert"></p>
-    <div class="wz-bar"><button id="tvcancel" type="button" class="hide">Cancel</button><button id="tvrescan" type="button">Look again</button><button id="tvsave" class="go">Save and continue</button></div>
+    <div class="wz-bar"><button id="tvcancel" type="button" class="hide">Cancel</button><button id="tvrescan" type="button">Scan again</button><button id="tvsave" class="go">Save</button></div>
   </div>
 
   <div id="setup3" class="card wz-card wz-done hide">
@@ -802,6 +807,8 @@ const dur = sec => { const m = Math.round(sec / 60); if (m < 2) return 'just sta
   const h = Math.floor(m / 60); if (h < 48) return h + ' h ' + (m % 60) + ' min'; return Math.floor(h / 24) + ' d ' + (h % 24) + ' h'; };
 const ago = ts => { const m = Math.round((Date.now() / 1000 - ts) / 60); if (m < 2) return 'just now'; if (m < 90) return m + ' min ago';
   const h = Math.round(m / 60); if (h < 48) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; };
+// the stream's own title as the live check last saw it (an offline channel keeps its last one); nothing when the saved name already holds it
+const titleLine = f => f.title && !(f.name || '').includes(f.title) ? (f.live === false ? 'Last stream: ' : '') + f.title : '';
 const liveLine = f => f.live === true ? ['live for ' + dur(f.live_for || 0), f.game].filter(Boolean).join(' \u00b7 ')
   : f.live === false ? ['Offline', f.last_live ? 'last live ' + ago(f.last_live) : 'not seen live yet', f.game ? 'was playing ' + f.game : null].filter(Boolean).join(' \u00b7 ')
   : '';
@@ -1076,7 +1083,7 @@ function drawFavs() {
     const live = f.live === true ? el('span', 'badge live', 'LIVE') : null;
     const lnote = el('span', 'sub livenote', liveLine(f));
     const head = el('div', 'fhead'); head.append(avatarEl(f.name, f.url), el('b', null, f.name));
-    b.append(head, ...siteChips(f), ...(live ? [live] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
+    b.append(head, ...siteChips(f), ...(live ? [live] : []), ...(titleLine(f) ? [el('span', 'ftitle', titleLine(f))] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
     if (reordering) {
       const i = favList.indexOf(f), mv = el('span', 'mv');
       const grip = el('button', 'grip', '☰');  // drag this to move the row; arrow keys also work
@@ -1575,12 +1582,8 @@ function renderSetup() {
   if (setupStep === 2 && !tvLoading && !tvDisc) discoverTvs();
   if (setupStep === 3) {
     $('setupdone').textContent = (setupInfo.created ? 'Your admin account \u201c' + setupInfo.created + '\u201d is ready. ' : '') + 'Add people and guest links from Settings, behind the gear.';
-    const on = ['living', 'bedroom'].filter(t => tvForm[t] && tvForm[t].enabled);
-    $('setupsummary').replaceChildren(...(on.length ? on.map(t => {
-      const f = tvForm[t], r = tvDisc && tvDisc.rokus.find(x => x.ip === f.roku);
-      return mk('div', {class: 'wz-sum'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, f.name.slice(0, 1)),
-        mk('div', {}, mk('b', {}, f.name), mk('small', {}, [r ? [r.brand, r.model].filter(Boolean).join(' ') : (f.roku ? f.roku : 'No TV controls'), f.input ? f.input.replace('HDMI', 'HDMI ') : null].filter(Boolean).join(' \u00b7 '))));
-    }) : []));
+    $('setupsummary').replaceChildren(...tvList.map(t => mk('div', {class: 'wz-sum'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, (t.name || '?').slice(0, 1)),
+      mk('div', {}, mk('b', {}, t.name), mk('small', {}, plugSummary(t))))));
   }
 }
 async function openSetup() {
@@ -1609,30 +1612,29 @@ $('claimform').onsubmit = async e => {
   setupInfo = {...setupInfo, needs_owner: false}; $('claimcode').value = ''; setupStep = 2; renderSetup(); loadAccounts();
 };
 
-// ---- step 2: find the TVs, guess how they pair up, let the person correct it ----
-let tvDisc = null, tvLoading = false, tvForm = {};
-const TV_TITLES = {living: 'The Pi\u2019s own screen', bedroom: 'The Chromecast'};
-async function discoverTvs() {
-  tvLoading = true; tvDisc = null;
+// ---- step 2: one card per TV: its name, and what is plugged into it (the Pi on an HDMI input, a Chromecast) ----
+let tvDisc = null, tvLoading = false, tvList = [], tvNote = '';
+const HDMI = [['', 'Don\u2019t switch the TV\u2019s input'], ['HDMI1', 'HDMI 1'], ['HDMI2', 'HDMI 2'], ['HDMI3', 'HDMI 3'], ['HDMI4', 'HDMI 4']];
+const hdmiText = v => v ? v.replace('HDMI', 'HDMI ') : '';
+function plugSummary(t) {
+  const parts = [];
+  if (t.pi) parts.push('The Pi' + (t.pi.input ? ' on ' + hdmiText(t.pi.input) : ''));
+  if (t.chromecast) parts.push('Chromecast' + (t.chromecast.device ? ' \u201c' + t.chromecast.device + '\u201d' : ''));
+  return parts.length ? parts.join(' \u00b7 ') : 'TV controls only';
+}
+async function discoverTvs(keep) {
+  tvLoading = true; const before = keep ? tvList : [];
   $('tvintro').textContent = 'Looking for TVs on your network\u2026 (a few seconds)';
   $('tvslots').replaceChildren(); $('tverr').textContent = ''; $('tvsave').disabled = true; $('tvrescan').disabled = true;
   const j = await fetch('/api/discover').then(r => r.json()).catch(() => null);
   tvLoading = false; $('tvrescan').disabled = false; $('tvsave').disabled = false;
-  if (!j || j.ok === false) { $('tvintro').textContent = 'Couldn\u2019t search just now. You can look again.'; return; }
+  if (!j || j.ok === false) { $('tvintro').textContent = 'Couldn\u2019t scan just now. Tap Scan again.'; return; }
   tvDisc = j;
-  ['living', 'bedroom'].forEach(t => {
-    const sv = j.saved[t] || {}, g = j.guess[t] || {}, done = 'enabled' in sv;  // "enabled" is only ever written by this wizard
-    tvForm[t] = {name: sv.name || (t === 'living' ? 'Living room' : 'Bedroom'), enabled: done ? sv.enabled !== false : !!g.enabled,
-      roku: done ? (sv.roku || '') : (g.roku || ''), input: done ? (sv.input || '') : (g.input || ''),
-      device: t === 'bedroom' ? (sv.device || g.device || '') : undefined, why: done ? [] : (g.why || [])};
-  });
+  tvList = j.tvs.map(t => { const old = before.find(o => o.roku && o.roku === t.roku); return old ? {...t, name: old.name, pi: old.pi, chromecast: old.chromecast} : t; });  // a re-scan keeps your edits
   const n = j.rokus.length, c = j.chromecasts.length;
-  $('tvintro').textContent = 'Found ' + n + (n === 1 ? ' Roku TV' : ' Roku TVs') + ', ' + c + (c === 1 ? ' Chromecast' : ' Chromecasts') + (j.display ? ' and the Pi\u2019s screen.' : ', and no screen on the Pi.')
-    + ' Check the guesses below and change anything that\u2019s wrong.' + (n ? '' : ' On each Roku TV: Settings > System > Advanced system settings > Control by mobile apps > Network access > Permissive.');
+  $('tvintro').textContent = 'We found ' + n + (n === 1 ? ' TV' : ' TVs') + ', ' + c + (c === 1 ? ' Chromecast' : ' Chromecasts') + (j.display ? ' and a screen on the Pi.' : '. The Pi has no screen attached.')
+    + (n ? '' : ' On each Roku TV: Settings, System, Advanced system settings, Control by mobile apps, Network access, Permissive.');
   renderTvSlots();
-}
-function rokuLabel(r) {
-  return [r.name || 'Roku', [r.brand, r.size ? r.size + '\u2033' : ''].filter(Boolean).join(' '), r.model, r.ip].filter(Boolean).join(' \u00b7 ') + (r.error ? ' (didn\u2019t answer)' : '');
 }
 function field(label, control) { return mk('label', {class: 'wz-f'}, mk('span', {}, label), control); }
 function opts(sel, items, value) {
@@ -1640,66 +1642,88 @@ function opts(sel, items, value) {
   sel.value = value;
   return sel;
 }
-function tvSlot(t) {
-  const f = tvForm[t], box = mk('div', {class: 'wz-slot' + (f.enabled ? '' : ' is-off')});
-  const use = mk('input', {type: 'checkbox', class: 'tg', role: 'switch', 'aria-label': 'Use ' + TV_TITLES[t]}); use.checked = f.enabled;
-  use.onchange = () => { f.enabled = use.checked; box.classList.toggle('is-off', !f.enabled); };
-  box.append(mk('div', {class: 'wz-top'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, t === 'living' ? 'P' : 'C'),
-    mk('div', {class: 'grow'}, mk('b', {}, TV_TITLES[t]), mk('small', {}, t === 'living' ? 'The TV plugged into the Pi' : 'The TV with a Chromecast')), use));
-  const body = mk('div', {class: 'wz-body'});
-  const name = mk('input', {value: f.name, maxlength: '24'}); name.oninput = () => { f.name = name.value; };
-  body.append(field('Name', name));
-  if (t === 'living' && tvDisc.pi_input && f.input !== tvDisc.pi_input) {  // the Pi was moved: what the TV says now beats what was saved
-    const use = mk('button', {type: 'button'}, 'Use HDMI ' + tvDisc.pi_input.slice(-1));
-    use.onclick = () => { f.input = tvDisc.pi_input; renderTvSlots(); };
-    body.append(mk('div', {class: 'wz-why'}, mk('b', {}, 'The Pi is now on HDMI ' + tvDisc.pi_input.slice(-1) + ' of its TV'), mk('p', {}, 'That differs from the saved input.'), use));
+function plugRow(title, sub, on, disabled, onToggle, ...body) {
+  const sw = mk('input', {type: 'checkbox', class: 'tg', role: 'switch', 'aria-label': title}); sw.checked = on; sw.disabled = disabled && !on;
+  sw.onchange = () => onToggle(sw.checked);
+  return mk('div', {class: 'wz-plug' + (on ? ' on' : '')}, mk('div', {class: 'wz-top'}, mk('div', {class: 'grow'}, mk('b', {}, title), mk('small', {}, sub)), sw), on ? mk('div', {class: 'wz-body'}, ...body) : null);
+}
+function tvCard(t) {
+  const info = t.info, box = mk('div', {class: 'wz-slot'});
+  const head = [info && [info.brand, info.size ? info.size + '\u2033' : ''].filter(Boolean).join(' '), info && info.name, t.roku].filter(Boolean).join(' \u00b7 ');
+  box.append(mk('div', {class: 'wz-top'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, (t.name || '?').slice(0, 1)),
+    mk('div', {class: 'grow'}, mk('b', {}, t.name || 'TV'), mk('small', {}, head || 'No Roku set')),
+    t.found ? null : mk('span', {class: 'pill'}, 'Didn\u2019t answer')));
+  const name = mk('input', {value: t.name, maxlength: '24', 'aria-label': 'Name'}); name.oninput = () => { t.name = name.value; };
+  const body = mk('div', {class: 'wz-body'}, field('Name', name));
+  // the Pi: only one TV can have it; ticking it here takes it off another
+  const display = !!tvDisc.display, det = tvDisc.pi_input;
+  body.append(mk('div', {class: 'wz-plugs-h'}, 'What\u2019s plugged in?'));
+  const piBody = [];
+  if (t.pi) {
+    piBody.push(field('HDMI input the Pi is on', opts(mk('select', {}), HDMI, t.pi.input || '')));
+    piBody[0].querySelector('select').onchange = e => { t.pi.input = e.target.value; renderTvSlots(); };
+    if (det && t.pi.input === det) piBody.push(mk('small', {class: 'wz-ok'}, 'We detected this: the Pi is on ' + hdmiText(det) + '.'));
+    else if (det) {
+      const use = mk('button', {type: 'button'}, 'Use ' + hdmiText(det));
+      use.onclick = () => { t.pi.input = det; renderTvSlots(); };
+      piBody.push(mk('div', {class: 'wz-why'}, mk('b', {}, 'The Pi is on ' + hdmiText(det) + ' of its TV'), mk('p', {}, 'That differs from the saved input.'), use));
+    }
   }
-  if (t === 'bedroom') {
-    const devs = tvDisc.chromecasts.map(d => [d.name, d.name + ' \u00b7 ' + d.host]);
-    if (f.device && !devs.some(d => d[0] === f.device)) devs.push([f.device, f.device + ' (saved, not found now)']);
-    const dev = opts(mk('select', {}), devs.length ? devs : [['', 'No Chromecast found']], f.device || '');
-    dev.onchange = () => { f.device = dev.value; };
-    body.append(field('Chromecast', dev));
+  body.append(plugRow('This Pi', display ? 'The Pi\u2019s own screen' : 'No screen is attached to the Pi right now', !!t.pi, !display, on => {
+    if (on) { tvList.forEach(o => { if (o !== t && o.pi) { tvNote = 'The Pi moved to ' + (t.name || 'this TV') + ' from ' + o.name + '.'; o.pi = null; } }); t.pi = {input: det || ''}; }
+    else t.pi = null;
+    renderTvSlots();
+  }, ...piBody));
+  const casts = tvDisc.chromecasts.map(d => [d.name, d.name + ' \u00b7 ' + d.host]);
+  const ccBody = [];
+  if (t.chromecast) {
+    if (t.chromecast.device && !casts.some(d => d[0] === t.chromecast.device)) casts.push([t.chromecast.device, t.chromecast.device + ' (saved, not found now)']);
+    const dev = opts(mk('select', {}), casts.length ? casts : [['', 'No Chromecast found']], t.chromecast.device || (casts[0] || [''])[0]);
+    t.chromecast.device = dev.value; dev.onchange = () => { t.chromecast.device = dev.value; };
+    const inp = opts(mk('select', {}), HDMI, t.chromecast.input || ''); inp.onchange = () => { t.chromecast.input = inp.value; };
+    ccBody.push(field('Which Chromecast', dev), field('HDMI input it is on', inp));
   }
-  const rokus = tvDisc.rokus.map(r => [r.ip, rokuLabel(r)]);
-  if (f.roku && !rokus.some(r => r[0] === f.roku)) rokus.push([f.roku, f.roku + ' (saved, not found now)']);
-  const roku = opts(mk('select', {}), [['', 'None: no power, volume or input controls'], ...rokus], f.roku);
-  roku.onchange = () => { f.roku = roku.value; };
-  body.append(field('Its Roku TV', roku));
-  const inp = opts(mk('select', {}), [['', 'Don\u2019t switch the TV\u2019s input'], ['HDMI1', 'HDMI 1'], ['HDMI2', 'HDMI 2'], ['HDMI3', 'HDMI 3'], ['HDMI4', 'HDMI 4']], f.input);
-  inp.onchange = () => { f.input = inp.value; };
-  body.append(field('HDMI input to switch to when you play', inp));
-  const out = mk('span', {role: 'status'});
-  const test = mk('button', {type: 'button'}, 'Test the TV');
-  test.onclick = async () => {
-    if (!f.roku) { out.textContent = 'Pick a Roku TV first.'; return; }
-    out.textContent = '';
-    const r = await busy(test, () => fetch('/api/targets/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({roku: f.roku})}).then(x => x.json()));
-    out.textContent = !r ? 'Couldn\u2019t reach the Pi.' : r.ok ? 'Sent. Did the TV\u2019s information banner appear?' : r.error;
-  };
-  body.append(mk('div', {class: 'wz-test'}, test, out));
-  if (f.why.length) body.append(mk('div', {class: 'wz-why'}, mk('b', {}, 'Why we picked this'), ...f.why.map(w => mk('p', {}, w))));
+  body.append(plugRow('Chromecast', tvDisc.chromecasts.length ? tvDisc.chromecasts.length + (tvDisc.chromecasts.length === 1 ? ' found' : ' found') : 'None found on your network', !!t.chromecast, !tvDisc.chromecasts.length, on => {
+    if (on) { tvList.forEach(o => { if (o !== t && o.chromecast) { tvNote = 'The Chromecast moved to ' + (t.name || 'this TV') + ' from ' + o.name + '.'; o.chromecast = null; } }); t.chromecast = {device: (tvDisc.chromecasts[0] || {}).name || '', input: ''}; }
+    else t.chromecast = null;
+    renderTvSlots();
+  }, ...ccBody));
+  if (!t.pi && !t.chromecast) body.append(mk('p', {class: 'wz-lead'}, 'Nothing plugged in. You can still turn it on and change volume or input from the remote.'));
+  if (!t.found) body.append(mk('div', {class: 'wz-why'}, mk('b', {}, 'Didn\u2019t answer'), mk('p', {}, 'On that TV: Settings, System, Advanced system settings, Control by mobile apps, Network access, Permissive. Then Scan again.')));
+  if (t.why && t.why.length) body.append(mk('div', {class: 'wz-why'}, mk('b', {}, 'Why we picked this'), ...t.why.map(w => mk('p', {}, w))));
+  const out = mk('span', {role: 'status'}), row = mk('div', {class: 'wz-test'});
+  if (t.roku) {
+    const test = mk('button', {type: 'button'}, 'Test this TV');
+    test.onclick = async () => {
+      out.textContent = '';
+      const r = await busy(test, () => fetch('/api/targets/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({roku: t.roku})}).then(x => x.json()));
+      out.textContent = !r ? 'Couldn\u2019t reach the Pi.' : r.ok ? 'Sent. Did the TV\u2019s information banner appear?' : r.error;
+    };
+    row.append(test, out);
+  }
+  if (t.id) {  // a saved TV can be taken off the list (a scan will offer it again if it is still there)
+    const rm = mk('button', {type: 'button', class: 'danger'}, 'Remove this TV');
+    rm.onclick = async () => { if (await confirmSheet('Remove ' + (t.name || 'this TV') + '?', 'It is taken off the remote when you tap Save. Nothing playing is touched.', 'Remove', true)) { tvList = tvList.filter(o => o !== t); renderTvSlots(); } };
+    row.append(rm);
+  }
+  body.append(row);
   box.append(body);
   return box;
 }
-function renderTvSlots() { $('tvslots').replaceChildren(tvSlot('living'), tvSlot('bedroom')); }
-$('tvrescan').onclick = () => { tvWarned = false; discoverTvs(); };
-$('tvcancel').onclick = () => { tvDisc = null; tvForm = {}; tvWarned = false; $('tverr').textContent = ''; location.hash = '#/settings'; };  // nothing was saved: leave the draft behind
-let tvWarned = false;
+function renderTvSlots() {
+  $('tvslots').replaceChildren(...tvList.map(tvCard));
+  $('tverr').textContent = tvNote; tvNote = '';
+  if (!tvList.length && tvDisc) $('tvslots').append(mk('p', {class: 'wz-lead', style: 'padding:8px 4px'}, 'No TVs yet. Make sure each Roku TV has Control by mobile apps set to Permissive, then Scan again.'));
+}
+$('tvrescan').onclick = () => discoverTvs(true);
+$('tvcancel').onclick = () => { tvDisc = null; tvList = []; tvNote = ''; $('tverr').textContent = ''; location.hash = '#/settings'; };  // nothing was saved: leave the draft behind
 $('tvsave').onclick = async () => {
   $('tverr').textContent = '';
-  const bare = ['living', 'bedroom'].filter(t => tvForm[t].enabled && !tvForm[t].roku).map(t => tvForm[t].name || t);
-  if (bare.length && !tvWarned) {  // no Roku means no power, volume, input switching or standby detection: say so before saving
-    tvWarned = true;
-    $('tverr').textContent = bare.join(' and ') + (bare.length > 1 ? ' have' : ' has') + ' no Roku chosen, so there will be no TV controls, input switching or standby detection. Pick one above, or tap Save again to continue without.';
-    return;
-  }
-  tvWarned = false;
-  const body = {}; ['living', 'bedroom'].forEach(t => { const {why, ...rest} = tvForm[t]; body[t] = rest; });
-  const r = await busy($('tvsave'), () => fetch('/api/targets/config', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).then(x => x.json()));
+  const body = {tvs: tvList.map(t => ({id: t.id, name: t.name, roku: t.roku, pi: t.pi, chromecast: t.chromecast}))};
+  const r = await busy($('tvsave'), () => fetch('/api/tvs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).then(x => x.json()));
   if (!r) { $('tverr').textContent = 'Couldn\u2019t reach the Pi.'; return; }
   if (r.ok === false) { $('tverr').textContent = r.error || 'That didn\u2019t save.'; return; }
-  loadTargets(); setupStep = 3; renderSetup();
+  tvList = r.tvs; loadTargets(); setupStep = 3; renderSetup();
 };
 $('sufinish').onclick = async () => {
   const r = await busy($('sufinish'), () => api('/api/setup/finish', 'POST', {}));
@@ -1754,7 +1778,7 @@ async function loadRecents() {
     b.onkeydown = e => { if (e.key === 'Enter') playFav(it.url); };
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
     const live = it.live === true ? [el('span', 'badge live', 'LIVE')] : [];  // the same chip and line as a favourite
-    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), ...live, el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, linkEl(it.url, it.source), x);  // the same open-on-the-site icon as a favourite
+    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), ...live, ...(titleLine(it) ? [el('span', 'ftitle', titleLine(it))] : []), el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, linkEl(it.url, it.source), x);  // the same open-on-the-site icon as a favourite
     box.append(b);
   });
   markFavs();  // a list redrawn while a tap is still loading keeps its spinner
