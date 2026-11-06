@@ -548,6 +548,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v.01M14.5 20.5v.01M17 20.5h3.5v-3"/></symbol>
 <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5v-3a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2h3"/></symbol>
 <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
 <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M5 7.5l4.5 4.5L5 16.5M12 17h7"/></symbol>
 <symbol id="i-hdmi" viewBox="0 0 24 24"><path d="M4.5 8h15v5.5l-3 3.2h-9l-3-3.2z"/></symbol>
@@ -954,7 +955,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <div id="wallgroupswrap" class="hide"><div class="wlabel" style="display:flex;align-items:center;justify-content:space-between">Groups<button id="wallsavegroup" class="hide" type="button" style="min-height:30px;padding:0 10px;font-size:12px;gap:5px"><svg class="ic" aria-hidden="true" style="width:14px;height:14px"><use href="#i-multi-grid"/></svg>Save these as a group</button></div><div id="wallgroups" class="wallfavs"></div></div>
         <div id="walladdbox">
       <div class="wlabel" id="walladdlabel">Add a stream</div>
-      <form id="walladd" class="row"><input id="wallurl" type="search" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
+      <form id="walladd" class="row"><input id="wallurl" type="search" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="chatbtn" aria-label="Add this stream" title="Add"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button></form>
         <div id="wallpick" class="pickrow hide"></div>
       <div id="wallfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="wallfavs" class="wallfavs"></div></div>
     </div>
@@ -964,7 +965,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="sh"><div class="grow"><b id="replttl">Replace</b><span class="sub">Pick what goes in its place</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
-    <form id="repladd" class="row"><input id="replurl" type="search" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="The stream to put in its place" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Replace</button></form>
+    <form id="repladd" class="row"><input id="replurl" type="search" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="The stream to put in its place" style="font-size:16px"><button class="chatbtn" aria-label="Replace with this stream" title="Replace"><svg class="ic" aria-hidden="true"><use href="#i-swap"/></svg></button></form>
     <div id="replpick" class="pickrow hide"></div>
     <div id="replfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="replfavs" class="wallfavs"></div></div>
   </div>
