@@ -206,7 +206,7 @@ body.chatfull{overflow:hidden}
 #chatcard.full #emotepick{display:flex;flex-direction:column;height:min(46vh,360px);animation:sheetup .2s ease-out}
 #chatcard.full #emotegrid{flex:1;max-height:none}
 #emotesuggest,.sugg{display:flex;gap:6px;overflow-x:auto;padding:0 0 6px;scrollbar-width:none}#emotesuggest::-webkit-scrollbar,.sugg::-webkit-scrollbar{display:none}
-#emotesuggest button,.sugg button{min-height:40px;padding:0 12px;flex:none;font-size:14px;gap:6px}#emotesuggest img{height:26px;max-width:64px;object-fit:contain}.sugg button small{color:var(--dim);font-size:12px}
+#emotesuggest button,.sugg button{min-height:40px;padding:0 12px;flex:none;font-size:14px;gap:6px}#emotesuggest img{height:26px;max-width:64px;object-fit:contain}.sugg .sw{position:relative;display:inline-flex}.sugg img.sav{width:26px;height:26px;border-radius:50%;object-fit:cover}.sugg .sw .livedot{width:9px;height:9px;box-shadow:0 0 0 2px var(--card2,var(--card))}.sugg img.sgame{width:20px;height:28px;border-radius:4px;object-fit:cover}.sugg button small{color:var(--dim);font-size:12px}
 #emotepick{background:var(--bg);border-radius:14px;padding:8px;margin:0 0 8px}
 #emotepick>input{display:block;width:100%;box-sizing:border-box;font-size:16px;min-height:44px;margin-bottom:8px}
 #emotepick .wseg{display:flex;flex-wrap:wrap;margin-bottom:4px}
@@ -1127,8 +1127,9 @@ async function twFlush() {
     });
   }
 }
-function avatarEl(name, url, cls) {
+function avatarEl(name, url, cls, live) {  // live === true: the red dot of a streamer who is on now
   const a = el('span', 'av' + (cls ? ' ' + cls : ''), initials(name));
+  if (live === true) { const d = el('i', 'livedot'); d.title = 'Live now'; a.classList.add('livehost'); a.append(d); }
   a.style.background = 'hsl(' + hueOf(name) + ' 45% 32%)';
   const slug = kickSlug(url), tw = slug ? null : twSlug(url);
   const put = src => {
@@ -1162,7 +1163,7 @@ function renderWallStrip(show) {
     const tags = el('span', 'wtags');  // the site and LIVE chips live here, under each picture
     tags.append(el('span', 'badge ' + (t.source || ''), t.source || 'Other'));
     if (off) tags.append(el('span', 'badge', 'Offline')); else if (t.live === true) tags.append(el('span', 'badge live', 'LIVE'));
-    b.append(avatarEl(t.name, t.url), el('span', 'wn', t.name), tags);
+    b.append(avatarEl(t.name, t.url, '', t.live === true && !off), el('span', 'wn', t.name), tags);
     const s = el('button', 'ws');  // the speaker: sound on or off for this stream. Tapping the rest of the tile selects it
     s.innerHTML = ic(on ? 'volume' : 'mute'); s.setAttribute('aria-pressed', String(on)); s.setAttribute('aria-label', (on ? 'Mute ' : 'Hear ') + t.name);
     s.onclick = e => { e.stopPropagation(); wallApi({action: 'sound', i: t.i, on: !on}); };
@@ -1454,7 +1455,7 @@ function drawFavs() {
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
     const live = f.live === true ? el('span', 'badge live', 'LIVE') : null;
     const lnote = el('span', 'sub livenote', liveLine(f));
-    const head = el('div', 'fhead'); head.append(avatarEl(favHead(f), f.url), el('b', null, favHead(f)), ...titleEl(f));
+    const head = el('div', 'fhead'); head.append(avatarEl(favHead(f), f.url, '', f.live), el('b', null, favHead(f)), ...titleEl(f));
     b.append(head, ...siteChips(f), ...(live ? [live] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
     if (reordering) {
       const i = favList.indexOf(f), mv = el('span', 'mv');
@@ -1523,7 +1524,7 @@ function renderQuick() {
     if (style === 'cards') {  // the list style: one row per stream, with its title beside the name
       const b = el('div', 'fav'), head = el('div', 'fhead');
       b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url;
-      head.append(avatarEl(it.name, it.url), el('b', null, it.name), ...titleEl(it));
+      head.append(avatarEl(it.name, it.url, '', it.live), el('b', null, it.name), ...titleEl(it));
       const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
       b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), el('span', 'badge live', 'LIVE'), el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin);
       b.onclick = () => playFav(it.url);
@@ -1534,7 +1535,7 @@ function renderQuick() {
     b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url; b.setAttribute('aria-label', 'Play ' + it.name + (it.title ? ': ' + it.title : ''));
     if (it.title) b.title = it.title;
     tags.append(el('span', 'badge ' + (it.source || ''), it.source || 'Other'), el('span', 'badge live', 'LIVE'));
-    b.append(avatarEl(it.name, it.url), el('span', 'wn', it.name), tags);
+    b.append(avatarEl(it.name, it.url, '', true), el('span', 'wn', it.name), tags);
     b.onclick = () => playFav(it.url);
     b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
     return b;
@@ -1605,7 +1606,7 @@ function pickCards(name, matches, choose) {
     const sub = el('span', 'sub');
     if (m.live) { sub.append(el('span', 'on', 'LIVE')); if (m.viewers) sub.append(document.createTextNode(' \u00b7 ' + Number(m.viewers).toLocaleString() + ' watching')); }
     else sub.textContent = 'Offline';
-    const av = avatarEl(name, m.url), top = el('span', 'ptop');  // their profile picture, the site's logo beside it
+    const av = avatarEl(name, m.url, '', m.live), top = el('span', 'ptop');  // their profile picture, the site's logo beside it
     av.style.cssText = 'width:44px;height:44px;font-size:15px';
     top.append(av, pi);
     b.append(top, el('b', null, m.source), sub);
@@ -2510,7 +2511,7 @@ async function loadRecents() {
   items.forEach(it => {
     const b = el('div', 'fav' + (it.live === false ? ' off' : '')), head = el('div', 'fhead');
     b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url;
-    head.append(avatarEl(it.name, it.url), el('b', null, it.name), ...titleEl(it));
+    head.append(avatarEl(it.name, it.url, '', it.live), el('b', null, it.name), ...titleEl(it));
     const x = el('button', 'x'); x.innerHTML = ic('star'); x.setAttribute('aria-label', 'Save ' + it.name + ' to favourites');
     x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'POST', {url: it.url, name: it.name}); await loadFavs(); };
     b.onclick = () => playFav(it.url);
@@ -2816,7 +2817,7 @@ function browseTiles(rows) {  // one tile per streamer: a name live on both site
   const by = new Map();
   rows.forEach(r => {
     const k = r.login.toLowerCase().replace(/-/g, '_');  // Kick writes an underscore in a name as a hyphen
-    if (!by.has(k)) by.set(k, {name: r.name, avatar: r.avatar, title: r.title, game: r.game, lang: r.lang || '', started: 0, total: 0, plats: []});
+    if (!by.has(k)) by.set(k, {name: r.name, avatar: r.avatar, gameImg: r.game_img, title: r.title, game: r.game, lang: r.lang || '', started: 0, total: 0, plats: []});
     const t = by.get(k);
     t.total += r.viewers || 0; t.plats.push({source: r.source, url: r.url, viewers: r.viewers || 0});
     t.started = Math.max(t.started, Date.parse(r.started || '') || 0);
@@ -2835,14 +2836,17 @@ function suggestBrowse(q, games, base) {  // while typing: matching categories (
   const box = $('browsesuggest'), items = [];
   if (q.length >= 2) {
     [...games.entries()].filter(([g]) => g.toLowerCase().includes(q) && g !== browseGame).sort((a, b) => b[1] - a[1]).slice(0, 4).forEach(([g, n]) => items.push({game: g, n}));
-    base.filter(t => t.name.toLowerCase().includes(q) && t.name.toLowerCase() !== q).slice(0, 3).forEach(t => items.push({name: t.name}));
+    base.filter(t => t.name.toLowerCase().includes(q) && t.name.toLowerCase() !== q).slice(0, 3).forEach(t => items.push({name: t.name, avatar: t.avatar}));
   }
+  items.forEach(it => { if (it.game) it.img = (base.find(t => t.game === it.game && t.gameImg) || {}).gameImg; });
   box.classList.toggle('hide', !items.length);
   box.replaceChildren(...items.map(it => {
     const b = el('button');
     b.type = 'button';
+    const pic = it.game ? it.img : it.avatar;  // a category shows its box art, a channel its profile picture
+    if (pic) { const i = document.createElement('img'); i.src = pic; i.alt = ''; i.referrerPolicy = 'no-referrer'; i.className = it.game ? 'sgame' : 'sav'; i.onerror = () => i.remove(); if (it.game) b.append(i); else { const w = el('span', 'sw'); w.append(i); const d = el('i', 'livedot'); w.append(d); b.append(w); } }  // a channel in the live list is live: red dot
     if (it.game) { b.append(document.createTextNode(it.game + ' '), el('small', null, it.n + ' live')); b.title = 'Show only this category'; b.onclick = () => { browseGame = it.game; $('browseq').value = ''; renderBrowse(); }; }
-    else { b.textContent = it.name; b.onclick = () => { $('browseq').value = it.name; renderBrowse(); }; }
+    else { b.append(document.createTextNode(it.name)); b.onclick = () => { $('browseq').value = it.name; renderBrowse(); }; }
     return b;
   }));
 }
@@ -2872,6 +2876,7 @@ function renderBrowse() {
     const b = el('div', 'btile'), av = el('span', 'av', initials(t.name));
     av.style.background = 'hsl(' + hueOf(t.name) + ' 45% 32%)';
     if (t.avatar) { const i = document.createElement('img'); i.src = t.avatar; i.alt = ''; i.loading = 'lazy'; i.referrerPolicy = 'no-referrer'; av.textContent = ''; av.appendChild(i); }
+    { const d = el('i', 'livedot'); d.title = 'Live now'; av.classList.add('livehost'); av.append(d); }
     b.append(av, el('b', null, t.name), el('span', 'badge live', 'LIVE'), el('span', 'sub', [t.game, fmtViewers(t.total) + ' watching'].filter(Boolean).join(' \u00b7 ')));
     const acts = el('div', 'bacts');
     t.plats.forEach(pl => {

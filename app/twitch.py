@@ -133,7 +133,9 @@ def live_now(first=24, game=None):
     pics = users([r["user_login"] for r in rows])
     return [{"login": r["user_login"], "name": r.get("user_name") or r["user_login"], "title": r.get("title"), "game": r.get("game_name"),
              "viewers": r.get("viewer_count"), "avatar": (pics.get(r["user_login"]) or {}).get("avatar"), "lang": r.get("language"), "started": r.get("started_at"),
-             "thumb": (r.get("thumbnail_url") or "").replace("{width}", "440").replace("{height}", "248")} for r in rows if r.get("type") == "live"]
+             "thumb": (r.get("thumbnail_url") or "").replace("{width}", "440").replace("{height}", "248"),
+             "game_img": f"https://static-cdn.jtvnw.net/ttv-boxart/{r['game_id']}-52x72.jpg" if r.get("game_id") else None}
+            for r in rows if r.get("type") == "live"]
 
 
 def live_among(logins):
@@ -151,7 +153,9 @@ def live_among(logins):
     pics = users([r["user_login"] for r in rows])
     return [{"login": r["user_login"], "name": r.get("user_name") or r["user_login"], "title": r.get("title"), "game": r.get("game_name"),
              "viewers": r.get("viewer_count"), "avatar": (pics.get(r["user_login"]) or {}).get("avatar"), "lang": r.get("language"), "started": r.get("started_at"),
-             "thumb": (r.get("thumbnail_url") or "").replace("{width}", "440").replace("{height}", "248")} for r in rows if r.get("type") == "live"]
+             "thumb": (r.get("thumbnail_url") or "").replace("{width}", "440").replace("{height}", "248"),
+             "game_img": f"https://static-cdn.jtvnw.net/ttv-boxart/{r['game_id']}-52x72.jpg" if r.get("game_id") else None}
+            for r in rows if r.get("type") == "live"]
 
 
 # ---- linking an account (so chat messages go out as that person) ----
