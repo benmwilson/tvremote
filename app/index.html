@@ -9,6 +9,10 @@
 <meta name="apple-mobile-web-app-title" content="TV Remote">
 <meta name="theme-color" content="#0b0e14">
 <link rel="manifest" href="/manifest.json">
+<script>/* which phone is this? the help, tour and settings then show only what fits it */
+(function () { var u = navigator.userAgent, os = /Android/i.test(u) ? 'android' : (/iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1)) ? 'ios' : 'other'; document.documentElement.dataset.os = os; })();
+</script>
+<style>[data-os-only]{display:none}html[data-os=ios] [data-os-only=ios],html[data-os=android] [data-os-only=android],html[data-os=other] [data-os-only=other]{display:block}</style>
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <title>TV Remote</title>
@@ -664,7 +668,9 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="card s-form"><button id="tourgo" type="button" class="go">Take the tour</button></div>
   <div class="card help" id="help">
     <details open><summary>Play something</summary>
-      <p>Copy a link, or tap Share in Kick, Twitch, YouTube or Safari, then run the <b>Play on Pi</b> Shortcut. You pick a TV, and it starts playing there.</p>
+      <p data-os-only="ios">Copy a link, or tap Share in Kick, Twitch, YouTube or Safari, then run the <b>Play on Pi</b> Shortcut. You pick a TV, and it starts playing there.</p>
+      <p data-os-only="android">Tap Share in Kick, Twitch, YouTube or Chrome, then choose <b>TV Remote</b> in the share list (add it to your Home screen first, below). You pick a TV, and it starts playing there.</p>
+      <p data-os-only="other">Paste a link into the remote, or open <b>/share?u=</b> with a link on this address. On a phone, add the remote to the Home screen and use the Share menu.</p>
       <p>You can also paste a link or type a channel name on the remote. A bare name looks on Kick; use the buttons to switch to Twitch or a YouTube search.</p></details>
     <details><summary>Pick a TV</summary>
       <p>All TVs shows a card for each TV and what it is playing. Tap one to open its remote. Controls only ever act on the TV you opened.</p></details>
@@ -675,7 +681,9 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <details><summary>Several streams at once</summary>
       <p>The Pi's own screen can show up to four streams together. Open Multistream on that TV's remote, then add streams. <b>Enlarge</b> makes one big, and <b>Sync</b> lines up the pictures if one is ahead.</p></details>
     <details><summary>Add it to your Home Screen</summary>
-      <p>In Safari, tap Share, then Add to Home Screen. It then opens like an app.</p></details>
+      <p data-os-only="ios">In Safari, tap Share, then Add to Home Screen. It then opens like an app.</p>
+      <p data-os-only="android">In Chrome, tap the three dots, then Install app (or Add to Home screen). It opens like an app, and it shows up in the Share list so you can send links straight to a TV.</p>
+      <p data-os-only="other">In Chrome or Edge, use the install icon in the address bar to make it an app window.</p></details>
     <details><summary>Something isn't working</summary>
       <p><b>Isn't live right now:</b> the channel is offline. <b>Nothing on the TV:</b> check the TV is on and set to the right input, or tap the power button. <b>Stuck or blurry:</b> try Refresh, or pick a lower quality. Still stuck? Tell whoever set this up.</p></details>
     <details class="adm hide"><summary>Admins: move the Pi or add a TV</summary>
@@ -1731,7 +1739,7 @@ function confirmSheet(title, text, yes, danger) {
 // `when` is added to the text if the thing is not on screen right now (it only appears in some states).
 const TOUR = [
   {t: 'Pick a TV', x: 'The first screen has a card for each TV and what it is playing. Tap one to open its remote. Controls only act on the TV you opened.', view: 'all', sel: '#cards .tvcard'},
-  {t: 'Play something', x: 'Paste a link, type a channel name or search here. A bare name looks on Kick; the buttons below switch to Twitch or YouTube. From your phone you can also share a link to the \u201cPlay on Pi\u201d Shortcut.', view: 'tv', sel: '#link'},
+  {t: 'Play something', x: 'Paste a link, type a channel name or search here. A bare name looks on Kick; the buttons below switch to Twitch or YouTube. From your phone you can also use Share: the \u201cPlay on Pi\u201d Shortcut on an iPhone, or the TV Remote app in the Share list on Android.', view: 'tv', sel: '#link'},
   {t: 'Favourites', x: 'Tap the star on a stream to keep it here. The LIVE badge shows who is on now, and greyed ones are offline.', view: 'tv', sel: '#favs', when: 'Nothing is saved yet: tap the star on a stream to add one.'},
   {t: 'Recents', x: 'What you watched lately. Offline channels are greyed out.', view: 'tv', sel: '#recents', when: 'It fills up as you play things.'},
   {t: 'TV controls', x: 'Volume, mute, power and the TV\u2019s HDMI inputs, for the TV you opened.', view: 'tv', sel: '#tvctl'},
@@ -1740,7 +1748,7 @@ const TOUR = [
   {t: 'Multistream', x: 'Watch up to four streams at once on the Pi\u2019s screen. Open it, add streams, and use Enlarge to make one big.', view: 'tv', sel: '#wallopencard', needsPlay: true, when: 'Only on the Pi\u2019s screen.'},
   {t: 'Chat', x: 'Read the chat of the Twitch or Kick channel that is playing. Link your account in Settings to type in Twitch chat, or show the chat on the TV.', view: 'tv', sel: '#chatcard', needsPlay: true, when: 'It appears while a Twitch or Kick channel plays.'},
   {t: 'Link your accounts', x: 'Link Kick or Twitch here to chat as yourself.', view: 'settings', sel: '#platforms', when: 'Guests can\u2019t link accounts.'},
-  {t: 'Help and Home Screen', x: 'More answers live here. To use this like an app, open it in Safari, tap Share, then Add to Home Screen.', view: 'settings', sel: '#help'},
+  {t: 'Help and Home Screen', x: 'More answers live here. To use this like an app, add it to your Home Screen (Safari: Share, Add to Home Screen. Chrome on Android: menu, Install app).', view: 'settings', sel: '#help'},
   {t: 'That\u2019s it', x: 'Tap Take the tour any time to see this again.', view: 'settings', sel: '#tourgo'}];
 let tourI = 0, tourHome = '', tourEl = null, tourSeq = 0, tourSteps = TOUR;
 const tourOpen = () => !$('tourbox').classList.contains('hide');
@@ -1970,7 +1978,7 @@ function renderShell() {
     ? (s.install_url ? 'Scanning on an iPhone offers to add the shortcut.' : 'Paste the shortcut iCloud link above. Until then the QR code opens this remote.')
     : mode === 'shortcut'
     ? (/^shortcuts:/.test(s.shortcut_url || '') ? 'Scanning on an iPhone runs that shortcut, if it is installed on the phone.' : s.shortcut_url ? 'Scanning opens the shortcut\u2019s iCloud page, so a phone can add \u201cPlay on Pi\u201d.' : 'Paste the shortcut\u2019s iCloud link, or shortcuts://run-shortcut?name=TV%20Remote, above. Until then the QR code opens this remote.')
-    : 'Scanning opens this remote.';
+    : 'Scanning opens this remote. This works on iPhone and Android; the shortcut options below are for iPhones only.';
   $('qrguestnote').classList.toggle('hide', !s.qr_guest);
   $('invtv').classList.toggle('hide', !targets.some(t => t.kind === 'pi'));
   $('piicon').setAttribute('href', s.enabled ? '#i-eye-off' : '#i-eye');
@@ -3541,7 +3549,7 @@ const shorten = u => u.length > 70 ? u.slice(0, 67) + '…' : u;
 const lastTv = () => { try { return localStorage.getItem('lastTv') || ''; } catch (e) { return ''; } };
 
 function renderPicker() {
-  if (!picker.started) { picker.url = extractUrl(new URLSearchParams(location.search).get('u')); picker.started = true; }
+  if (!picker.started) { const qs = new URLSearchParams(location.search); picker.url = extractUrl(qs.get('u')) || extractUrl(qs.get('text')) || extractUrl(qs.get('title'));  // Android's Share sends the link in text picker.started = true; }
   $('sharedlink').textContent = picker.url ? shorten(picker.url) : '';
   $('sharedlink').classList.toggle('hide', !picker.url);
   $('pastebox').classList.toggle('hide', !!picker.url);

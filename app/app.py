@@ -1159,6 +1159,7 @@ def icon(n):
 @app.get("/manifest.json")
 def manifest():
     return jsonify(name="TV Remote", short_name="TV Remote", start_url="/", display="standalone",
+                   share_target={"action": "/share", "method": "GET", "params": {"title": "title", "text": "text", "url": "u"}},  # Android: once installed, Share > TV Remote opens the TV picker with the link
                    background_color="#0b0e14", theme_color="#0b0e14",
                    icons=[{"src": "/icon-180.png", "sizes": "180x180", "type": "image/png"},
                           {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
