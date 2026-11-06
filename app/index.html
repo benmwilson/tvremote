@@ -197,6 +197,10 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .fav .fhead{display:flex;align-items:center;gap:10px;padding-right:30px;margin-bottom:6px}
 .fav .fhead b{margin:0;padding:0;min-width:0;flex:0 1 auto;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fav>.iconlink{position:absolute;right:0;bottom:0}
+.badge.Kick,.badge.Twitch,.badge.YouTube{display:inline-flex;align-items:center;gap:5px}
+.badge.Kick{--logo:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%3E%3Cpath%20d=%27M1.333%200h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z%27/%3E%3C/svg%3E")}.badge.Twitch{--logo:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%3E%3Cpath%20d=%27M11.571%204.714h1.715v5.143H11.57zm4.715%200H18v5.143h-1.714zM6%200L1.714%204.286v15.428h5.143V24l4.286-4.286h3.428L22.286%2012V0zm14.571%2011.143l-3.428%203.428h-3.43l-3%203v-3H6.857V1.714h13.714Z%27/%3E%3C/svg%3E")}.badge.YouTube{--logo:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%3E%3Cpath%20d=%27M23.5%206.2a3%203%200%2000-2.1-2.1C19.5%203.6%2012%203.6%2012%203.6s-7.5%200-9.4.5A3%203%200%2000.5%206.2C0%208.1%200%2012%200%2012s0%203.9.5%205.8a3%203%200%20002.1%202.1c1.9.5%209.4.5%209.4.5s7.5%200%209.4-.5a3%203%200%20002.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.6%2015.6V8.4l6.2%203.6-6.2%203.6z%27/%3E%3C/svg%3E")}
+.badge.Kick:not(.chip)::before,.badge.Twitch:not(.chip)::before,.badge.YouTube:not(.chip)::before,.badge.chip.Kick::after,.badge.chip.Twitch::after,.badge.chip.YouTube::after{content:"";width:1.05em;height:1.05em;flex:none;background:currentColor;-webkit-mask:var(--logo) center/contain no-repeat;mask:var(--logo) center/contain no-repeat}
+.badge.chip.Kick::after,.badge.chip.Twitch::after,.badge.chip.YouTube::after{order:-1;margin-right:5px}
 .fav .badge{margin-right:8px}
 #gear{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px;transition:background .15s,color .15s}
 #gear[aria-pressed=true]{color:var(--fg);background:var(--line)}
@@ -1480,7 +1484,7 @@ async function poll() {
 // A streamer on more than one site gets a chip for each; tap a chip to watch there. A dot marks the sites they're live on.
 function siteChips(f) {
   return (f.links || [{url: f.url, source: f.source}]).map(l => {
-    const c = el('button', 'badge chip ' + (l.source || ''), (l.source || 'Other') + (l.live ? ' \u25CF' : ''));
+    const c = el('button', 'badge chip ' + (l.source || ''), (l.source || 'Other'));
     c.type = 'button'; c.setAttribute('aria-label', 'Watch ' + f.name + ' on ' + (l.source || 'the site') + (l.live ? ' (live)' : ''));
     c.onclick = e => { e.stopPropagation(); if (!reordering) playFav(l.url); };
     return c;
@@ -3798,10 +3802,25 @@ window.addEventListener('popstate', show);
 $('back').onclick = () => { location.hash = view() === 'settings' ? beforeSettings : '#/'; };
 $('gear').onclick = e => { if (view() === 'settings') { e.preventDefault(); location.hash = beforeSettings; } };
 
+// TV volume up/down can be tapped as fast as you like: taps are gathered for a moment and sent as one batch of presses (never dropped while one is still in flight).
+let volN = 0, volK = '', volTimer = 0, volChain = Promise.resolve();
+function volFlush() {
+  clearTimeout(volTimer);
+  if (!volN) return;
+  const key = volK, count = volN; volN = 0; volK = '';
+  volChain = volChain.then(() => api('/api/roku/key', 'POST', {key, count}));  // one batch after another, in order
+}
+function volTap(k) {
+  if (volK && volK !== k) volFlush();  // the other direction: what was gathered goes first
+  volK = k; volN++;
+  tvMuted[target] = false; renderTvMute();  // changing the volume unmutes a Roku TV
+  if (volN >= 15) volFlush(); else { clearTimeout(volTimer); volTimer = setTimeout(volFlush, 90); }
+}
 document.addEventListener('click', async e => {
   const b = e.target.closest('button[data-k]');
   if (!b) return;
   const k = b.dataset.k;
+  if (k === 'VolumeUp' || k === 'VolumeDown') { volTap(k); return; }
   if (b.id === 'tvmute' && muteHeld) { muteHeld = false; return; }  // that was a press-and-hold (a correction), not a tap
   if (b.id === 'tvpower') { if (pwHeld) { pwHeld = false; return; } delete pwOver[target]; }  // a tap acts on what is shown, then waits for the TV
   const pw = b.id === 'tvpower';  // the power button spins until the TV itself reports the new state (or 30 s)
