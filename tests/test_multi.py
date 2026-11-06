@@ -566,3 +566,30 @@ class StaleWallTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EnlargeSoundTest(unittest.TestCase):
+    def make(self, layout, sound):
+        w = wall()
+        w.layout, w.main_url = layout, "https://kick.com/main"
+        w.extras = [{"url": "https://kick.com/a", "proc": None}, {"url": "https://kick.com/b", "proc": None}]
+        w.sound = set(sound)
+        return w
+
+    def test_in_focus_the_enlarged_stream_is_heard_and_the_one_it_replaced_is_muted(self):
+        w = self.make("focus", {0})
+        w.swap(1)
+        self.assertEqual((w.main_url, w.sound), ("https://kick.com/a", {0}))  # the stage has the sound; the old main (now tile 1) is not in it
+
+    def test_other_small_streams_keep_their_own_sound_setting(self):
+        w = self.make("focus", {0, 2})
+        w.swap(1)
+        self.assertEqual(w.sound, {0, 2})
+        w = self.make("focus", {1})  # the enlarged one was the only one heard, and stays so
+        w.swap(1)
+        self.assertEqual(w.sound, {0})
+
+    def test_in_grid_the_sound_travels_with_its_stream_as_before(self):
+        w = self.make("grid", {0})
+        w.swap(1)
+        self.assertEqual(w.sound, {1})

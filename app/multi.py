@@ -318,7 +318,7 @@ class Wall:
                 self.extras[i - 1].update(error=None, proc=None)
 
     def swap(self, i, main_url=None):
-        """Put extra tile i's stream on the big tile, and the big tile's stream on tile i. Works from the wall's own record of the main stream
+        """Put extra tile i's stream on the big tile, and the big tile's stream on tile i. In the focus layout the sound goes to the big tile. Works from the wall's own record of the main stream
         (not from what the main window is playing right now, which lags), so quick repeated taps can never copy one stream into two tiles.
         Returns the new main url, or None."""
         with self.lock:
@@ -332,6 +332,8 @@ class Wall:
             self.selected = i if self.selected == 0 else 0 if self.selected == i else self.selected  # the selection follows the stream
             a, b = 0 in self.sound, i in self.sound  # and so does the sound
             self.sound = (self.sound - {0, i}) | ({i} if a else set()) | ({0} if b else set())
+            if self.layout == "focus":  # the big tile is the stage: whatever is enlarged is heard, and what it replaced there is muted (the other small ones are left as they are)
+                self.sound = (self.sound - {i}) | {0}
             t["source"] = self.resolve(t["url"])[0]
             return self.main_url
 

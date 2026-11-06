@@ -1931,6 +1931,7 @@ def pi_status():
         data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(url or "")
         data["chat_ok"] = source in ("Twitch", "Kick") and bool(chat.channel_of(url or ""))
         data["chat"] = bool(_chat["obj"])
+        data["chat_pref"] = bool(_chat["pref"])
         if wall.active():  # the mute button is the controlled stream's sound switch
             data["muted"] = wall.selected not in wall.sound
         # live = streamlink, or a stream with no duration

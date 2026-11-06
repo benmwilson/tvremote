@@ -2180,8 +2180,8 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
     }));
   }
   const pop = kick ? 'https://kick.com/popout/' + encodeURIComponent(kick) + '/chat' : tw ? 'https://www.twitch.tv/popout/' + tw + '/chat' : '';
-  $('chatTv').classList.toggle('hide', !(st.chat_ok && !st.wall));  // Twitch chat on the TV: one stream on the Pi's screen
-  $('chatTv').setAttribute('aria-pressed', String(!!st.chat));
+  $('chatTv').classList.toggle('hide', !(st.chat_ok || st.chat_pref));  // chat on the TV: for the controlled stream, one or several on the Pi's screen
+  $('chatTv').setAttribute('aria-pressed', String(!!st.chat_pref));  // on means asked for, even while the controlled stream has no chat
   $('chatpop').classList.toggle('hide', !pop);  // in the header, between the title and the chevron, open or not
   if (pop) $('chatpop').href = pop;
   $('chatbox').classList.toggle('hide', !want);
@@ -2451,7 +2451,7 @@ function dbg(open) {
   if (open) { dbgTick(); dbgTimer = setInterval(dbgTick, 2000); }
 }
 $('movedgo').onclick = () => { location.hash = '#/setup'; };
-$('chatTv').onclick = async () => { await cmd('chat', st.chat ? 'off' : 'on'); };
+$('chatTv').onclick = async () => { await cmd('chat', st.chat_pref ? 'off' : 'on'); };
 $('dbgOpen').onclick = () => dbg(true);
 $('dbgClose').onclick = $('scrim').onclick = () => dbg(false);
 
