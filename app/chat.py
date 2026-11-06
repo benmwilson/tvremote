@@ -151,7 +151,7 @@ def ass_column(channel, msgs, source="Twitch"):
         if wrapped[0].startswith(who + ": "):
             wrapped[0] = "{\\c&H" + bgr + "&\\b1}" + who + "{\\r}: " + wrapped[0][len(who) + 2:]
         lines += wrapped
-        lines.append("{\\fs10} ")  # a little air between messages
+        lines.append("{\\fs10} {\\fs26}")  # a little air between messages (and the size back, or the next name stays tiny)
     head = "{\\an7\\pos(28,44)\\fs28\\b1\\bord0\\shad0\\1c&H" + accent + "&}\u25cf  {\\1c&HA9978C&\\fsp3}CHAT  {\\1c&HF6F1EE&\\fsp0}" + _esc(channel).upper()
     body = "{\\an1\\pos(28,1050)\\fs26\\bord2\\shad0\\q2}" + "\\N".join(lines[-COL_LINES:])
     return "\n".join([*background(accent), head, body])
