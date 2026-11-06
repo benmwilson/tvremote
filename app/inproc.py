@@ -18,6 +18,14 @@ _lock = threading.Lock()
 _session = None
 
 
+def _load():
+    """Import yt-dlp before streamlink, always: streamlink swaps a part of urllib3 (the URL percent-encoding helper) for its own, and a yt-dlp that is
+    imported after it fails with "'Urllib3UtilUrlPercentReOverride' object has no attribute 'sub'", which also breaks streamlink's own requests.
+    Imported in this order both work. Found on the Pi, where streams quietly fell back to the slow path."""
+    import yt_dlp  # noqa: F401
+    import streamlink  # noqa: F401
+
+
 def session():
     """One streamlink session for the whole app (made once; plugins load on first use)."""
     global _session
@@ -25,6 +33,7 @@ def session():
         raise Unavailable()
     with _lock:
         if _session is None:
+            _load()
             from streamlink import Streamlink
             _session = Streamlink()
         return _session
@@ -75,6 +84,7 @@ _ydl = {}
 def _yt(**opts):
     if not ENABLED:
         raise Unavailable()
+    _load()
     from yt_dlp import YoutubeDL
     base = {"quiet": True, "no_warnings": True, "noplaylist": True, "skip_download": True, "socket_timeout": 15}
     return YoutubeDL({**base, **opts})
@@ -102,7 +112,6 @@ def warm():
         s = session()
         for u in ("https://kick.com/warm", "https://www.twitch.tv/warm"):
             s.resolve_url(u)  # loads the plugin module (no network)
-        from yt_dlp import YoutubeDL  # noqa: F401
         _yt()
     except Exception:
         return None
