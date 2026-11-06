@@ -47,6 +47,7 @@ import throttle
 import kick
 import twitch
 import dockerctl
+import emotes
 import mpvipc
 import multi
 import pihealth
@@ -165,7 +166,7 @@ SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/se
 # later) is refused, so a new endpoint is closed to guests until it is listed here on purpose.
 GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
              "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
-             "/api/shell", "/api/stats", "/api/browse", "/api/twitch/avatars", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch", "/api/detect"}  # /api/watch checks the guest setting itself
+             "/api/shell", "/api/stats", "/api/browse", "/api/twitch/avatars", "/api/emotes", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch", "/api/detect"}  # /api/watch checks the guest setting itself
 GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/api/roku/launch", "/logout"}
 
 
@@ -3214,6 +3215,17 @@ def twitch_chat():
     except ValueError as e:
         return jsonify(ok=False, error=str(e)), 400
     return jsonify(ok=True)
+
+
+@app.get("/api/emotes")
+def api_emotes():
+    """The emotes for a Twitch channel's chat (Twitch, 7TV, BetterTTV, FrankerFaceZ; the channel's own, then global): for the chat feed, the picker and suggestions."""
+    login = request.args.get("channel", "").strip().lower()
+    if not re.fullmatch(r"\w{2,25}", login):
+        return jsonify(ok=False, error="No channel."), 400
+    r = jsonify(ok=True, sets=emotes.for_channel(login))
+    r.headers["Cache-Control"] = "private, max-age=300"
+    return r
 
 
 @app.get("/api/twitch/avatars")

@@ -183,10 +183,23 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .sub.warn{color:var(--warn,#ffb062)}
 #chatcard{margin-top:14px;padding:6px 8px 12px 16px}
-#wallopencard,#browsecard{margin-top:12px;padding:8px 16px}#chattabs{flex-wrap:wrap;margin:2px 8px 6px 0}
+#wallopencard,#browsecard{margin-top:12px;padding:8px 16px}#playsec{margin-top:6px}#chattabs{flex-wrap:wrap;margin:2px 8px 6px 0}
 #chatcard #chatbox{margin-right:8px}
 .chatpoplink{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:40px;margin:8px 8px 0 0;color:var(--dim);font-size:14px}.chatpoplink .ic{width:16px;height:16px}
 .chathead .chev{font-size:18px;padding:0 8px}
+#chatcomp{margin:8px 8px 0 0}
+#emotesuggest{display:flex;gap:6px;overflow-x:auto;padding:0 0 6px;scrollbar-width:none}#emotesuggest::-webkit-scrollbar{display:none}
+#emotesuggest button{min-height:40px;padding:0 10px;flex:none;font-size:14px;gap:6px}#emotesuggest img{height:26px;max-width:64px;object-fit:contain}
+#emotepick{background:var(--bg);border-radius:14px;padding:8px;margin:0 0 8px}
+#emotepick>input{display:block;width:100%;box-sizing:border-box;font-size:16px;min-height:44px;margin-bottom:8px}
+#emotepick .wseg{display:flex;flex-wrap:wrap;margin-bottom:4px}
+#emotegrid{max-height:230px;overflow-y:auto;overscroll-behavior:contain}
+#emotegrid .eh{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:10px 2px 4px;font-weight:600}
+#emotegrid .eg{display:flex;flex-wrap:wrap;gap:2px}
+#emotegrid button{min-height:0;width:46px;height:46px;padding:4px;background:none;border-radius:10px}#emotegrid img{max-width:100%;max-height:100%;object-fit:contain}
+#emotegrid .en{padding:10px 2px;color:var(--dim);font-size:14px}
+#kickfull[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14}
+#chatcount{text-align:right;margin:4px 2px 0;font-size:12px}
 .chatrow{display:flex;align-items:center;gap:8px}.chatrow .chathead{flex:1;min-width:0}
 .chatbtn{flex:none;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;box-sizing:border-box;display:grid;place-items:center;border-radius:12px;background:var(--card2);color:var(--dim);text-decoration:none;border:0}
 .chatbtn[aria-pressed=true]{color:var(--fg);box-shadow:inset 0 0 0 2px var(--accent,#9be564)}
@@ -792,10 +805,19 @@ body:has(dialog.sheet[open]){overflow:hidden}
   </div>
   <div id="chattabs" class="wseg hide" role="tablist" aria-label="Which stream's chat"></div>
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
-  <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
+  <div id="chatcomp" class="hide">
+    <div id="emotesuggest" class="hide" role="listbox" aria-label="Emote suggestions"></div>
+    <div id="emotepick" class="hide">
+      <input id="emoteq" type="search" placeholder="Search emotes" aria-label="Search emotes" autocomplete="off" autocapitalize="off" autocorrect="off">
+      <div class="wseg" id="emotetabs" role="group" aria-label="Emote source"><button type="button" data-p="all" aria-pressed="true">All</button><button type="button" data-p="twitch" aria-pressed="false">Twitch</button><button type="button" data-p="7tv" aria-pressed="false">7TV</button><button type="button" data-p="bttv" aria-pressed="false">BTTV</button><button type="button" data-p="ffz" aria-pressed="false">FFZ</button></div>
+      <div id="emotegrid"></div>
+    </div>
+    <form id="kicksend" class="row hide" style="margin:0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Emotes" title="Emotes" aria-pressed="false" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" id="chatsendbtn" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
+    <p id="chatcount" class="sub hide"></p>
+  </div>
+  <button id="chatlink" type="button" class="hide" style="margin:8px 8px 0 0;width:calc(100% - 8px)">Link Twitch to chat as yourself</button>
 </div>
 <div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multistream</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
-<div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multistream</span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
 <dialog id="tvapps" class="sheet" aria-labelledby="tvappsttl">
   <div class="sh"><div class="grow"><b id="tvappsttl">TV apps</b><span class="sub" id="tvappssub">Tap one to open it on the TV</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -856,6 +878,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   </details>
 </div>
 
+<div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multistream</span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
 <div id="playsec">
 <h2>Play something</h2>
 <div class="card">
@@ -1927,9 +1950,9 @@ $('kicksend').onsubmit = async e => {
   const text = $('kicktext').value.trim();
   if (!text) return;
   const r = await busy($('kicksend').querySelector('button'), () => chatNow.tw ? api('/api/twitch/chat', 'POST', {channel: chatNow.tw, text}) : api('/api/kick/chat', 'POST', {channel: chatNow.kick || kickSlug(st.url || ''), text}));
-  if (r && r.ok) { $('kicktext').value = ''; $('kicktext').focus(); }  // stay in the box so the keyboard stays up for the next one
+  if (r && r.ok) { $('kicktext').value = ''; chatInputChanged(); $('kicktext').focus(); }  // stay in the box so the keyboard stays up for the next one
 };
-$('kickfull').onclick = () => { const k = chatNow.kick, t = chatNow.tw; if (k) window.open('https://kick.com/popout/' + encodeURIComponent(k) + '/chat', '_blank', 'noopener'); else if (t) window.open('https://www.twitch.tv/popout/' + t + '/chat', '_blank', 'noopener'); };
+$('kickfull').onclick = () => { const k = chatNow.kick; if (chatNow.tw) togglePicker(); else if (k) window.open('https://kick.com/popout/' + encodeURIComponent(k) + '/chat', '_blank', 'noopener'); };
 fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {});
 
 // ---- settings: your account, linked platforms, and (for admins) people, access requests and guest links ----
@@ -2425,21 +2448,115 @@ function chatRow(name, color, parts) {
   if (/^#[0-9a-f]{6}$/i.test(color || '')) n.style.color = color;
   row.append(n);
   parts.forEach(p => {
-    if (p.img) { const img = document.createElement('img'); img.alt = p.alt || ''; img.loading = 'lazy'; img.src = p.img; row.append(img); }
+    if (p.img) { const img = document.createElement('img'); img.alt = p.alt || ''; img.title = p.alt || ''; img.loading = 'lazy'; img.src = p.img; row.append(img); }
     else if (p.t) row.append(document.createTextNode(p.t));
   });
   return row;
 }
+// ---- emotes: Twitch's own and the 7TV, BetterTTV and FrankerFaceZ sets for the channel in view (the Pi fetches the lists, the pictures come from each CDN) ----
+const emotesFor = {};  // channel -> {sets: [{provider, scope, emotes}], map: name -> emote, flat: [emote]}
+const PROV = {twitch: 'Twitch', '7tv': '7TV', bttv: 'BTTV', ffz: 'FFZ'};
+async function loadEmotes(login) {
+  if (!login || emotesFor[login]) return;
+  const e = emotesFor[login] = {sets: [], map: new Map(), flat: []};
+  const r = await fetch('/api/emotes?channel=' + encodeURIComponent(login)).then(x => x.json()).catch(() => null);
+  if (!r || !r.sets) { delete emotesFor[login]; return; }  // try again the next time the chat opens
+  e.sets = r.sets;
+  r.sets.forEach(set => set.emotes.forEach(m => { if (!e.map.has(m.n)) { const o = {...m, p: set.provider, scope: set.scope}; e.map.set(m.n, o); e.flat.push(o); } }));
+  if (chatNow.tw === login) { renderEmotePicker(); updateSuggest(); }
+}
+function withEmotes(text) {  // a word that is an emote's name becomes its picture
+  const em = emotesFor[chatNow.tw];
+  if (!em || !em.map.size || !text) return [{t: text}];
+  const out = []; let buf = '';
+  text.split(/(\s+)/).forEach(w => { const m = em.map.get(w); if (m) { if (buf) out.push({t: buf}); buf = ''; out.push({img: m.u, alt: w}); } else buf += w; });
+  if (buf) out.push({t: buf});
+  return out;
+}
+const emoteRecent = () => { try { return JSON.parse(localStorage.getItem('emoteRecent') || '[]'); } catch (e) { return []; } };
+function pushRecent(m) { try { localStorage.setItem('emoteRecent', JSON.stringify([m, ...emoteRecent().filter(x => x.n !== m.n)].slice(0, 24))); } catch (e) {} }
+let pickOpen = false, pickTab = 'all';
+function emoteBtn(m) {
+  const b = el('button'), i = document.createElement('img');
+  b.type = 'button'; b.title = m.n; b.setAttribute('aria-label', m.n); b.setAttribute('role', 'option');
+  i.src = m.u; i.alt = m.n; i.loading = 'lazy'; i.decoding = 'async'; b.append(i);
+  b.onclick = () => insertEmote(m);
+  return b;
+}
+function renderEmotePicker() {
+  if (!pickOpen) return;
+  const grid = $('emotegrid'), em = emotesFor[chatNow.tw], q = $('emoteq').value.trim().toLowerCase();
+  if (!em) { grid.replaceChildren(el('p', 'en', 'Loading emotes\u2026')); return; }
+  const parts = [], cap = q ? 300 : 160;
+  const add = (title, list) => { if (list.length) { parts.push(el('div', 'eh', title + (list.length > cap ? ' (first ' + cap + ': search for more)' : ''))); const g = el('div', 'eg'); g.append(...list.slice(0, cap).map(emoteBtn)); parts.push(g); } };
+  if (pickTab === 'all' && !q) add('Recent', emoteRecent());
+  em.sets.filter(set => pickTab === 'all' || set.provider === pickTab).forEach(set =>
+    add(PROV[set.provider] + (set.scope === 'channel' ? ' \u00b7 this channel' : ' \u00b7 global'), q ? set.emotes.filter(m => m.n.toLowerCase().includes(q)) : set.emotes));
+  grid.replaceChildren(...(parts.length ? parts : [el('p', 'en', q ? 'No emote matches \u201c' + $('emoteq').value.trim() + '\u201d.' : 'No emotes for this channel yet.')]));
+}
+function togglePicker(force) {
+  pickOpen = force === undefined ? !pickOpen : force;
+  $('emotepick').classList.toggle('hide', !pickOpen); $('kickfull').setAttribute('aria-pressed', String(pickOpen));
+  if (pickOpen) { $('kicktext').blur(); renderEmotePicker(); }
+}
+function insertEmote(m) {  // at the caret, with a space before and after
+  const t = $('kicktext'), a = t.selectionStart == null ? t.value.length : t.selectionStart, b = t.selectionEnd == null ? a : t.selectionEnd;
+  const before = t.value.slice(0, a), add = (before && !/\s$/.test(before) ? ' ' : '') + m.n + ' ';
+  if (before.length + add.length + t.value.length - b > 500) return;
+  t.value = before + add + t.value.slice(b);
+  t.setSelectionRange(before.length + add.length, before.length + add.length);
+  pushRecent(m); chatInputChanged();
+}
+function updateSuggest() {  // the word being typed, completed to emote names: tap one (or press Tab for the first)
+  const box = $('emotesuggest'), em = emotesFor[chatNow.tw], t = $('kicktext');
+  const word = (t.value.slice(0, t.selectionStart == null ? t.value.length : t.selectionStart).match(/(\S+)$/) || [])[1] || '';
+  const w = word.replace(/^:/, '').toLowerCase();
+  let list = [];
+  if (em && w.length >= 2) {
+    list = em.flat.filter(m => m.n.toLowerCase().startsWith(w));
+    if (list.length < 10) list = list.concat(em.flat.filter(m => !m.n.toLowerCase().startsWith(w) && m.n.toLowerCase().includes(w)));
+    list = list.slice(0, 12);
+  }
+  if (list.length === 1 && list[0].n === word) list = [];  // already typed in full
+  box.classList.toggle('hide', !list.length);
+  box.replaceChildren(...list.map(m => {
+    const b = el('button'), i = document.createElement('img');
+    b.type = 'button'; b.setAttribute('role', 'option'); i.src = m.u; i.alt = ''; b.append(i, document.createTextNode(m.n));
+    b.onmousedown = e => e.preventDefault();  // keep the keyboard up
+    b.onclick = () => {
+      const caret = t.selectionStart == null ? t.value.length : t.selectionStart, at = caret - word.length;
+      t.value = t.value.slice(0, at) + m.n + ' ' + t.value.slice(caret);
+      t.setSelectionRange(at + m.n.length + 1, at + m.n.length + 1); pushRecent(m); chatInputChanged(); t.focus();
+    };
+    return b;
+  }));
+}
+function chatInputChanged() {
+  const n = $('kicktext').value.length;
+  $('chatcount').textContent = n + ' / 500'; $('chatcount').classList.toggle('hide', n < 350);
+  $('chatsendbtn').disabled = !$('kicktext').value.trim();
+  updateSuggest();
+}
+$('kicktext').addEventListener('input', chatInputChanged);
+$('kicktext').addEventListener('click', updateSuggest);
+$('kicktext').addEventListener('focus', () => togglePicker(false));
+$('kicktext').addEventListener('keydown', e => { if (e.key === 'Tab' && !$('emotesuggest').classList.contains('hide')) { e.preventDefault(); $('emotesuggest').firstChild.click(); } });
+$('emoteq').addEventListener('input', renderEmotePicker);
+$('emotetabs').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  pickTab = b.dataset.p; document.querySelectorAll('#emotetabs button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderEmotePicker();
+};
+$('chatlink').onclick = () => { location.href = '/auth/twitch/start'; };
 function twitchParts(m) {
   const chars = [...m.text], parts = [];  // emote positions count characters, not UTF-16 units
   let at = 0;
   (m.emotes || []).forEach(e => {
     if (e.s < at || !/^[\w-]+$/.test(e.id)) return;
-    parts.push({t: chars.slice(at, e.s).join('')},
+    parts.push(...withEmotes(chars.slice(at, e.s).join('')),
       {img: 'https://static-cdn.jtvnw.net/emoticons/v2/' + e.id + '/default/dark/1.0', alt: chars.slice(e.s, e.e + 1).join('')});
     at = e.e + 1;
   });
-  parts.push({t: chars.slice(at).join('')});
+  parts.push(...withEmotes(chars.slice(at).join('')));
   return parts;
 }
 function kickParts(text) {  // emotes arrive inside the text as [emote:12345:name]
@@ -2517,7 +2634,13 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   const kickSend = KICK_OWN_SEND && want && !!kick && !!(kickInfo || {}).can_chat;  // typing needs a Kick account linked with chat permission
   const twSend = want && !!tw && !!(twitchInfo || {}).can_chat;  // and a Twitch account linked with it
   const canSend = kickSend || twSend;
-  $('kicksend').classList.toggle('hide', !canSend);
+  $('kicksend').classList.toggle('hide', !canSend); $('chatcomp').classList.toggle('hide', !canSend);
+  if (!canSend && pickOpen) togglePicker(false);
+  const tw2 = (twitchInfo || {}); $('chatlink').classList.toggle('hide', !(want && tw && tw2.can_link && !tw2.can_chat));
+  $('chatlink').textContent = tw2.name ? 'Link Twitch again to allow chatting' : 'Link Twitch to chat as yourself';
+  if (want && tw) loadEmotes(tw);
+  $('kickfull').title = $('kickfull').ariaLabel = tw ? 'Emotes' : 'Emotes: opens Kick\u2019s full chat';
+  $('chatsendbtn').disabled = !$('kicktext').value.trim();
   $('chatbox').classList.toggle('crop', kickSend);  // only Kick's own message bar needs hiding
   if (canSend) $('kicktext').placeholder = 'Chat as ' + (twSend ? twitchInfo.name : kickInfo.name);
   $('chatTog').setAttribute('aria-expanded', String(want)); $('chatChev').setAttribute('aria-expanded', String(want));
