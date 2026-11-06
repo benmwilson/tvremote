@@ -174,7 +174,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .chatpoplink{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:40px;margin:8px 8px 0 0;color:var(--dim);font-size:14px}.chatpoplink .ic{width:16px;height:16px}
 .chathead .chev{font-size:18px;padding:0 8px}
 .chatrow{display:flex;align-items:center;gap:8px}.chatrow .chathead{flex:1;min-width:0}
-.chatbtn{flex:none;width:44px;height:44px;padding:0;display:grid;place-items:center;border-radius:12px;background:var(--card2,rgba(255,255,255,.06));color:var(--dim);text-decoration:none}
+.chatbtn{flex:none;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;box-sizing:border-box;display:grid;place-items:center;border-radius:12px;background:var(--card2,rgba(255,255,255,.06));color:var(--dim);text-decoration:none}
 .chatbtn .ic{width:20px;height:20px}.chatbtn .chev{font-size:18px;transition:transform .15s;display:block}.chatbtn[aria-expanded=true] .chev{transform:rotate(180deg)}
 .chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
 .chathead .chev{color:var(--dim);transition:transform .15s}.chathead[aria-expanded=true] .chev{transform:rotate(180deg)}
@@ -1052,6 +1052,10 @@ function syncQual() {
     if (sel.dataset.mode !== 'wall') { sel.dataset.mode = 'wall'; sel.innerHTML = ''; WALL_Q.forEach(([v, label]) => { const o = el('option', null, label); o.value = v; sel.append(o); }); }
     if (document.activeElement !== sel) sel.value = (wallStreams(st.wall).find(t => t.i === st.wall.selected) || {}).quality || '';  // the selected stream's
   } else if (sel.dataset.mode === 'wall') { sel.dataset.mode = ''; sel.innerHTML = ''; qualFor = null; }  // back to this stream's own list
+  else if (sel.options.length && document.activeElement !== sel) {  // keep it showing what is really playing: a multi-view ending changes the quality of the same stream without a new list
+    const v = [...sel.options].map(o => o.value).find(o => String(st.quality).split(',').includes(o));
+    if (v) sel.value = v;
+  }
 }
 async function loadQualities() {
   qualTries = st.url === qualFor ? qualTries + 1 : 1;

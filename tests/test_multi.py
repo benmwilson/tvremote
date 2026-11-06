@@ -184,6 +184,23 @@ class QuickSecondAddTest(unittest.TestCase):
         self.assertEqual(r[1], 400)
 
 
+class HomeScreenPausedTest(unittest.TestCase):
+    """The home screen is a window behind the streams. If it is left running (the multi-view background has blurred glows) while a stream plays
+    full screen, the compositor has two windows to draw and the stream drops about 10 frames a minute. It must be paused after every in-place load."""
+
+    def test_a_stream_loaded_in_place_tells_the_home_screen_to_pause_even_when_the_wall_has_just_ended(self):
+        import app as server
+        proc = mock.MagicMock()
+        proc.poll.return_value = None
+        server.wall.clear()  # the multi-view just ended: nothing on the wall any more
+        with mock.patch.object(server, "HOT", True), mock.patch.dict(server.state, {"proc": proc, "hot": True, "wid": server.wall.main_wid(), "url": "https://kick.com/a"}), \
+                mock.patch.object(server, "resolve", return_value=("Kick", "streamlink")), mock.patch.object(server, "stream_url", return_value="https://cdn/x.m3u8"), \
+                mock.patch.object(server.mpvipc, "send", return_value={"error": "success"}), mock.patch.object(server, "screen") as screen, \
+                mock.patch.object(server.livewatch, "refresh_one"), mock.patch.object(server, "sl_info"), mock.patch.object(server, "switch_tv_to_pi"):
+            self.assertTrue(server.hot_load("https://kick.com/b"))
+        screen.assert_called_with("playing")
+
+
 class QualityOsdTest(unittest.TestCase):
     def test_a_wheel_and_text_show_while_the_quality_changes_then_the_result(self):
         import app as server

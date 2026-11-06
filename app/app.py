@@ -638,8 +638,7 @@ def hot_load(url, quality=None):
         threading.Thread(target=livewatch.refresh_one, args=(url,), daemon=True).start()
     threading.Thread(target=sl_info, args=(url,), daemon=True).start()  # the title and details
     threading.Thread(target=switch_tv_to_pi, daemon=True).start()
-    if wall.active():
-        screen("playing")
+    screen("playing")  # always: the home screen is a window behind the stream and must be paused (a multi-view collapsing in place leaves it running)
     return True
 
 
