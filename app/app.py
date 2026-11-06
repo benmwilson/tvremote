@@ -543,6 +543,9 @@ def is_lagging(drop_delta, cache_s):
     return drop_delta >= 8 or (cache_s is not None and cache_s < 0.6)
 
 
+_swapping = threading.Event()  # set while osd_swap draws, so nothing else flashes over it
+
+
 def _stall_monitor(proc):
     """Count stalls and show Buffering on the TV while the picture waits for data; a smaller note while it only stutters."""
     stalled_at = None
@@ -552,7 +555,7 @@ def _stall_monitor(proc):
         stalled = prop("paused-for-cache") is True
         d, cache = prop("frame-drop-count"), prop("demuxer-cache-duration")
         if isinstance(d, (int, float)) and prop("pause") is not True and not stalled:
-            bad = drops is not None and is_lagging(d - drops, cache if isinstance(cache, (int, float)) else None)
+            bad = drops is not None and not _swapping.is_set() and is_lagging(d - drops, cache if isinstance(cache, (int, float)) else None)
             calm = 0 if bad else calm + 1
             if bad and not lagging:
                 lagging = True
@@ -580,7 +583,8 @@ def _stall_monitor(proc):
         if stalled and stalled_at is None:
             stalled_at = time.time()
             state["stalls"] = state.get("stalls", 0) + 1
-            mpv(["osd-overlay", 3, "ass-events", buffering_screen(), 1920, 1080])
+            if not _swapping.is_set():
+                mpv(["osd-overlay", 3, "ass-events", buffering_screen(), 1920, 1080])
         elif not stalled and stalled_at is not None:
             state["stall_s"] = state.get("stall_s", 0) + time.time() - stalled_at
             stalled_at = None
@@ -1551,15 +1555,21 @@ def osd_swap(label, sock=SOCK, ready=None, max_s=8.0):
     background, never blocks the change, and a window that has gone away just stops it. Returns the thread."""
     def run():
         frames, t0, i = "\u25d0\u25d3\u25d1\u25d2", time.time(), 0
-        while time.time() - t0 < (max_s if ready else 2.5):
-            r = mpvipc.send(sock, ["show-text", f"{frames[i % 4]}  Switching to {label}", 700])
-            if r is None:
-                return  # no window to draw on
-            i += 1
-            time.sleep(0.25)
-            if ready and time.time() - t0 > 0.6 and ready():
-                break
-        mpvipc.send(sock, ["show-text", f"Quality: {label}", 1500])
+        if sock == SOCK:
+            _swapping.set()  # the stall monitor keeps its Buffering / lagging screens off while the wheel turns
+        try:
+            while time.time() - t0 < (max_s if ready else 2.5):
+                r = mpvipc.send(sock, ["show-text", f"{frames[i % 4]}  Switching to {label}", 900])
+                if r is None:
+                    return  # no window to draw on
+                i += 1
+                time.sleep(0.4)
+                if ready and time.time() - t0 > 0.6 and ready():
+                    break
+            mpvipc.send(sock, ["show-text", f"Quality: {label}", 1500])
+        finally:
+            if sock == SOCK:
+                _swapping.clear()
     t = threading.Thread(target=run, daemon=True)
     t.start()
     return t

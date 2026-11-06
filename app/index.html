@@ -174,8 +174,8 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .chatpoplink{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:40px;margin:8px 8px 0 0;color:var(--dim);font-size:14px}.chatpoplink .ic{width:16px;height:16px}
 .chathead .chev{font-size:18px;padding:0 8px}
 .chatrow{display:flex;align-items:center;gap:8px}.chatrow .chathead{flex:1;min-width:0}
-.chatbtn{flex:none;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;box-sizing:border-box;display:grid;place-items:center;border-radius:12px;background:var(--card2,rgba(255,255,255,.06));color:var(--dim);text-decoration:none}
-.chatbtn .ic{width:20px;height:20px}.chatbtn .chev{font-size:18px;transition:transform .15s;display:block}.chatbtn[aria-expanded=true] .chev{transform:rotate(180deg)}
+.chatbtn{flex:none;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;box-sizing:border-box;display:grid;place-items:center;border-radius:12px;background:var(--card2);color:var(--dim);text-decoration:none;border:0}
+.chatbtn .ic{width:20px;height:20px}.chatbtn .chev{padding:0;font-size:18px;transition:transform .15s;display:block}.chatbtn[aria-expanded=true] .chev{transform:rotate(180deg)}
 .chathead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;background:none;color:var(--text,#f6f1ee);text-align:left;padding:0}
 .chathead .chev{color:var(--dim);transition:transform .15s}.chathead[aria-expanded=true] .chev{transform:rotate(180deg)}
 #chatbox iframe{display:block;width:100%;height:340px;border:0;border-radius:12px;background:#0b0e14}
@@ -518,7 +518,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <a class="s-link" id="signout" href="/logout">Sign out</a>
   </div>
   <div class="card hide" id="pwcard">
-    <button class="s-line" id="pwopen" aria-expanded="false"><b>Change password</b><span class="chev">&#9662;</span></button>
+    <button class="s-line" id="pwopen" aria-expanded="false"><b>Change password</b><span class="chatbtn"><span class="chev">&#9662;</span></span></button>
     <form id="pwform" class="hide s-form">
       <input id="pwcur" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password">
       <input id="pwnew" type="password" placeholder="New password (6+ characters)" autocomplete="new-password" aria-label="New password">
@@ -703,7 +703,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
-<div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multi-view</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chev">&rsaquo;</span></button></div>
+<div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multi-view</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
 <dialog id="confirm" class="sheet" aria-labelledby="confirmttl">
   <div class="sh"><div class="grow"><b id="confirmttl"></b></div></div>
   <div class="sb"><p id="confirmtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>

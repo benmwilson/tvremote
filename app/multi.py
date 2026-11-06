@@ -48,7 +48,8 @@ def window_id(layout, n, i):
 
 def window_args(layout, n, i):
     x, y, w, h = tiles(layout, n)[i]
-    return ["--fs=no", "--no-border", f"--wayland-app-id={window_id(layout, n, i)}", f"--geometry={w}x{h}"], w
+    return ["--fs=no", "--no-border", f"--wayland-app-id={window_id(layout, n, i)}", f"--geometry={w}x{h}",
+            "--demuxer-max-bytes=40MiB", "--demuxer-max-back-bytes=8MiB"], w  # up to 4 players share 1.8 GB: mpv's default cache is 150 MiB each
 
 
 def cap(player, width):
