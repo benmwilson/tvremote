@@ -552,6 +552,31 @@ def chat_sync():
         _chat["obj"] = (chat.KickChat if source == "Kick" else chat.TwitchChat)(ch, chat_column_send, column=True)
 
 
+CHAT_QUALITY = "720p60,720p,480p,360p,best"  # the picture is shown in 1440x810 beside the chat: 1080p there dropped about 2 frames a second, 720p none
+
+
+def _quality_height(q):
+    m = re.match(r"(\d+)", q or "")
+    return int(m.group(1)) if m else 0
+
+
+def chat_lower_quality():
+    """One stream, chat going on: play it at 720p (and remember the quality it had). A quality picked while the chat is up is left alone."""
+    q = state.get("quality")
+    if state["url"] and state["proc"] and not wall.active() and _quality_height(q) > 720 and chat.channel_of(state["url"]):
+        _chat["restore_q"] = q
+        with lock:
+            start_player(state["url"], CHAT_QUALITY, "quality")
+
+
+def chat_restore_quality():
+    """Chat going off: give the stream the quality it had before the chat lowered it (only if it is still the lowered one)."""
+    q, _chat["restore_q"] = _chat.get("restore_q"), None
+    if q and state["url"] and state["proc"] and not wall.active() and _quality_height(state.get("quality")) == 720:
+        with lock:
+            start_player(state["url"], q, "quality")
+
+
 def chat_refresh():
     """Another stream became the controlled one (or a window was swapped): show its chat. Cheap enough to call often."""
     if _chat["pref"] and wall.active():
@@ -1224,6 +1249,10 @@ def api_cmd():
         return jsonify(ok=True)
     if action == "chat":
         _chat["pref"] = data.get("value") != "off"
+        if _chat["pref"]:
+            chat_lower_quality()
+        else:
+            chat_restore_quality()
         chat_sync()
         return jsonify(ok=True)
     fn = COMMANDS.get(action)
