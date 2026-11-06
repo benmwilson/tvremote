@@ -1867,44 +1867,27 @@ def transition_close():
 
 
 def osd_swap(label, sock=SOCK, ready=None, max_s=8.0, title=None, source=None, line=None):
-    """While a stream or its quality changes in place, cover the picture with a card (the channel, "Switching to 720p" or `line`) until the new picture
-    plays, then say "Quality: 720p" for a moment (not for a stream change). `ready()` says the new picture is playing; without it the card stays 2.5 s.
-    In a multistream tile the small on-screen wheel is used instead. Runs in the background, never blocks the change. Returns the thread."""
+    """While a stream or its quality changes in place, show a small spinning mark and what is happening ("Switching to 720p", or `line`) as on-screen
+    text over the picture, until the new picture plays; then say "Quality: 720p" for a moment (not for a refresh or a stream change). `ready()` says
+    the new picture is playing; without it the mark stays 2.5 s. No card: the change happens in the picture itself. Runs in the background, never
+    blocks the change, and in the window of `sock`. Returns the thread. (title and source are kept for callers; the text does not use them.)"""
+    text = line or f"Switching to {label}"
     if sock == SOCK:
-        _swapping.set()  # the stall monitor keeps its Buffering / lagging screens off while the card is up
-        try:  # the card goes up first (about a second for its window), so the change happens behind it, not before it
-            transition_show(title or fav_name(state["url"] or ""), line or f"Switching to {label}", source or state["source"])
-        except Exception as e:
-            app.logger.info("Transition card not shown (%s)", e)
-
-        def run_main():
-            t0 = time.time()
-            try:
-                time.sleep(0.8)  # long enough to be read
-                while time.time() - t0 < (max_s if ready else 2.5) and not (ready and ready()):
-                    time.sleep(0.25)
-                transition_close()
-                if line is None:
-                    mpvipc.send(sock, ["show-text", f"Quality: {label}", 1500])
-            finally:
-                transition_close()
-                _swapping.clear()
-        t = threading.Thread(target=run_main, daemon=True)
-        t.start()
-        return t
+        _swapping.set()  # the stall monitor keeps its Buffering / lagging screens off while this is up
 
     def run():
         frames, t0, i = "◐◓◑◒", time.time(), 0
         try:
             while time.time() - t0 < (max_s if ready else 2.5):
-                r = mpvipc.send(sock, ["show-text", f"{frames[i % 4]}  Switching to {label}", 900])
+                r = mpvipc.send(sock, ["show-text", f"{frames[i % 4]}  {text}", 900])
                 if r is None:
                     return  # no window to draw on
                 i += 1
                 time.sleep(0.4)
                 if ready and time.time() - t0 > 0.6 and ready():
                     break
-            mpvipc.send(sock, ["show-text", f"Quality: {label}", 1500])
+            if line is None:
+                mpvipc.send(sock, ["show-text", f"Quality: {label}", 1500])
         finally:
             if sock == SOCK:
                 _swapping.clear()

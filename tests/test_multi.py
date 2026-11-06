@@ -204,25 +204,26 @@ class HomeScreenPausedTest(unittest.TestCase):
 
 
 class QualityOsdTest(unittest.TestCase):
-    def test_a_card_covers_the_picture_while_the_quality_changes_then_the_result_is_said(self):
+    def test_a_spinning_mark_shows_while_the_quality_changes_then_the_result_is_said(self):
         import app as server
-        sent, polls, cards = [], [0], []
+        sent, polls = [], [0]
         def ready():
             polls[0] += 1
             return polls[0] >= 2  # the new picture is playing after a moment
-        with mock.patch.object(server.mpvipc, "send", side_effect=lambda sock, cmd, *a: sent.append(cmd) or {"error": "success"}),                 mock.patch.object(server, "transition_show", side_effect=lambda *a: cards.append(("show", a))),                 mock.patch.object(server, "transition_close", side_effect=lambda: cards.append(("close",))),                 mock.patch.dict(server.state, {"url": "https://kick.com/omie", "source": "Kick"}),                 mock.patch.object(server.time, "sleep"), mock.patch.object(server.time, "time", side_effect=[0.0, 0.1] + [1.0] * 40):
+        with mock.patch.object(server.mpvipc, "send", side_effect=lambda sock, cmd, *a: sent.append(cmd) or {"error": "success"}),                 mock.patch.dict(server.state, {"url": "https://kick.com/omie", "source": "Kick"}),                 mock.patch.object(server.time, "sleep"):
             server.osd_swap("720p", ready=ready).join(5)
-        self.assertEqual(cards[0], ("show", ("omie", "Switching to 720p", "Kick")))
-        self.assertEqual(cards[-1], ("close",))
-        self.assertEqual([c[1] for c in sent if c[0] == "show-text"], ["Quality: 720p"])  # said after the card goes
+        texts = [c[1] for c in sent if c[0] == "show-text"]
+        self.assertTrue(any("Switching to 720p" in t for t in texts))  # (background threads of other tests may also be sending, so: any / in, not first / last)
+        self.assertIn("Quality: 720p", texts)  # said once the picture is there
 
-    def test_a_stream_change_says_what_it_is_and_no_quality_message(self):
+    def test_a_refresh_or_stream_change_says_what_it_is_and_no_quality_message(self):
         import app as server
-        sent, cards = [], []
-        with mock.patch.object(server.mpvipc, "send", side_effect=lambda sock, cmd, *a: sent.append(cmd) or {"error": "success"}),                 mock.patch.object(server, "transition_show", side_effect=lambda *a: cards.append(a)), mock.patch.object(server, "transition_close"),                 mock.patch.object(server.time, "sleep"):
-            server.osd_swap(None, ready=lambda: True, title="xqc", source="Twitch", line="Switching stream").join(5)
-        self.assertEqual(cards, [("xqc", "Switching stream", "Twitch")])
-        self.assertEqual([c for c in sent if c[0] == "show-text"], [])
+        sent = []
+        with mock.patch.object(server.mpvipc, "send", side_effect=lambda sock, cmd, *a: sent.append(cmd) or {"error": "success"}),                 mock.patch.object(server.time, "sleep"):
+            server.osd_swap(None, ready=lambda: True, line="Refreshing the stream").join(5)
+        texts = [c[1] for c in sent if c[0] == "show-text"]
+        self.assertTrue(any("Refreshing the stream" in t for t in texts))
+        self.assertFalse(any("Quality" in t for t in texts))
 
     def test_a_small_tile_keeps_the_wheel_and_stops_quietly_when_it_has_no_window(self):
         import app as server
