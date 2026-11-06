@@ -37,6 +37,8 @@ def tiles(layout, n):
     chat = layout.startswith("c")
     layout, area = layout.lstrip("c"), (W - CHAT_W if layout.startswith("c") else W)
     if layout == "grid":
+        if n == 2 and chat:  # beside the chat strip two streams stack, so each is big
+            return _row(1, 840, 472, M, area) + _row(1, 840, 472, M + 472 + S + G, area)
         if n == 2:
             w = (area - 2 * M - G) // 2
             h = w * 9 // 16

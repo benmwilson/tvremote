@@ -7,7 +7,7 @@ from PIL import Image, ImageFilter
 
 W, H = 1920, 1080
 BG = (0x0B, 0x0E, 0x14)
-GLOWS = [(900, -300, 1300, 900, (0x2E, 0x5A, 0x9A), 0.69, 120), (300, 620, 1500, 900, (0x6A, 0x2E, 0x8A), 0.65, 120)]  # x, y, w, h, colour, opacity, blur
+GLOWS = [(-200, -260, 1100, 760, (0x2E, 0x5A, 0x9A), 0.69, 140), (1000, 640, 1100, 760, (0x6A, 0x2E, 0x8A), 0.65, 140)]  # the same two glows as the multi-view screen behind several streams (app/shell.py wall_screen)
 
 
 def render():
