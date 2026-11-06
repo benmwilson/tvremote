@@ -251,7 +251,7 @@ def api_auth():
     role = accounts.role(g.user)
     return jsonify(required=auth_required(), user=g.user, owner=accounts.is_owner(g.user), role=role,
                    admin=role == "admin", guest=g.user == accounts.GUEST,
-                   watch=g.user != accounts.GUEST or phone_settings()["phone_guests"], **info)
+                   watch=g.user != accounts.GUEST or phone_settings()["phone_guests"], ui=ui_settings(), **info)
 
 
 # ---------- routing ----------
@@ -575,13 +575,16 @@ def chat_column_send(text, image=False):
     return ok
 
 
-def chat_strip_send(text):
+def chat_strip_send(text, image=False):
     """Several streams: the chat of the stream the remote controls shows in the strip on the right (the windows have made room for it). The window
     stays up while the feed changes; chat_strip_close() takes it away. True when it was drawn."""
     if text is None:
         return True
     win = _chat["win"] = _chat["win"] or chatwin.chat_panel()
-    return bool((win.running() or win.open()) and win.update(text))
+    ok = bool((win.running() or win.open()) and win.update(text))
+    if ok and image is not False:
+        ok = win.overlay(image)  # the messages as a picture with the emotes in it
+    return ok
 
 
 def chat_strip_close():
@@ -1890,12 +1893,23 @@ def api_status():
 PHONE_QUALITIES = (360, 480, 720, 1080)
 
 
+def ui_settings():
+    """What the remote suggests and lists (Settings > What the remote suggests). Everyone's remote reads these through /api/auth."""
+    def n(key, default, lo, hi):
+        try:
+            return min(max(int(settings.get(key, default)), lo), hi)
+        except (TypeError, ValueError):
+            return default
+    return {"groups_live_only": settings.get("groups_live_only", True) is not False, "recents_hide_offline": bool(settings.get("recents_hide_offline")),
+            "recents_max": n("recents_max", 5, 3, 8), "quick_max": n("quick_max", 6, 3, 9)}
+
+
 def phone_settings():
     """App settings an admin can change from Settings (kept in settings.json). Phone viewing: the biggest picture the phone is sent, and
     whether a guest may use it. More of these (and per-role permissions) can join this one place."""
     q = settings.get("phone_quality", 720)
     return {"phone_quality": q if q in PHONE_QUALITIES else 720, "phone_guests": settings.get("phone_guests", True) is not False,
-            "qr": settings.get("qr", True) is not False, "heat_tv": bool(settings.get("heat_tv"))}
+            "qr": settings.get("qr", True) is not False, "heat_tv": bool(settings.get("heat_tv")), **ui_settings()}
 
 
 @app.get("/api/config")
@@ -1912,9 +1926,14 @@ def api_config_set():
         if body["phone_quality"] not in PHONE_QUALITIES:
             return jsonify(ok=False, error="Pick 360, 480, 720 or 1080."), 400
         settings["phone_quality"] = body["phone_quality"]
-    for k in ("phone_guests", "qr", "heat_tv"):
+    for k in ("phone_guests", "qr", "heat_tv", "groups_live_only", "recents_hide_offline"):
         if k in body:
             settings[k] = bool(body[k])
+    for k, lo, hi in (("recents_max", 3, 8), ("quick_max", 3, 9)):
+        if k in body:
+            if not isinstance(body[k], int) or isinstance(body[k], bool) or not lo <= body[k] <= hi:
+                return jsonify(ok=False, error=f"Choose {lo} to {hi}."), 400
+            settings[k] = body[k]
     save_settings()
     if HOME and HOME.kind == "idle":
         HOME.show("idle")  # the QR code may have been switched

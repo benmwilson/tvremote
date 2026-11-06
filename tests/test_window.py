@@ -32,6 +32,23 @@ class FullWindow(unittest.TestCase):
         self.assertEqual(p.call_count, 1)
 
 
+class ChatSenders(unittest.TestCase):
+    """Both ways of drawing the TV chat take the optional emote picture (a draw function that did not would crash the chat's drawing thread)."""
+
+    def test_column_and_strip_accept_the_picture(self):
+        class Win:
+            def __init__(self): self.calls = []
+            def running(self): return True
+            def update(self, t): self.calls.append(("update", t)); return True
+            def overlay(self, i): self.calls.append(("overlay", i)); return True
+        for send in (server.chat_strip_send, server.chat_column_send):
+            w = Win()
+            with mock.patch.dict(server._chat, {"win": w, "bar": Win(), "col": True}), mock.patch.object(server, "mpv"),                     mock.patch.dict(server.state, {"url": "https://www.twitch.tv/x", "source": "Twitch"}), mock.patch.object(server, "stream_title", return_value="t"):
+                self.assertTrue(send("text", (b"0", 1, 1, 0, 0)))
+                self.assertTrue(send("text"))  # no picture asked for: the overlay is left as it is
+            self.assertEqual([c[0] for c in w.calls], ["update", "overlay", "update"], send.__name__)
+
+
 class HeatWarning(unittest.TestCase):
     def setUp(self):
         server._warned["at"] = 0.0

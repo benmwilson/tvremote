@@ -41,6 +41,18 @@ class PhoneViewing(unittest.TestCase):
         self.assertEqual(self.admin.get("/api/config").get_json()["phone_quality"], 480)
         self.assertEqual(self.admin.post("/api/config", json={"phone_quality": 999}).status_code, 400)
 
+    def test_suggestion_settings_default_sensibly_and_every_remote_can_read_them(self):
+        ui = self.admin.get("/api/auth").get_json()["ui"]
+        self.assertEqual(ui, {"groups_live_only": True, "recents_hide_offline": False, "recents_max": 5, "quick_max": 6})
+        self.assertTrue(self.admin.post("/api/config", json={"groups_live_only": False, "recents_hide_offline": True, "recents_max": 8, "quick_max": 3}).get_json()["ok"])
+        for who in (self.admin, self.guest()):  # a guest's remote needs them too: they decide what it shows
+            self.assertEqual(who.get("/api/auth").get_json()["ui"], {"groups_live_only": False, "recents_hide_offline": True, "recents_max": 8, "quick_max": 3})
+
+    def test_suggestion_counts_are_bounded_and_only_an_admin_changes_them(self):
+        for bad in ({"recents_max": 99}, {"recents_max": 1}, {"quick_max": "6"}, {"quick_max": True}, {"quick_max": 10}):
+            self.assertEqual(self.admin.post("/api/config", json=bad).status_code, 400, bad)
+        self.assertEqual(self.guest().post("/api/config", json={"recents_max": 3}).status_code, 403)
+
     def test_guests_cannot_change_settings(self):
         g = self.guest()
         self.assertEqual(g.post("/api/config", json={"phone_quality": 360}).status_code, 403)
