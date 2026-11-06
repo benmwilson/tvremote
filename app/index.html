@@ -756,8 +756,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <option value="3">Works on up to 3 devices</option><option value="5">Works on up to 5 devices</option></select>
       <button class="go" id="invmake">Create a guest link</button>
       <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. It is shown only now, so copy it before you leave this page.</p>
-        <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button" class="iconbtn" aria-label="Copy the link" title="Copy the link"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg></button></div>
-        <div class="row" style="margin-top:8px"><button id="invqr" type="button" class="iconbtn" aria-label="Show QR code" title="Show QR code"><svg class="ic" aria-hidden="true"><use href="#i-qr"/></svg></button><button id="invtv" type="button" class="iconbtn hide" aria-label="Show it on the TV" title="Show it on the TV"><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg></button></div></div>
+        <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button" class="iconbtn" aria-label="Copy the link" title="Copy the link"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg></button><button id="invqr" type="button" class="iconbtn" aria-label="Show QR code" title="Show QR code"><svg class="ic" aria-hidden="true"><use href="#i-qr"/></svg></button><button id="invtv" type="button" class="iconbtn hide" aria-label="Show it on the TV" title="Show it on the TV"><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg></button></div></div>
       <p class="sub">A guest can play Kick, Twitch and YouTube links and control the TVs. They can't change favourites, link accounts or manage people and TVs. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
     </div>
     <div class="card hide" id="guests"></div>
@@ -1024,9 +1023,10 @@ body:has(dialog.sheet[open]){overflow:hidden}
 </dialog>
 <dialog id="qrpop" class="sheet" aria-labelledby="qrpopttl">
   <div class="sh"><div class="grow"><b id="qrpopttl">QR code</b><span class="sub" id="qrpopsub"></span></div>
+    <button id="qrpoptv" type="button" class="iconbtn" aria-label="Show it on the TV" title="Show it on the TV"><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg></button>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb"><div id="qrpopimg" style="width:min(300px,80vw);margin:0 auto;border-radius:14px;overflow:hidden;background:#fff"></div>
-    <button id="qrpoptv" type="button" class="go" style="margin-top:12px">Show it on the TV</button></div>
+    </div>
 </dialog>
 <div id="tourbox" class="hide" role="dialog" aria-live="polite" aria-labelledby="tourttl">
   <div class="tt"><b id="tourttl"></b><span class="sub" id="toursub"></span>
@@ -2045,7 +2045,7 @@ async function showQr(url, title) {  // a popup with the QR code of a link; from
   if (!r || !r.ok) return;
   $('qrpopttl').textContent = title; $('qrpopsub').textContent = 'Scan with a phone camera';
   $('qrpopimg').innerHTML = r.svg; $('qrpopimg').firstElementChild.style.cssText = 'display:block;width:100%;height:auto';
-  setBtn($('qrpoptv'), 'tv', 'Show it on the TV'); $('qrpoptv').onclick = async () => { if (await qrSet({qr_guest: url})) setBtn($('qrpoptv'), 'check', 'Showing on the TV'); };
+  setBtn($('qrpoptv'), 'tv', ''); $('qrpoptv').title = 'Show it on the TV'; $('qrpoptv').classList.remove('on'); $('qrpoptv').onclick = async () => { if (await qrSet({qr_guest: url})) { $('qrpoptv').classList.add('on'); $('qrpoptv').title = 'Showing on the TV'; } };
   $('qrpop').showModal();
 }
 $('invqr').onclick = () => showQr($('invurl').value, 'Guest link');
