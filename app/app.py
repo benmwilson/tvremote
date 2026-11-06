@@ -2299,6 +2299,8 @@ def qr_info():
     if qr_guest["url"]:
         return qr_guest["url"], "Scan to join as a guest"
     if settings.get("qr_mode") == "shortcut" and settings.get("shortcut_url"):
+        if settings["shortcut_url"].startswith("shortcuts://"):  # runs a shortcut already on the phone
+            return settings["shortcut_url"], "Scan to run the shortcut on your iPhone"
         return settings["shortcut_url"], "Scan to get the Play on Pi shortcut"
     return f"http://{shell.lan_ip()}:{PORT}", "Scan for the remote"
 
@@ -2453,8 +2455,8 @@ def api_shell_set():
             settings["qr_mode"] = body["qr_mode"]
         if "shortcut_url" in body:
             u = str(body["shortcut_url"] or "").strip()[:300]
-            if u and not u.startswith("https://"):
-                return jsonify(ok=False, error="Paste the shortcut's iCloud link (it starts with https://)."), 400
+            if u and not u.startswith(("https://", "shortcuts://")):
+                return jsonify(ok=False, error="Paste the shortcut's iCloud link (https://) or shortcuts://run-shortcut?name=..."), 400
             settings["shortcut_url"] = u
         if "qr_guest" in body:  # a guest link to show, or "" to take it down
             u = str(body["qr_guest"] or "")[:300]

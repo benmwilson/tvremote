@@ -738,7 +738,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <div><div class="s-cap">What it opens</div>
           <select id="qrmode" aria-label="What the QR code opens"><option value="remote">This remote</option><option value="shortcut">The iPhone shortcut</option></select></div>
         <div id="qrshortcut" class="hide"><div class="s-cap">Shortcut link</div>
-          <input id="shortcuturl" placeholder="https://www.icloud.com/shortcuts/&hellip;" aria-label="The Play on Pi shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"></div>
+          <input id="shortcuturl" placeholder="shortcuts://run-shortcut?name=TV%20Remote" aria-label="The Play on Pi shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"></div>
         <p class="sub" id="qrhelp"></p>
         <div id="qrguestnote" class="hide row" style="align-items:center;margin:0"><span class="sub grow" style="margin:0">A guest link is showing on the TV.</span><button id="qrguestoff" type="button" style="flex:none">Show the normal QR code</button></div>
       </div>
@@ -1947,7 +1947,7 @@ function renderShell() {
   $('qrshortcut').classList.toggle('hide', mode !== 'shortcut');
   $('qropts').classList.toggle('hide', s.qr === false);
   $('qrhelp').textContent = mode === 'shortcut'
-    ? (s.shortcut_url ? 'Scanning opens the shortcut\u2019s iCloud page, so a phone can add \u201cPlay on Pi\u201d.' : 'Paste the shortcut\u2019s iCloud link above. Until then the QR code opens this remote.')
+    ? (/^shortcuts:/.test(s.shortcut_url || '') ? 'Scanning on an iPhone runs that shortcut, if it is installed on the phone.' : s.shortcut_url ? 'Scanning opens the shortcut\u2019s iCloud page, so a phone can add \u201cPlay on Pi\u201d.' : 'Paste the shortcut\u2019s iCloud link, or shortcuts://run-shortcut?name=TV%20Remote, above. Until then the QR code opens this remote.')
     : 'Scanning opens this remote.';
   $('qrguestnote').classList.toggle('hide', !s.qr_guest);
   $('invtv').classList.toggle('hide', !targets.some(t => t.kind === 'pi'));
