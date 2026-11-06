@@ -607,9 +607,9 @@ class ResumeLiveTest(unittest.TestCase):
         self.server = server
         server.state.pop("paused_at", None)
 
-    def run_resume(self, paused_for, duration):
+    def run_resume(self, paused_for, duration, url="https://kick.com/a"):
         server = self.server
-        with mock.patch.object(server, "start_player") as start, mock.patch.dict(server.state, {"url": "https://kick.com/a", "quality": "720p"}):
+        with mock.patch.object(server, "start_player") as start, mock.patch.dict(server.state, {"url": url, "quality": "720p"}):
             server.resume_live(True, duration, now=100.0)
             reloaded = server.resume_live(False, duration, now=100.0 + paused_for)
         return reloaded, start
@@ -625,6 +625,11 @@ class ResumeLiveTest(unittest.TestCase):
         start.assert_not_called()
 
     def test_a_video_with_a_duration_resumes_where_it_was(self):
-        reloaded, start = self.run_resume(60, 3600.0)
+        reloaded, start = self.run_resume(60, 3600.0, url="https://www.youtube.com/watch?v=abc")
         self.assertFalse(reloaded)
         start.assert_not_called()
+
+    def test_a_live_channel_is_reloaded_even_though_mpv_reports_a_duration(self):
+        reloaded, start = self.run_resume(30, 132.0)  # what the log showed: 1:12 / 2:12, the length of the cache
+        self.assertTrue(reloaded)
+        start.assert_called_once_with("https://kick.com/a", "720p", "refresh")

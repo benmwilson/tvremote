@@ -1412,7 +1412,9 @@ def resume_live(paused, duration, now=None):
         state["paused_at"] = now
         return False
     since = state.pop("paused_at", None)
-    if paused is False and duration is None and since and now - since > RESUME_LIVE_AFTER and state.get("url") and not wall.active():
+    # live: a channel link, or no duration. (mpv shows a duration for a live stream too, the length of what it has cached, so the duration alone can't say.)
+    live = bool(state.get("url")) and (duration is None or is_channel(state["url"]))
+    if paused is False and live and since and now - since > RESUME_LIVE_AFTER and not wall.active():
         with lock:
             start_player(state["url"], state.get("quality"), "refresh")
         return True
