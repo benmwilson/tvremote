@@ -234,6 +234,7 @@ Goal: anyone can run the container on a Pi and get a remote that finds and contr
 
 ## Todo
 - **Admins manage TVs from Settings without the wizard:** rename a TV, re-pair its Roku, change its HDMI input, switch it off, from a card per TV in the admin "TVs" section. (Renaming works today but only inside "Change or move a TV"; names are limited to the two fixed slots.) Owners and admins both; guests never. Part of the target-registry refactor above.
+- **AirPlay as a third way to play** (Ben can AirPlay Kick from his iPhone to the living-room Roku): a TV card gets an "AirPlay (built into this TV)" switch next to the Pi and the Chromecast, the Living room card then plays instead of "TV controls only", and the Continue button becomes a "Continue on..." list of every way to play. Unknown: whether a Pi can push to a Roku's AirPlay 2 receiver (try `pyatv` `stream.play_url` in the running container first; the living-room TV is the roommate's, so ask before the spike).
 - **One-tap "Auto-set up"** after plugging into a new TV: scan, save the guesses only when each is clear, otherwise open the wizard.
 - Notice when the Pi's TV changed (CEC name or HDMI port differs from what was saved) and show an admin banner "The Pi looks like it moved: review TVs".
 - Look at the new help section, QR code and login eye icon on the Pi / in Chrome (not seen on screen yet).

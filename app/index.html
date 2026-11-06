@@ -112,7 +112,6 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .watch{position:sticky;top:8px;z-index:6;padding:10px;box-shadow:0 10px 28px rgba(0,0,0,.5);margin-top:12px}
 .watchbar{display:flex;align-items:center;gap:8px;margin-bottom:8px}.watchbar b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .watchbar button{flex:none;width:44px;min-height:44px;padding:0;display:grid;place-items:center}.watchbar select{flex:none;max-width:46%;min-height:44px;font-size:15px}
-.watch.min #watchbody{display:none}
 .now.offidle>:not(.tvoff){display:none!important}
 #view-tv.tvonly #now,#view-tv.tvonly #watchcard,#view-tv.tvonly #chatcard,#view-tv.tvonly #wallopencard,#view-tv.tvonly #playsec{display:none!important}
 .now.offidle .tvoff{flex-direction:column;text-align:center;gap:6px;margin:0;padding:26px 18px 22px;background:linear-gradient(160deg,rgba(255,176,98,.16),rgba(255,176,98,.05));border-color:rgba(255,176,98,.28)}
@@ -378,6 +377,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
 .wstream .wtags{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}.wstream .badge{font-size:9px;padding:2px 5px;min-height:0;line-height:1.3}
 .wstream[aria-pressed=true]{box-shadow:inset 0 0 0 2px var(--tv,#6bb2ff);background:var(--line)}.wstream{cursor:pointer}.wstream .ws{position:absolute;top:2px;right:2px;display:flex;align-items:center;justify-content:center;width:34px;height:34px;min-height:0;padding:0;background:none;color:var(--dim)}.wstream .ws[aria-pressed=true]{color:var(--tv,#6bb2ff)}.wstream .ws .ic{width:16px;height:16px}
 .wallnote .ni{display:inline-flex;vertical-align:-4px}.wallnote .ni .ic{width:18px;height:18px}
+.wallbar{display:flex;gap:8px;margin:12px 0 0}.wallbar .wallnote{flex:1;min-width:0;width:auto;margin:0}
+.wallbar #nowsync{flex:none;width:48px;min-height:44px;padding:0;display:grid;place-items:center;border-radius:12px;background:var(--card2,var(--line))}
 .wallnote{display:block;width:100%;min-height:44px;margin:12px 0 0;padding:0 14px;border-radius:12px;background:var(--card2,var(--line));font-size:14px;font-weight:600;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wtile .ctl button,.wtile .top button{background:var(--card)}.wtile .ctl select{background-color:var(--card)}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff)}
 .wlabel{margin:18px 2px 8px;color:var(--dim);font-size:13px;font-weight:600;letter-spacing:.02em}.wrow{display:flex;align-items:center;gap:10px;margin-top:10px}.wrow .sub{flex:1}
@@ -634,7 +635,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div id="stripcap" class="stripcap hide">Tap a picture to choose which stream the controls below are for. Tap its speaker for sound.</div>
   <div id="wallstrip" class="wallstrip hide" role="group" aria-label="Streams on the screen"></div>
   <div class="nowhead" id="nowhead"><span id="nowav" class="hide"></span><span class="badge" id="src">Idle</span><span class="badge live hide" id="live">LIVE</span><span class="grow"></span><a id="nowlink" class="iconlink hide" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg></a></div>
-  <button id="wallnote" class="wallnote hide" aria-haspopup="dialog"></button>
+  <div class="wallbar"><button id="wallnote" class="wallnote hide" aria-haspopup="dialog"></button>
+    <button id="nowsync" type="button" class="hide" aria-label="Sync the streams" title="Sync the streams: line them up in time"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button></div>
   <div id="ctlfor" class="ctlfor hide"></div>
   <div id="title" class="ttl">Nothing playing</div>
   <div id="game" class="sub hide"></div>
@@ -663,7 +665,6 @@ body:has(dialog.sheet[open]){overflow:hidden}
 </div>
 <div class="card watch hide" id="watchcard" role="region" aria-label="Watching on this phone">
   <div class="watchbar"><b id="watchttl" class="grow">Watch on phone</b><select id="watchsrc" class="hide" aria-label="Which stream to watch"></select>
-    <button id="watchmin" type="button" aria-expanded="true" aria-label="Hide the picture" title="Hide the picture"><svg class="ic" aria-hidden="true"><use href="#i-eye-off"/></svg></button>
     <button id="watchclose" type="button" aria-label="Stop watching on this phone" title="Stop watching on this phone"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div id="watchbody">
     <video id="watchvid" playsinline controls autoplay style="width:100%;border-radius:12px;background:#000;aspect-ratio:16/9"></video>
@@ -688,11 +689,11 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <dialog id="wallcard" class="sheet" aria-labelledby="wallttl">
   <div class="sh"><div class="grow"><b id="wallttl">Multi-view</b><span class="sub" id="wallsub"></span></div>
     <span class="wseg hide" id="walllayout"><button data-l="grid" aria-label="Grid layout" title="Grid: equal tiles"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg></button><button data-l="focus" aria-label="Focus layout" title="Focus: one big, the rest below"><svg class="ic" aria-hidden="true"><use href="#i-multi-focus"/></svg></button></span>
+    <button class="sclose hide" id="wallsync" type="button" aria-label="Sync the streams" title="Sync the streams: line them up in time"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
     <button class="sclose" data-close aria-label="Close" autofocus><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
     <div id="walltiles"></div>
-    <div id="wallsyncrow" class="syncrow hide"><button id="wallsync" type="button"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg><span>Sync streams</span></button><span class="sub" id="syncnote">Lines them up in time</span></div>
-    <div id="walladdbox">
+        <div id="walladdbox">
       <div class="wlabel" id="walladdlabel">Add a stream</div>
       <form id="walladd" class="row"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
         <div id="wallpick" class="pickrow hide"></div>
@@ -977,6 +978,7 @@ function render() {
   syncQual();
   $('qual').classList.toggle('hide', !up || !$('qual').options.length);  // starting: only Stop
   $('wallnote').classList.toggle('hide', !(st.wall && (up || starting)));
+  $('nowsync').classList.toggle('hide', !(st.wall && up));
   const multi = !!(up && st.wall);  // several streams: Remove takes the controlled one off, Stop all ends everything
   $('stop').classList.toggle('hide', multi); $('remove').classList.toggle('hide', !multi); $('stopall').classList.toggle('hide', !multi);
   $('enlarge').classList.toggle('hide', !(up && st.wall && st.wall.layout === 'focus' && st.wall.selected !== 0));  // the stream being controlled is not the big one
@@ -989,6 +991,7 @@ function render() {
     if (up && !st.wall.busy) note.append(ico, document.createTextNode(' ' + (sn.length ? sn.map(name).join(', ') : 'Muted')));
     else note.append(document.createTextNode('updating'));
     note.append(document.createTextNode(' \u203a'));
+    if (syncMsg && Date.now() < syncMsg.until) note.replaceChildren(document.createTextNode(syncMsg.text));
   }
   $('ctlrow').classList.toggle('single', !up && starting);  // starting: just Stop, so you can cancel
   $('fav').classList.toggle('hide', !up);
@@ -1213,9 +1216,10 @@ async function go() {
     if (!/^[\w-]{2,25}$/.test(t)) return search(t);  // words, not a channel name: look on YouTube
     const d = await fetch('/api/detect?name=' + encodeURIComponent(t)).then(x => x.json()).catch(() => null);  // which sites is this name on?
     if (!d || !d.ok) { err('Couldn\u2019t look that up. Try again, or paste a link.'); return {ok: false}; }
-    if (!d.matches.length) return search(t);  // not a channel on Kick or Twitch: try YouTube
-    if (d.pick) return play(d.pick);
-    $('playpick').replaceChildren(...pickCards(t, d.matches, (m, b) => busy(b, () => play(m.url))));
+    const live = d.matches.filter(m => m.live);
+    if (!live.length) return search(t);  // not live on Kick or Twitch (or not a channel at all: Twitch calls an unknown name offline): try YouTube
+    if (live.length === 1) return play(live[0].url);  // live on one site only
+    $('playpick').replaceChildren(...pickCards(t, live, (m, b) => busy(b, () => play(m.url))));  // live on both: which one?
     $('playpick').classList.remove('hide');
     return {ok: true, noWait: true};  // it is waiting for the choice: nothing is starting yet
   }
@@ -1272,7 +1276,7 @@ function moveInfo() {
   const to = (targets || []).find(t => t.id !== target && t.reachable && (t.kind === 'pi' || t.kind === 'chromecast'));
   if (!to || here.kind === 'tv') return null;
   const same = !!here.tv && here.tv === to.tv, dev = to.kind === 'chromecast' ? 'the Chromecast' : 'the Pi';
-  return {to, here, same, dev, label: same ? 'Switch to ' + dev : 'Move to ' + to.name};
+  return {to, here, same, dev, label: same ? 'Continue on ' + dev : 'Move to ' + to.name};  // same TV: carry what is playing over to the other device
 }
 // A confirmation sheet for something that stops what is playing: resolves true on the confirm button, false on Cancel, Esc or a tap outside.
 function confirmSheet(title, text, yes, danger) {
@@ -1298,7 +1302,7 @@ $('move').onclick = async () => {
   else if (tvOff(to)) notes.push(to.name + ' is off. It will be turned on, and back off if you move away without anything else using it.');
   if (to.now && to.now.title) notes.push('This replaces \u201c' + to.now.title + '\u201d on ' + to.name + '.');
   if (!st.live && st.duration) notes.push('It starts from the beginning.');
-  const ok = await confirmSheet(same ? 'Switch to ' + dev + '?' : 'Move to ' + to.name + '?', notes.join(' '), same ? 'Switch' : 'Move');
+  const ok = await confirmSheet(same ? 'Continue on ' + dev + '?' : 'Move to ' + to.name + '?', notes.join(' '), same ? 'Continue' : 'Move');
   if (!ok) return;
   return busy($('move'), async () => {
     // the Pi starts it on the other TV first (if that fails, what is playing here is left alone), stops this one, and switches
@@ -1964,7 +1968,7 @@ $('chatTog').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem(
 // ---- Multi-view (Pi TV only): several streams on the screen at once ----
 // The Pi answers at once with how the wall will look, while the windows restart in the background: show that now.
 const wallApi = async body => { const r = await api('/api/wall', 'POST', body); if (r && r.ok) { if ('wall' in r) { st.wall = r.wall; wallSig = ''; renderWall(); } if (body.action === 'add') loadRecents(); poll(); } return r; };
-let wallSig = '';
+let wallSig = '', syncMsg = null;  // syncMsg: what the last Sync found, shown for a few seconds in the sheet's subtitle
 const WALL_Q = [['', 'Auto quality'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']];
 let wallReplace = null;  // the stream the next one added will take the place of (null: it is added to the screen)
 const wallPut = async url => {
@@ -1980,9 +1984,9 @@ function renderWall() {
   const w = st.wall, rows = w ? wallStreams(w) : [];
   $('wallopensub').textContent = w ? rows.length + ' of ' + w.max + ' on screen. Tap to manage' : 'Watch more than one at once';
   $('walllayout').classList.toggle('hide', !w);
-  $('wallsyncrow').classList.toggle('hide', !w);
+  $('wallsync').classList.toggle('hide', !w);
   if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
-  $('wallsub').textContent = w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') : 'Watch more than one at once';
+  $('wallsub').textContent = syncMsg && Date.now() < syncMsg.until ? syncMsg.text : w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') : 'Watch more than one at once';
   $('wallcard').classList.toggle('updating', !!(w && w.busy));  // the Pi is changing the windows: a spinner, and the buttons that change them wait
   const sig = JSON.stringify([w, wallReplace, favList.map(f => f.live === true), recentList.map(x => x.live === true)]);
   if (sig === wallSig) return;
@@ -2075,11 +2079,11 @@ function closeWatch(why) {
   if (why) err(why);
   const v = $('watchvid');
   v.pause(); v.removeAttribute('src'); v.onpause = v.onplay = v.ontimeupdate = v.onerror = null; v.load();
-  $('watchcard').classList.add('hide'); $('watchcard').classList.remove('min');
+  $('watchcard').classList.add('hide');
 }
 async function startWatch(i) {
   const v = $('watchvid'), note = $('watchnote'), card = $('watchcard');
-  card.classList.remove('hide', 'min'); $('watchmin').setAttribute('aria-expanded', 'true');
+  card.classList.remove('hide');
   note.textContent = 'Getting the stream…';
   v.pause(); v.removeAttribute('src'); v.load();
   const r = await api('/api/watch' + (i == null ? '' : '?i=' + i));
@@ -2108,19 +2112,20 @@ async function startWatch(i) {
 }
 $('watch').onclick = () => startWatch(st.wall ? st.wall.selected : null);
 $('watchsrc').onchange = () => startWatch(Number($('watchsrc').value));
-$('watchclose').onclick = closeWatch;
-$('watchmin').onclick = () => {
-  const min = $('watchcard').classList.toggle('min'), v = $('watchvid');
-  $('watchmin').setAttribute('aria-expanded', String(!min));
-  if (min) v.pause(); else v.play().catch(() => {});  // a hidden picture isn't left playing
-};
+$('watchclose').onclick = () => closeWatch();  // not closeWatch itself: it would be handed the click event as the reason
 $('remove').onclick = () => st.wall && busy($('remove'), () => wallApi({action: 'remove', i: st.wall.selected}));
 $('enlarge').onclick = () => st.wall && wallApi({action: 'swap', i: st.wall.selected});  // swap windows with the big one; the control choice stays with the stream
 $('wallopen').onclick = () => { wallSig = ''; renderWall(); $('wallcard').showModal(); Promise.all([loadFavs(), loadRecents()]).then(renderWall); };
-$('wallsync').onclick = () => busy($('wallsync'), async () => {  // read each stream's timing and wind the leading ones back
-  $('syncnote').textContent = 'Reading the streams\u2026';
+const syncWall = btn => busy(btn, async () => {  // read each stream's timing and wind the leading ones back
+  const say = text => { syncMsg = {text, until: Date.now() + 8000}; wallSig = ''; renderWall(); render(); setTimeout(() => { renderWall(); render(); }, 8100); };
+  say('Reading the streams\u2026');
   const r = await api('/api/wall', 'POST', {action: 'sync'});
-  $('syncnote').textContent = r && r.sync ? r.sync.note : 'Couldn\u2019t sync them. Try again.';
+  say(r && r.sync ? r.sync.note : 'Couldn\u2019t sync them. Try again.');
+  return r;
+});
+$('wallsync').onclick = () => syncWall($('wallsync'));
+$('nowsync').onclick = () => syncWall($('nowsync'));
+  say(r && r.sync ? r.sync.note : 'Couldn\u2019t sync them. Try again.');
   return r;
 });
 $('walllayout').onclick = e => { const b = e.target.closest('button[data-l]'); if (b) wallApi({action: 'layout', layout: b.dataset.l}); };

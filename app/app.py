@@ -5,6 +5,7 @@ from datetime import datetime
 import hmac
 import html
 import ipaddress
+import socket
 import json
 import os
 import re
@@ -63,6 +64,19 @@ except ImportError:  # pychromecast missing: Pi target only
 CAST = None  # created at startup (mDNS discovery runs in the background)
 
 app = Flask(__name__, static_folder=None)
+app.config["MAX_CONTENT_LENGTH"] = 1_000_000  # every body this app takes is a few lines of JSON; refuse anything big (413)
+
+
+@app.after_request
+def security_headers(resp):
+    """Basic hardening on every response: no sniffing, never framed by another site (clickjacking), no referrer sent to other sites,
+    and nothing from the API is cached (it describes what is on the TV right now)."""
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    if request.path.startswith("/api/") and "Cache-Control" not in resp.headers:
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 def tgt():
@@ -276,6 +290,25 @@ def resolve(url):
     if player == "auto":
         player = "streamlink" if youtube_is_live(url) else "ytdlp"
     return source, player
+
+
+def guest_link_refused(url):
+    """A guest on a one-time link may play things on the TVs, but must not be able to point the Pi at the home network (the router, the NAS,
+    this app on localhost). For a guest: only http(s) links whose every address is public. None when fine (or not a guest), else a sentence.
+    A link that can't be looked up is refused too. Regular accounts are not limited: a movie on the NAS is theirs to play."""
+    if not (has_request_context() and getattr(g, "user", None) == accounts.GUEST):
+        return None
+    sorry = "Guests can only play links from the public internet."
+    p = urlparse(url or "")
+    if p.scheme not in ("http", "https") or not p.hostname:
+        return sorry
+    try:
+        addrs = socket.getaddrinfo(p.hostname, p.port or (443 if p.scheme == "https" else 80), type=socket.SOCK_STREAM)
+        if not addrs or any(not ipaddress.ip_address(a[4][0]).is_global for a in addrs):
+            return sorry
+    except (OSError, ValueError):
+        return sorry
+    return None
 
 
 def normalise(text, site="kick"):
@@ -894,6 +927,8 @@ def play_get():
     """Used by the iPhone Shortcut: start playing, then show the remote."""
     url = normalise(request.args.get("u") or request.args.get("url"))
     c = tgt()
+    if url and guest_link_refused(url):
+        url = None  # shown as nothing playing; the guest is not told what is on the home network
     if url:
         try:
             play_on(c, url, request.args.get("q"), request.args.get("via"))
@@ -1055,6 +1090,9 @@ def api_play():
                     data.get("site", "kick"))
     if not url:
         return jsonify(ok=False, error="No link found"), 400
+    refused = guest_link_refused(url)
+    if refused:
+        return jsonify(ok=False, error=refused), 403
     c = tgt()  # outside the try: its 503 must reach the client, not be turned into a 502
     try:
         play_on(c, url, data.get("quality"), data.get("via"))
@@ -1430,6 +1468,8 @@ def api_move():
     src, dst, url = d.get("from"), d.get("to"), normalise(d.get("url") or "")
     if src not in tvconfig.IDS or dst not in tvconfig.IDS or src == dst or not url:
         return jsonify(ok=False, error="Pick a different TV to move it to."), 400
+    if guest_link_refused(url):
+        return jsonify(ok=False, error="Guests can only play links from the public internet."), 403
     if not TV_ENABLED.get(dst) or not TV_ENABLED.get(src):
         return jsonify(ok=False, error="That TV isn't set up to play on."), 400
     same_tv = bool(TV_OF.get(src) and TV_OF.get(src) == TV_OF.get(dst))  # e.g. the Pi and the Chromecast on one TV
@@ -1921,6 +1961,7 @@ def api_shell():
 @app.post("/api/shell")
 def api_shell_set():
     """Turn the TV's home screen on or off (off shows the Pi desktop again). The app and this remote keep running."""
+    admin_only()  # the switch lives in the admin part of Settings; it also stops what is playing
     body = request.get_json(silent=True) or {}
     if "qr" in body:  # the QR code on the Ready screen: redraw it now if that screen is showing
         settings["qr"] = bool(body["qr"])
