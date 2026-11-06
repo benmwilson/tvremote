@@ -64,6 +64,17 @@ class DockerTest(unittest.TestCase):
         self.assertNotIn("hunter2", json.dumps(d))
         self.assertEqual((d["restart_policy"], d["network"], d["health"], d["restarts"]), ("unless-stopped", "host", "healthy", 2))
 
+    def test_other_containers_show_no_env_values_and_urls_lose_passwords(self):
+        other = json.loads(json.dumps(INSPECT))
+        other["Config"]["Env"] = ["DB=postgres://bob:pw123@db/x", "MODE=plain"]
+        other["Config"]["Cmd"] = ["run", "https://u:secretpw@host/a"]
+        with mock.patch.object(dockerctl, "_call", fake({"/containers/json": (200, LIST), "/containers/uptime-kuma/json": (200, other)})):
+            d = dockerctl.detail("uptime-kuma")
+        self.assertTrue(all(v is None for _, v in d["env"]))
+        self.assertNotIn("secretpw", d["command"])
+        self.assertEqual(dockerctl.scrub("x postgres://bob:pw123@db/x y"), "x postgres://bob:****@db/x y")
+        self.assertEqual(dict(dockerctl.redact(["A=https://u:p@h"]))["A"], "https://u:****@h")
+
     def test_logs_are_demultiplexed(self):
         raw = frame(1, "hello\n") + frame(2, "oops\n")
         with mock.patch.object(dockerctl, "_call", fake({"/containers/json": (200, LIST), "/containers/tvremote/logs": (200, raw),

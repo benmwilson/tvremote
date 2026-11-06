@@ -495,6 +495,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <symbol id="i-hdmi" viewBox="0 0 24 24"><path d="M4.5 8h15v5.5l-3 3.2h-9l-3-3.2z"/></symbol>
 <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3zM13.5 7.5l3 3"/></symbol>
 <symbol id="i-list" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></symbol>
 <symbol id="i-grid" viewBox="0 0 24 24"><rect x="5" y="5" width="5.5" height="5.5" rx="1.2"/><rect x="13.5" y="5" width="5.5" height="5.5" rx="1.2"/><rect x="5" y="13.5" width="5.5" height="5.5" rx="1.2"/><rect x="13.5" y="13.5" width="5.5" height="5.5" rx="1.2"/></symbol>
 <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M10 6H6.5A1.5 1.5 0 005 7.5v10A1.5 1.5 0 006.5 19h10a1.5 1.5 0 001.5-1.5V14"/></symbol>
@@ -2339,16 +2340,23 @@ async function loadTvsAdmin() {
         pi: x.pi ? {...x.pi, input: piIn.value} : x.pi, chromecast: x.chromecast ? {...x.chromecast, input: ccIn.value} : x.chromecast});
       const res = await fetch('/api/tvs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tvs: list})}).then(x => x.json()).catch(() => null);
       if (!res || res.ok === false) { msg.textContent = (res && res.error) || 'Couldn\u2019t save.'; msg.style.color = 'var(--bad)'; return; }
-      tvsAdmin = res.tvs; msg.textContent = 'Saved'; msg.style.color = ''; loadTargets();
+      tvsAdmin = res.tvs; loadTargets(); loadTvsAdmin();
     });
     del.onclick = async () => {
       if (!(await confirmSheet('Remove ' + t.name + '?', 'It leaves the list of TVs. The TV itself is not touched, and it can be added again from Change or move a TV.', 'Remove', true))) return;
       const res = await fetch('/api/tvs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tvs: tvsAdmin.filter(x => x.id !== t.id)})}).then(x => x.json()).catch(() => null);
       if (res && res.ok !== false) { tvsAdmin = res.tvs; loadTargets(); loadTvsAdmin(); } else msg.textContent = (res && res.error) || 'Couldn\u2019t remove it.';
     };
-    return mk('div', {class: 'card s-form'}, mk('b', {}, t.name),
+    const cancel = mk('button', {type: 'button'}, 'Cancel');
+    const editor = mk('div', {class: 's-form hide'},
       field('Name', name), field('Roku address', ip), ...(piIn ? [field('HDMI input the Pi is on', piIn)] : []),
-      ...(ccIn ? [field('HDMI input the Chromecast is on', ccIn)] : []), mk('div', {class: 's-out'}, save, del), msg);
+      ...(ccIn ? [field('HDMI input the Chromecast is on', ccIn)] : []), mk('div', {class: 's-out'}, save, cancel, del), msg);
+    const facts = dl([['Roku address', t.roku || 'Not set'], ['Pi on', t.pi ? (hdmiText(t.pi.input) || 'Input not switched') : ''],
+      ['Chromecast on', t.chromecast ? (hdmiText(t.chromecast.input) || 'Input not switched') : '']]);
+    const setOpen = open => { editor.classList.toggle('hide', !open); facts.classList.toggle('hide', open); pencil.setAttribute('aria-pressed', String(open)); };
+    const pencil = iconBtn('pencil', 'Edit ' + t.name, '', () => setOpen(editor.classList.contains('hide')));
+    cancel.onclick = () => { name.value = t.name; ip.value = t.roku || ''; if (piIn) piIn.value = t.pi.input || ''; if (ccIn) ccIn.value = t.chromecast.input || ''; msg.textContent = ''; setOpen(false); };
+    return mk('div', {class: 'card'}, mk('div', {style: 'display:flex;align-items:center;gap:8px'}, mk('b', {class: 'grow', style: 'font-size:17px'}, t.name), pencil), facts, editor);
   }));
 }
 fetch('/api/setup').then(r => r.json()).then(j => { setupNeeded = !!j.needed; if (setupNeeded && view() !== 'setup') location.hash = '#/setup'; }).catch(() => {});

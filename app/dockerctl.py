@@ -58,12 +58,20 @@ def _known(name):
     return name
 
 
-def redact(env):
-    """['A=1', 'API_TOKEN=x'] -> [('A', '1'), ('API_TOKEN', None)]: the value of anything secret-looking is dropped."""
+USERINFO = re.compile(r"(://[^/\s:@]+):[^@\s/]+@")  # a password inside an address: scheme://user:password@host
+
+
+def scrub(text):
+    return USERINFO.sub(lambda m: m.group(1) + ":****@", text or "")
+
+
+def redact(env, show_values=True):
+    """['A=1', 'API_TOKEN=x'] -> [('A', '1'), ('API_TOKEN', None)]: the value of anything secret-looking is dropped, and with
+    show_values False (any container but this app) every value is, since a name list can't catch every secret."""
     out = []
     for e in env or []:
         k, _, v = e.partition("=")
-        out.append((k, None if SECRET.search(k) else v))
+        out.append((k, None if SECRET.search(k) or not show_values else scrub(v)))
     return out
 
 
@@ -86,8 +94,8 @@ def detail(name):
         "devices": [d.get("PathOnHost") for d in host.get("Devices") or []],
         "mounts": [{"from": m.get("Source") or m.get("Name"), "to": m.get("Destination"), "rw": bool(m.get("RW")), "type": m.get("Type")} for m in j.get("Mounts") or []],
         "ports": sorted({f"{b.get('HostPort')}->{p}" for p, bs in (host.get("PortBindings") or {}).items() for b in bs or []}),
-        "command": " ".join((cfg.get("Entrypoint") or []) + (cfg.get("Cmd") or [])),
-        "env": redact(cfg.get("Env")),
+        "command": scrub(" ".join((cfg.get("Entrypoint") or []) + (cfg.get("Cmd") or []))),
+        "env": redact(cfg.get("Env"), name == SELF),
         "compose": {"project": labels.get("com.docker.compose.project"), "service": labels.get("com.docker.compose.service"),
                     "files": labels.get("com.docker.compose.project.config_files")},
     }
