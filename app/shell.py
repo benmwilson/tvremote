@@ -157,6 +157,18 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=(), accent=None):
     return r"{\an8\pos(960,@@Y@@)\bord0\shad0}" + r"\N".join(lines)
 
 
+def transition_screen(title, line, source=None):
+    """The card shown over the picture while a stream or its quality changes (a window of its own on the shared background): the logo, the
+    channel's name, the site in its own colour and one line of what is happening. One ASS event text per line, joined by newlines."""
+    accent = SRC_BGR.get(source, ACCENT)
+    out = list(logo_pieces(255, accent))
+    out.append(r"{\an8\pos(960,520)\fs84\b1\bord0\shad0\1c&H%s&}%s" % (TEXT, esc(clean(title))[:26] or "TV Remote"))
+    if source:
+        out.append(r"{\an8\pos(960,625)\fs34\b1\fsp6\bord0\shad0\1c&H%s&}%s" % (accent, esc(source).upper()))
+    out.append(r"{\an8\pos(960,690)\fs46\b0\bord0\shad0\1c&H%s&}%s" % (DIM, esc(line)[:50]))
+    return "\n".join(out)
+
+
 def wall_screen(layout, labels):
     """The background behind several streams: soft colour glows, and each stream's name on the strip under its window.
     labels: [(name, source, ended)] in tile order; an ended stream's slot says so. Returns one ASS event text per piece."""

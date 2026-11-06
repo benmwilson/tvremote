@@ -106,5 +106,9 @@ def chat_panel(**kw):
     return Panel("chat", "tvr-chat", 480, 1080, bg=os.path.join(ASSETS, "chat-bg-strip.png"), **kw)
 
 
+def transition_panel(**kw):
+    return Panel("transition", "tvr-transition", 1920, 1080, bg=os.path.join(ASSETS, "bg-full.png"), **kw)
+
+
 def bar_panel(**kw):
     return Panel("chatbar", "tvr-chatbar", 1440, 270, bg=os.path.join(ASSETS, "chat-bg-bar.png"), **kw)

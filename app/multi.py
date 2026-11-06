@@ -103,6 +103,8 @@ def rules_xml():
     # the chat window (app/chatwin.py): the right quarter of the screen, above the stream's full-screen window
     rules.append('    <windowRule identifier="tvr-chat"><serverDecoration>no</serverDecoration><action name="MoveTo" x="1440" y="0"/>'
                  '<action name="ResizeTo" width="480" height="1080"/><action name="ToggleAlwaysOnTop"/></windowRule>')
+    rules.append('    <windowRule identifier="tvr-transition"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="0"/>'
+                 '<action name="ResizeTo" width="1920" height="1080"/><action name="ToggleAlwaysOnTop"/></windowRule>')
     rules.append('    <windowRule identifier="tvr-chatbar"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="810"/>'
                  '<action name="ResizeTo" width="1440" height="270"/><action name="ToggleAlwaysOnTop"/></windowRule>')
     return '<?xml version="1.0"?>\n<labwc_config>\n  <windowRules>\n' + "\n".join(rules) + "\n  </windowRules>\n</labwc_config>\n"

@@ -744,7 +744,12 @@ def hot_load(url, quality=None):
     q = sl_quality(quality, cap(player, width) if width else None)
     if url == state["url"]:
         _addr_cache.pop((url, q), None)  # Refresh: a fresh address, not the remembered one
-    r = mpvipc.send(SOCK, ["loadfile", stream_url(url, q), "replace"], 5)  # raises when it is offline: the caller then starts it the usual way
+    addr = stream_url(url, q)  # raises when it is offline: the caller then starts it the usual way
+    if not _swapping.is_set() and not wall.active():  # a quality change draws its own card
+        before = state.get("started")
+        osd_swap(None, ready=lambda: _picture_changed_since(before), title=fav_name(url), source=source,
+                 line="Refreshing the stream" if url == state["url"] else "Switching stream")
+    r = mpvipc.send(SOCK, ["loadfile", addr, "replace"], 5)
     if not (r and r.get("error") == "success"):
         return False
     state.update(url=url, quality=q, source=source, player=player, started=time.time(), stalls=0, stall_s=0, ended=False)
@@ -1711,14 +1716,40 @@ def osd_volume(sock=SOCK):
         mpvipc.send(sock, ["show-text", volume_text(vol, muted), 1500])
 
 
-def osd_swap(label, sock=SOCK, ready=None, max_s=8.0):
-    """While a stream changes quality in place, show "Switching to 720p" with a turning wheel on the Pi's screen (the same on-screen text the volume
-    bar uses), then "Quality: 720p" for a moment. `ready()` says the new picture is playing; without it the wheel turns for 2.5 s. Runs in the
-    background, never blocks the change, and a window that has gone away just stops it. Returns the thread."""
+_transition = {"win": None}
+
+
+def transition_show(title, line, source):
+    """Put the card over the picture (a window of its own, so it can't flash the stream): True when it is up."""
+    win = _transition["win"] = _transition["win"] or chatwin.transition_panel()
+    return bool((win.running() or win.open()) and win.update(shell.transition_screen(title, line, source)))
+
+
+def transition_close():
+    if _transition["win"]:
+        _transition["win"].close()
+
+
+def osd_swap(label, sock=SOCK, ready=None, max_s=8.0, title=None, source=None, line=None):
+    """While a stream or its quality changes in place, cover the picture with a card (the channel, "Switching to 720p" or `line`) until the new picture
+    plays, then say "Quality: 720p" for a moment (not for a stream change). `ready()` says the new picture is playing; without it the card stays 2.5 s.
+    In a multi-view tile the small on-screen wheel is used instead. Runs in the background, never blocks the change. Returns the thread."""
     def run():
         frames, t0, i = "\u25d0\u25d3\u25d1\u25d2", time.time(), 0
         if sock == SOCK:
-            _swapping.set()  # the stall monitor keeps its Buffering / lagging screens off while the wheel turns
+            _swapping.set()  # the stall monitor keeps its Buffering / lagging screens off while the card is up
+            try:
+                transition_show(title or fav_name(state["url"] or ""), line or f"Switching to {label}", source or state["source"])
+                time.sleep(0.8)  # long enough to be read, and for the window to be up
+                while time.time() - t0 < (max_s if ready else 2.5) and not (ready and ready()):
+                    time.sleep(0.25)
+                transition_close()
+                if line is None:
+                    mpvipc.send(sock, ["show-text", f"Quality: {label}", 1500])
+            finally:
+                transition_close()
+                _swapping.clear()
+            return
         try:
             while time.time() - t0 < (max_s if ready else 2.5):
                 r = mpvipc.send(sock, ["show-text", f"{frames[i % 4]}  Switching to {label}", 900])
