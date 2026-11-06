@@ -108,7 +108,7 @@
 ### Task 5: Deploy, verify on the Pi, update notes
 
 **Files:**
-- Modify: `CLAUDE.md` (Todo: stage 2 items; layout notes), `docs/multi-view.md` untouched
+- Modify: `CLAUDE.md` (Todo: stage 2 items; layout notes), `docs/multistream.md` untouched
 
 - [ ] **Step 1: Push** and, with Ben's go-ahead, rebuild the Pi over SSH when nothing is playing (`docker exec tvremote curl -s http://127.0.0.1:8765/api/status` shows `running:false`).
 - [ ] **Step 2: Verify**: `ssh ... "docker exec tvremote cat /data/tvs.json"` shows the migrated TVs and `targets.json` is still there; in Chrome the wizard shows the real Rokus, the Chromecast and "detected HDMI 3"; saving from the wizard changes the card names/labels in All TVs.

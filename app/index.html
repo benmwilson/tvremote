@@ -115,7 +115,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 body.no-titles .ftitle{display:none}
 body.no-marquee .ftitle.mq{text-overflow:ellipsis}body.no-marquee .ftitle.mq>span{animation:none}
 .quick{margin-top:16px}.quick .wlabel{margin-bottom:8px}.quick .fav{background:var(--card2,rgba(255,255,255,.05))}
-.quickstrip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}  /* the same tiles as the multi-view strip */
+.quickstrip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}  /* the same tiles as the multistream strip */
 .quickstrip .wstream{cursor:pointer;overflow:hidden;padding:12px 4px}.quickstrip .wstream .av{width:48px;height:48px}
 .wstream.loading{pointer-events:none}.wstream.loading::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:40%;background:var(--tv,var(--fg));animation:slide 1.2s ease-in-out infinite}
 .now.offidle>:not(.tvoff){display:none!important}
@@ -599,7 +599,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <details><summary>Favourites and recents</summary>
       <p>Tap the star on a stream to save it as a favourite. Recents lists what was played lately. Guests can play from both but can't change favourites.</p></details>
     <details><summary>Several streams at once</summary>
-      <p>The Pi's own screen can show up to four streams together. Open Multi-view on that TV's remote, then add streams. <b>Enlarge</b> makes one big, and <b>Sync</b> lines up the pictures if one is ahead.</p></details>
+      <p>The Pi's own screen can show up to four streams together. Open Multistream on that TV's remote, then add streams. <b>Enlarge</b> makes one big, and <b>Sync</b> lines up the pictures if one is ahead.</p></details>
     <details><summary>Add it to your Home Screen</summary>
       <p>In Safari, tap Share, then Add to Home Screen. It then opens like an app.</p></details>
     <details><summary>Something isn't working</summary>
@@ -755,19 +755,32 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div id="chatbox" class="hide" role="log" aria-live="off"></div>
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
-<div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multi-view</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
-<div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multi-view</span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
+<div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multistream</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
+<div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multistream</span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
 <dialog id="tour" class="sheet" aria-labelledby="tourttl">
   <div class="sh"><div class="grow"><b id="tourttl"></b><span class="sub" id="toursub"></span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb"><p id="tourtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
     <div class="row"><button id="tourback" type="button">Back</button><button id="tournext" type="button" class="go">Next</button></div></div>
 </dialog>
+<dialog id="tvapps" class="sheet" aria-labelledby="tvappsttl">
+  <div class="sh"><div class="grow"><b id="tvappsttl">TV apps</b><span class="sub" id="tvappssub">Tap one to open it on the TV</span></div>
+    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb"><div id="apps" class="apps" aria-live="polite"></div></div>
+</dialog>
 <dialog id="browse" class="sheet" aria-labelledby="browsettl">
   <div class="sh"><div class="grow"><b id="browsettl">Browse live</b><span class="sub" id="browsesub">Kick and Twitch, biggest first</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
     <input id="browseq" type="search" placeholder="Search live channels, games, titles" aria-label="Search live channels" autocomplete="off" autocapitalize="off" autocorrect="off" enterkeyhint="search" style="font-size:16px;min-height:48px;margin-bottom:10px">
+    <div class="row" style="margin:0 0 10px"><select id="browsesort" aria-label="Sort by" style="font-size:16px;min-height:48px">
+      <option value="viewers">Most viewers</option><option value="fewest">Fewest viewers</option><option value="new">Just started</option><option value="name">Name A to Z</option></select></div>
+    <details id="browsefilters" style="margin:0 0 10px"><summary style="min-height:44px;line-height:44px;color:var(--dim)">Filters <span id="browsefcount" class="sub"></span></summary>
+      <div class="row"><select id="browsegame" aria-label="Category" style="font-size:16px;min-height:48px"></select>
+        <select id="browselang" aria-label="Language" style="font-size:16px;min-height:48px"></select></div>
+      <label class="s-check" style="justify-content:space-between;margin-top:8px">Only streamers live on both sites<input id="browseboth" type="checkbox" class="tg" role="switch"></label>
+      <button id="browsereset" type="button" style="width:100%;margin-top:8px">Clear search and filters</button>
+    </details>
     <div class="wseg" id="browsesite" role="group" aria-label="Site" style="margin-bottom:10px"><button type="button" data-s="" aria-pressed="true">All</button><button type="button" data-s="kick" aria-pressed="false">Kick</button><button type="button" data-s="twitch" aria-pressed="false">Twitch</button></div>
     <div id="browsegrid" class="bgrid" aria-live="polite"></div>
   </div>
@@ -778,7 +791,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <div class="row"><button id="confirmno" type="button" autofocus>Cancel</button><button id="confirmyes" type="button" class="go"></button></div></div>
 </dialog>
 <dialog id="wallcard" class="sheet" aria-labelledby="wallttl">
-  <div class="sh"><div class="grow"><b id="wallttl">Multi-view</b><span class="sub" id="wallsub"></span></div>
+  <div class="sh"><div class="grow"><b id="wallttl">Multistream</b><span class="sub" id="wallsub"></span></div>
     <span class="wseg hide" id="walllayout"><button data-l="grid" aria-label="Grid layout" title="Grid: equal tiles"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg></button><button data-l="focus" aria-label="Focus layout" title="Focus: one big, the rest below"><svg class="ic" aria-hidden="true"><use href="#i-multi-focus"/></svg></button></span>
     <button class="sclose hide" id="wallsync" type="button" aria-label="Sync the streams" title="Sync the streams: line them up in time"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
     <button class="sclose" data-close aria-label="Close" autofocus><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -808,9 +821,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button data-k="InputHDMI2"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>2</button>
     <button data-k="InputHDMI3"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>3</button></div>
   <div class="sleeprow" style="margin-top:12px"><select id="sleepsel" aria-label="Sleep timer"><option value="">Sleep timer: off</option><option value="15">Stop in 15 min</option><option value="30">Stop in 30 min</option><option value="60">Stop in 1 hour</option><option value="90">Stop in 90 min</option><option value="0">Cancel timer</option></select></div>
-  <details id="appsbox" style="margin-top:12px"><summary style="min-height:44px;line-height:44px;color:var(--dim)">TV apps</summary>
-    <div id="apps" class="apps" aria-live="polite"></div>
-  </details>
+  <button id="appsopen" type="button" aria-haspopup="dialog" style="width:100%;margin-top:12px;justify-content:space-between"><span>TV apps</span><span class="chev" aria-hidden="true">&rsaquo;</span></button>
   <details style="margin-top:12px"><summary style="min-height:44px;line-height:44px;color:var(--dim)">TV navigation</summary>
     <div class="pad">
     <div class="row"><button data-k="Home" aria-label="Home"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></button><button data-k="Up" aria-label="Up"><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button><button data-k="Back" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button></div>
@@ -856,7 +867,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <div class="dctl"><h4>TV power</h4>
       <span class="sub" id="d-powerhint"></span>
       <div class="dbmute"><button id="pwon" type="button">On</button><button id="pwoff" type="button">Off</button></div></div>
-    <div id="d-wall" class="hide"><h3>Multi-view</h3><table id="d-wallsum"></table><div id="d-walltiles"></div></div>
+    <div id="d-wall" class="hide"><h3>Multistream</h3><table id="d-wallsum"></table><div id="d-walltiles"></div></div>
     <h3>Pi health</h3><table id="d-pi"></table>
     <h3 id="d-h-player">Player</h3><table id="d-player"></table>
     <h3 id="d-h-mpv">mpv</h3><table id="d-mpv"></table>
@@ -1067,7 +1078,7 @@ function render() {
   if (hot) $('heatnote').textContent = 'The Pi is running hot (' + Math.round(hot.temp) + ' °C). ' + (hot.lowered ? 'Picture quality was lowered to cool it down.' : hot.level === 'hot' ? 'Lowering the picture quality.' : 'Frames may drop if it gets hotter.');
   $('src').className = 'badge ' + (run || st.starting ? (st.source || '') : '');
   $('live').classList.toggle('hide', !(run && st.live));
-  const swapping = !run && !!st.starting && !!st.wall;  // a window of the multi-view is restarting (a swap, a new layout): the others keep playing
+  const swapping = !run && !!st.starting && !!st.wall;  // a window of the multistream is restarting (a swap, a new layout): the others keep playing
   $('title').textContent = run ? (st.title || st.url) : swapping ? (chanName(st.url || '') || 'Main stream') : st.starting ? 'Starting…' : st.error ? 'Playback stopped' : ext ? ext.app : 'Nothing playing';
   const extCtl = !!ext && !!ext.controllable;  // a pause button only while that app's player is really open
   const nowUrl = run || swapping ? st.url : '';
@@ -1080,7 +1091,7 @@ function render() {
   }
   $('nowav').classList.toggle('hide', !nowAvFor || !!st.wall);  // the strip below shows every stream's picture instead
   renderWallStrip(run || swapping);
-  $('nowhead').classList.toggle('hide', !!st.wall && !!(run || swapping));  // in multi-view the strip carries each stream's site and LIVE chips
+  $('nowhead').classList.toggle('hide', !!st.wall && !!(run || swapping));  // in multistream the strip carries each stream's site and LIVE chips
   const gameLine = run ? [st.game, st.live_for != null ? 'live for ' + dur(st.live_for) : null].filter(Boolean).join(' \u00b7 ') : '';
   $('game').textContent = gameLine;
   $('game').classList.toggle('hide', !gameLine);
@@ -1094,7 +1105,7 @@ function render() {
     if (st.buffering) meta.push('buffering');
     if (st.stalls) meta.push(st.stalls + (st.stalls === 1 ? ' stall' : ' stalls') + ' (' + st.stall_s + ' s)');
   }
-  if (swapping) meta.push('Updating the multi-view. The others keep playing.');
+  if (swapping) meta.push('Updating the multistream. The others keep playing.');
   if (!run && st.error) meta.push(st.error);
   $('meta').textContent = meta.join(' · ');
   const up = !!run, starting = !!st.starting && !run;   // nothing to control until a stream is playing
@@ -1114,7 +1125,7 @@ function render() {
     const all = wallStreams(st.wall), sn = st.wall.sound, name = i => (all.find(t => t.i === i) || {}).name || 'another stream';
     const note = $('wallnote'), ico = el('span', 'ni');
     ico.innerHTML = ic(sn.length ? 'volume' : 'mute');
-    note.replaceChildren(document.createTextNode('Multi-view \u00b7 ' + all.length + ' streams \u00b7 '));
+    note.replaceChildren(document.createTextNode('Multistream \u00b7 ' + all.length + ' streams \u00b7 '));
     if (up && !st.wall.busy) note.append(ico, document.createTextNode(' ' + (sn.length ? sn.map(name).join(', ') : 'Muted')));
     else note.append(document.createTextNode('updating'));
     note.append(document.createTextNode(' \u203a'));
@@ -1149,14 +1160,14 @@ function render() {
   renderWall();
 }
 
-// With several streams on, this picker is the main stream's own, the same one as in Multi-view (both read and set wall.main_quality).
+// With several streams on, this picker is the main stream's own, the same one as in Multistream (both read and set wall.main_quality).
 function syncQual() {
   const sel = $('qual');
   if (st.wall) {
     if (sel.dataset.mode !== 'wall') { sel.dataset.mode = 'wall'; sel.innerHTML = ''; WALL_Q.forEach(([v, label]) => { const o = el('option', null, label); o.value = v; sel.append(o); }); }
     if (document.activeElement !== sel) sel.value = (wallStreams(st.wall).find(t => t.i === st.wall.selected) || {}).quality || '';  // the selected stream's
   } else if (sel.dataset.mode === 'wall') { sel.dataset.mode = ''; sel.innerHTML = ''; qualFor = null; }  // back to this stream's own list
-  else if (sel.options.length && document.activeElement !== sel) {  // keep it showing what is really playing: a multi-view ending changes the quality of the same stream without a new list
+  else if (sel.options.length && document.activeElement !== sel) {  // keep it showing what is really playing: a multistream ending changes the quality of the same stream without a new list
     const v = [...sel.options].map(o => o.value).find(o => String(st.quality).split(',').includes(o));
     if (v) sel.value = v;
   }
@@ -1206,7 +1217,7 @@ async function loadFavs() {
   loadRecents();
   loadGroups();
 }
-// ---- groups: saved sets of streams that start together in multi-view, and suggestions from what was watched together ----
+// ---- groups: saved sets of streams that start together in multistream, and suggestions from what was watched together ----
 let groupList = [], groupSug = [];
 async function loadGroups() {
   try { if (me.guest) return; } catch (e) {}  // guests don't have groups (and `me` may not be set yet on the very first call)
@@ -1226,7 +1237,7 @@ const groupLive = g => g.members.filter(m => m.live === true).length;
 const groupSites = g => [...new Set(g.members.map(m => m.source || 'Other'))].map(src => el('span', 'badge ' + src, src));  // the sites its streamers are on, like a solo streamer's badge
 const groupWho = g => g.members.map(m => m.name).join(', ');
 async function playGroup(g) {  // replaces what is on the TV, so ask when something is playing
-  if ((st.running || st.starting || st.wall) && !(await confirmSheet('Play ' + g.name + '?', 'This replaces what is on the TV now with ' + g.members.length + ' streams in multi-view.', 'Play group'))) return;
+  if ((st.running || st.starting || st.wall) && !(await confirmSheet('Play ' + g.name + '?', 'This replaces what is on the TV now with ' + g.members.length + ' streams in multistream.', 'Play group'))) return;
   const r = await api('/api/groups/play', 'POST', g.id ? {id: g.id} : {urls: g.members.map(m => m.url)});
   if (r && r.ok) { favLoading = null; poll(); }
 }
@@ -1382,7 +1393,7 @@ function renderQuick() {
       b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
       return b;
     }
-    const b = el('div', 'wstream'), tags = el('span', 'wtags');  // the tile style: picture, name, site and LIVE, like the strip along the top of a multi-view
+    const b = el('div', 'wstream'), tags = el('span', 'wtags');  // the tile style: picture, name, site and LIVE, like the strip along the top of a multistream
     b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url; b.setAttribute('aria-label', 'Play ' + it.name + (it.title ? ': ' + it.title : ''));
     if (it.title) b.title = it.title;
     tags.append(el('span', 'badge ' + (it.source || ''), it.source || 'Other'), el('span', 'badge live', 'LIVE'));
@@ -1447,7 +1458,7 @@ async function search(q) {
 }
 
 // The cards that ask "which one?" when a name is on both Kick and Twitch: its logo, whether they are live there, and how many watch.
-// Used by the multi-view add box and by Play something. choose(match, button) does the adding or playing.
+// Used by the multistream add box and by Play something. choose(match, button) does the adding or playing.
 function pickCards(name, matches, choose) {
   const head = el('div', 'wlabel', name + ' is on both. Which one?');
   head.style.cssText = 'grid-column:1/-1;margin:0';
@@ -1521,11 +1532,11 @@ async function loadApps() {
     img.onerror = () => img.remove();  // no icon: the name is enough
     b.append(img, el('span', null, a.name)); b.title = 'Open ' + a.name + ' on ' + ((targets.find(t => t.id === tv) || {}).name || 'the TV');
     b.setAttribute('aria-label', 'Open ' + a.name + ' on the TV');
-    b.onclick = async () => { const x = await busy(b, () => api('/api/roku/launch', 'POST', {id: a.id}), 1500); if (x && x.ok) followTv(); };
+    b.onclick = async () => { const x = await busy(b, () => api('/api/roku/launch', 'POST', {id: a.id}), 1500); if (x && x.ok) { $('tvapps').close(); followTv(); } };
     return b;
   }));
 }
-$('appsbox').addEventListener('toggle', () => { if ($('appsbox').open) loadApps(); });
+$('appsopen').onclick = () => { $('tvapps').showModal(); loadApps(); };
 // Where this stream can go: another way to play (the Pi's screen or a Chromecast) that is reachable. The Pi and the Chromecast on one TV are "the
 // same TV": that is a switch of device, not a trip to another room. A TV with nothing plugged in can't play, so it is never offered.
 // shortcut: there are at most two ways to play (one Pi, one Chromecast), so there is one "other"; more would need a picker.
@@ -1556,7 +1567,7 @@ const TOUR = [
   ['Pick a TV', 'The first screen has a card for each TV. Tap one to open its remote. Controls only act on the TV you opened.'],
   ['The remote', 'Pause, volume, mute, skip and quality. Refresh reloads a stalled stream. The power button turns the TV on or off. Stop ends playback.'],
   ['Favourites and recents', 'Tap the star on a stream to keep it. Recents lists what you watched lately; the LIVE badge shows who is on now.'],
-  ['Several streams', 'On the Pi’s screen you can watch up to four streams at once. Open Multi-view, add streams, and use Enlarge to make one big.'],
+  ['Several streams', 'On the Pi’s screen you can watch up to four streams at once. Open Multistream, add streams, and use Enlarge to make one big.'],
   ['Add it to your Home Screen', 'In Safari tap Share, then Add to Home Screen. It then opens like an app.'],
   ['That’s it', 'Stuck? The Help section below has more. Tap Take the tour any time to see this again.']];
 let tourI = 0;
@@ -1576,7 +1587,7 @@ $('move').onclick = async () => {
   const mv = moveInfo(), url = st.url;
   if (!mv || !url) return;
   const {to, here, same, dev} = mv, who = chanName(url) || 'this stream', dest = same ? dev : to.name;
-  const notes = [(st.wall ? 'Plays ' + who + ' (the stream you are controlling) on ' + dest + ', and ends the multi-view on ' + here.name + '.'
+  const notes = [(st.wall ? 'Plays ' + who + ' (the stream you are controlling) on ' + dest + ', and ends the multistream on ' + here.name + '.'
     : 'Plays ' + who + ' on ' + dest + ' and stops it on ' + here.name + '.')];
   if (same) notes.push('The TV stays on and changes to ' + dev + '\u2019s input.');
   else if (tvOff(to)) notes.push(to.name + ' is off. It will be turned on, and back off if you move away without anything else using it.');
@@ -2194,7 +2205,7 @@ async function loadRecents() {
   box.replaceChildren();
   $('recenthead').classList.toggle('hide', !items.length);
   items.forEach(it => {
-    const b = el('div', 'fav'), head = el('div', 'fhead');
+    const b = el('div', 'fav' + (it.live === false ? ' off' : '')), head = el('div', 'fhead');
     b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url;
     head.append(avatarEl(it.name, it.url), el('b', null, it.name), ...titleEl(it));
     const x = el('button', 'x'); x.innerHTML = ic('star'); x.setAttribute('aria-label', 'Save ' + it.name + ' to favourites');
@@ -2277,7 +2288,7 @@ function kickEmbed(slug) {  // Kick's own chat page (the one its OBS chat dock u
 const KICK_OWN_SEND = false;
 
 let chatTab = 0;
-function chatTiles() {  // the streams that can have a chat: every one on the multi-view screen, or the one playing
+function chatTiles() {  // the streams that can have a chat: every one on the multistream screen, or the one playing
   const items = st.wall ? wallStreams(st.wall) : [{i: 0, url: st.url || '', source: st.source}];
   return items.map(t => {
     let tw = '';
@@ -2328,29 +2339,48 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
 }
 $('chatTog').onclick = $('chatChev').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem('chatOpen', chatOpen ? '1' : '0'); } catch (e) {} chatShow(); };
 
-// ---- Browse live channels: who is live on Kick and Twitch, tap to play or add to the multi-view ----
-let browseSite = '', browseData = null, browseAt = 0;
+// ---- Browse live channels: who is live on Kick and Twitch, tap to play or add to the multistream ----
+let browseSite = '', browseData = null, browseAt = 0, browseGame = '', browseLang = '', browseBoth = false, browseSort = 'viewers';
 const fmtViewers = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n || 0);
+const langName = c => { try { return new Intl.DisplayNames(['en'], {type: 'language'}).of(c); } catch (e) { return c; } };
 function browseTiles(rows) {  // one tile per streamer: a name live on both sites is one tile with both buttons
   const by = new Map();
   rows.forEach(r => {
     const k = r.login.toLowerCase();
-    if (!by.has(k)) by.set(k, {name: r.name, avatar: r.avatar, title: r.title, game: r.game, total: 0, plats: []});
+    if (!by.has(k)) by.set(k, {name: r.name, avatar: r.avatar, title: r.title, game: r.game, lang: r.lang || '', started: 0, total: 0, plats: []});
     const t = by.get(k);
     t.total += r.viewers || 0; t.plats.push({source: r.source, url: r.url, viewers: r.viewers || 0});
+    t.started = Math.max(t.started, Date.parse(r.started || '') || 0);
     if (!t.avatar && r.avatar) t.avatar = r.avatar;
   });
-  return [...by.values()].sort((a, b) => b.total - a.total);
+  return [...by.values()];
 }
 function browseCanAdd() { const cur = targets.find(t => t.id === target) || {}; return cur.kind === 'pi' && (!!st.running || !!st.starting || !!st.wall); }
+function fillFilter(sel, label, counts, keep, nameOf) {  // a select of what is on offer (most common first), keeping the pick if it is still there
+  const items = [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]))).slice(0, 40);
+  sel.replaceChildren(new Option(label, ''), ...items.map(([v, n]) => new Option(nameOf(v) + ' (' + n + ')', v)));
+  sel.value = items.some(([v]) => v === keep) ? keep : '';
+  return sel.value;
+}
 function renderBrowse() {
   const grid = $('browsegrid');
   if (!browseData) { grid.replaceChildren(el('p', 'bnote', 'Loading\u2026')); return; }
   const q = $('browseq').value.trim().toLowerCase(), canAdd = browseCanAdd();
-  const tiles = browseTiles(browseData.streams).filter(t => !q || [t.name, t.game, t.title].some(x => (x || '').toLowerCase().includes(q)));
+  const base = browseTiles(browseData.streams.filter(r => !browseSite || r.source.toLowerCase() === browseSite));  // the site filter also hides the other site's button
+  const games = new Map(), langs = new Map();
+  base.forEach(t => { if (t.game) games.set(t.game, (games.get(t.game) || 0) + 1); if (t.lang) langs.set(t.lang, (langs.get(t.lang) || 0) + 1); });
+  browseGame = fillFilter($('browsegame'), 'All categories', games, browseGame, x => x);
+  browseLang = fillFilter($('browselang'), 'All languages', langs, browseLang, langName);
+  const tiles = base.filter(t => (!q || [t.name, t.game, t.title].some(x => (x || '').toLowerCase().includes(q)))
+    && (!browseGame || t.game === browseGame) && (!browseLang || t.lang === browseLang) && (!browseBoth || t.plats.length > 1));
+  const by = {viewers: (a, b) => b.total - a.total, fewest: (a, b) => a.total - b.total, new: (a, b) => b.started - a.started, name: (a, b) => a.name.localeCompare(b.name)};
+  tiles.sort(by[browseSort] || by.viewers);
+  const active = [browseGame, browseLang, browseBoth].filter(Boolean).length;
+  $('browsefcount').textContent = active ? '\u00b7 ' + active + ' on' : '';
+  $('browsesub').textContent = tiles.length + ' live' + (tiles.length !== base.length ? ' of ' + base.length : '');
   if (!tiles.length) {
     const off = browseSite === 'twitch' ? !browseData.twitch : browseSite === 'kick' ? !browseData.kick : !browseData.twitch && !browseData.kick;
-    grid.replaceChildren(el('p', 'bnote', q && browseData.streams.length ? 'No live channel matches “' + $('browseq').value.trim() + '”.' : off ?'That site isn\u2019t set up on this Pi yet.' : 'Nothing came back. Try again in a moment.'));
+    grid.replaceChildren(el('p', 'bnote', base.length ? 'No live channel matches. Try clearing the search or filters.' : off ? 'That site isn\u2019t set up on this Pi yet.' : 'Nothing came back. Try again in a moment.'));
     return;
   }
   grid.replaceChildren(...tiles.map(t => {
@@ -2365,7 +2395,7 @@ function renderBrowse() {
       go.onclick = async () => { const r = await busy(go, () => play(pl.url)); if (r && r.ok) $('browse').close(); };
       row.append(go);
       if (canAdd) {
-        const add = el('button', 'bpadd', '+'); add.setAttribute('aria-label', 'Add ' + t.name + ' to the multi-view'); add.title = 'Add to the multi-view';
+        const add = el('button', 'bpadd', '+'); add.setAttribute('aria-label', 'Add ' + t.name + ' to the multistream'); add.title = 'Add to the multistream';
         add.onclick = async () => { const r = await busy(add, () => wallPut(pl.url)); if (r && r.ok) { add.textContent = '\u2713'; add.disabled = true; } };
         row.append(add);
       }
@@ -2375,12 +2405,12 @@ function renderBrowse() {
     return b;
   }));
 }
-async function loadBrowse(force) {
-  if (!force && browseData && Date.now() - browseAt < 30000 && browseData.site === browseSite) return renderBrowse();
+async function loadBrowse(force) {  // both sites at once: the site buttons, filters and sorting then work on what is already here
+  if (!force && browseData && Date.now() - browseAt < 30000) return renderBrowse();
   browseData = null; renderBrowse();
-  const r = await fetch('/api/browse?n=50' + (browseSite ? '&site=' + browseSite : '')).then(x => x.json()).catch(() => null);
+  const r = await fetch('/api/browse?n=50').then(x => x.json()).catch(() => null);
   if (!$('browse').open) return;
-  browseData = r ? {...r, site: browseSite} : {streams: [], kick: true, twitch: true, site: browseSite}; browseAt = Date.now();
+  browseData = r || {streams: [], kick: true, twitch: true}; browseAt = Date.now();
   renderBrowse();
 }
 $('browseq').oninput = renderBrowse;
@@ -2389,10 +2419,18 @@ $('browsesite').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   browseSite = b.dataset.s;
   document.querySelectorAll('#browsesite button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-  loadBrowse();
+  renderBrowse();
+};
+$('browsesort').onchange = () => { browseSort = $('browsesort').value; renderBrowse(); };
+$('browsegame').onchange = () => { browseGame = $('browsegame').value; renderBrowse(); };
+$('browselang').onchange = () => { browseLang = $('browselang').value; renderBrowse(); };
+$('browseboth').onchange = () => { browseBoth = $('browseboth').checked; renderBrowse(); };
+$('browsereset').onclick = () => {
+  browseGame = browseLang = ''; browseBoth = false; browseSort = 'viewers'; $('browseq').value = ''; $('browseboth').checked = false; $('browsesort').value = 'viewers';
+  renderBrowse();
 };
 
-// ---- Multi-view (Pi TV only): several streams on the screen at once ----
+// ---- Multistream (Pi TV only): several streams on the screen at once ----
 // The Pi answers at once with how the wall will look, while the windows restart in the background: show that now.
 const wallApi = async body => { const r = await api('/api/wall', 'POST', body); if (r && r.ok) { if ('wall' in r) { st.wall = r.wall; wallSig = ''; renderWall(); } if (body.action === 'add') loadRecents(); poll(); } return r; };
 let wallSig = '', syncMsg = null;  // syncMsg: what the last Sync found, shown for a few seconds in the sheet's subtitle
@@ -2444,7 +2482,7 @@ function renderWall() {
     const rp = act('swap', 'Replace', 'put a different stream in this window', () => { wallReplace = wallReplace === r.i ? null : r.i; wallSig = ''; renderWall(); if (wallReplace !== null) $('wallurl').focus(); });
     rp.setAttribute('aria-pressed', String(wallReplace === r.i));
     if (r.i && w.layout === 'focus' && !r.error) act('enlarge', 'Enlarge', 'swap places with the big window', () => wallApi({action: 'swap', i: r.i}));
-    if (!r.error) act('fullscreen', 'Full screen', 'stop multi-view and show only this stream, full screen', () => wallApi({action: 'only', i: r.i}));
+    if (!r.error) act('fullscreen', 'Full screen', 'stop multistream and show only this stream, full screen', () => wallApi({action: 'only', i: r.i}));
     tile.append(acts);
     if (r.error) {  // it ended by itself: say why, and offer to try again (taking it off the screen is the X, which moves the others)
       const e = el('div', 'err', r.error), retry = el('button', null, 'Try again');
@@ -2460,7 +2498,7 @@ function renderWall() {
   // suggestions: the favourites that are live now, then the live recents (the live site of a streamer who is on both)
   // never suggest a streamer who is already on the screen: compared by name, so another link form or the other site doesn't slip through
   const key = u => { try { const p = new URL(u).pathname.split('/').filter(Boolean); return (p.length === 1 ? p[0] : String(u)).toLowerCase(); } catch (e) { return String(u).toLowerCase(); } };
-  const playing = rows.length ? rows : (st.url ? [{url: st.url, name: chanName(st.url) || ''}] : []);  // before multi-view starts, what is playing is the one stream
+  const playing = rows.length ? rows : (st.url ? [{url: st.url, name: chanName(st.url) || ''}] : []);  // before multistream starts, what is playing is the one stream
   const seen = new Set(playing.flatMap(r => [key(r.url), (r.name || '').toLowerCase()])), sugg = [];
   const offer = (name, url) => { const k = key(url), who = chanName(url) || name, n = (who || '').toLowerCase(); if (seen.has(k) || (n && seen.has(n))) return; seen.add(k); if (n) seen.add(n); sugg.push({name: who, url}); };  // the channel's name: a saved favourite may carry the whole stream title
   for (const f of favList) if (f.live === true) offer(f.name, f.play_url || f.url);
@@ -2669,7 +2707,7 @@ function cardEl(c, onTap, extra) {
   const sub = [[c.brand, size].filter(Boolean).join(' '), c.model].filter(Boolean).join(' · ');
   const n = c.now;
   const ms = !!(n && n.streams && n.streams.length > 1);  // several streams on the screen
-  const line = !c.reachable ? "Can't reach this TV" : ms ? 'Multi-view \u00b7 ' + n.streams.length + ' streams' : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.external ? (c.external.paused ? 'Paused on the TV: ' : 'On the TV: ') + c.external.app : c.error ? "Couldn't play: " + c.error : c.kind === 'tv' ? 'TV controls only' : 'Nothing playing';
+  const line = !c.reachable ? "Can't reach this TV" : ms ? 'Multistream \u00b7 ' + n.streams.length + ' streams' : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.external ? (c.external.paused ? 'Paused on the TV: ' : 'On the TV: ') + c.external.app : c.error ? "Couldn't play: " + c.error : c.kind === 'tv' ? 'TV controls only' : 'Nothing playing';
   b.append(head, el('div', 'sub', [sub, c.connection].filter(Boolean).join(' · ')), el('div', 'now', line));
   if (c.reachable && ms) {  // one row per stream: who, which site, live or not, what they are playing, and whether it has sound
     const list = el('div', 'cstreams');
@@ -2848,7 +2886,7 @@ function show() {
   if (v === 'tv') {
     const id = decodeURIComponent(location.hash.slice(5));
     if (id !== target) {
-      target = id; st = {}; lastRun = null; qualFor = null; appsFor = null; $('appsbox').open = false; renderTvMute(); $('qual').innerHTML = '';
+      target = id; st = {}; lastRun = null; qualFor = null; appsFor = null; if ($('tvapps').open) $('tvapps').close(); renderTvMute(); $('qual').innerHTML = '';
       try { localStorage.setItem('target', id); } catch (e) {}
       loadFavs(); poll(); loadShell();
     }

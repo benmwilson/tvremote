@@ -457,13 +457,13 @@ def cec_phys():
 
 
 _moved = {"v": None}
-_wall_note = {"text": "", "until": 0.0}  # a short line for the Multi-view sheet ("buddha went offline and was removed")
-OFFLINE_REMOVE_S = 180  # a stream that ended is taken off the multi-view this long after, so the others get its room back
+_wall_note = {"text": "", "until": 0.0}  # a short line for the Multistream sheet ("buddha went offline and was removed")
+OFFLINE_REMOVE_S = 180  # a stream that ended is taken off the multistream this long after, so the others get its room back
 _off_seen = {}
 
 
 def _offline_loop():
-    """Every 15 s: a stream on the multi-view screen that has been offline for OFFLINE_REMOVE_S is removed (the windows lay out again once). Until
+    """Every 15 s: a stream on the multistream screen that has been offline for OFFLINE_REMOVE_S is removed (the windows lay out again once). Until
     then its tile says so and offers Try again, in case it was a blip. A stream that comes back, or is tried again, starts the count again."""
     while True:
         time.sleep(15)
@@ -823,7 +823,7 @@ def hot_load(url, quality=None):
         threading.Thread(target=livewatch.refresh_one, args=(url,), daemon=True).start()
     threading.Thread(target=sl_info, args=(url,), daemon=True).start()  # the title and details
     threading.Thread(target=switch_tv_to_pi, daemon=True).start()
-    screen("playing")  # always: the home screen is a window behind the stream and must be paused (a multi-view collapsing in place leaves it running)
+    screen("playing")  # always: the home screen is a window behind the stream and must be paused (a multistream collapsing in place leaves it running)
     return True
 
 
@@ -908,7 +908,7 @@ def warm_addresses():
     rects = multi.tiles(wall.geo, wall.count())
     urls = [wall.main_url] + [t["url"] for t in wall.extras]
     wants = {cap("streamlink", r[2]) for r in rects}
-    wants.add(sl_quality(wall.saved_quality, None))  # and the full-screen quality: removing a stream (or ending the multi-view) leaves one stream
+    wants.add(sl_quality(wall.saved_quality, None))  # and the full-screen quality: removing a stream (or ending the multistream) leaves one stream
     for u in urls:                                    # at that quality, which must be ready at once instead of a second's wait for streamlink
         source, player = resolve(u)
         if player != "streamlink" or source == "Twitch":
@@ -921,7 +921,7 @@ def warm_addresses():
 
 
 def _rewarm_loop():
-    """Stream addresses are remembered for ADDR_TTL seconds. While a multi-view stays up, refresh them just before they run out, so removing
+    """Stream addresses are remembered for ADDR_TTL seconds. While a multistream stays up, refresh them just before they run out, so removing
     a stream minutes later is as quick as removing it straight away."""
     while True:
         threading.Event().wait(ADDR_TTL - 60)
@@ -1316,7 +1316,7 @@ def play_on(c, url, quality, via=None):
     was_wall = False
     if not c:
         was_wall = wall.active()
-        wall.clear()  # starting something on the Pi's screen is a single stream; more are added from the Multi-view sheet
+        wall.clear()  # starting something on the Pi's screen is a single stream; more are added from the Multistream sheet
         if was_wall:
             wall.saved_quality = None  # the new stream starts at its own default, not the old main stream's pick
     # Wake the TV first, in the background: working out the link can fail (a channel that is offline), and a Chromecast that is
@@ -1328,7 +1328,7 @@ def play_on(c, url, quality, via=None):
         c.play(url, quality, via, cancelled=lambda: not newest())
     else:
         resolve(url)  # the slow part (cached afterwards), done before taking the player lock so a newer tap is never stuck behind it
-        if was_wall:  # out of a multi-view: the main window makes itself full screen and loads the new stream in place, instead of every window closing and a new one opening
+        if was_wall:  # out of a multistream: the main window makes itself full screen and loads the new stream in place, instead of every window closing and a new one opening
             if newest():
                 wall_relayout(url)  # takes the player lock itself, and starts a player the usual way when it can't load in place
         else:
@@ -1493,14 +1493,14 @@ _wall_pending = [0]  # changes queued or running: the phone shows a spinner and 
 
 
 def wall_later(fn, *args):
-    """Run a multi-view change in the background: restarting windows takes seconds, and the phone must not wait for it.
+    """Run a multistream change in the background: restarting windows takes seconds, and the phone must not wait for it.
     Jobs run one at a time, and each reads the wall as it is by then, so a quick second tap is not lost."""
     def run():
         with _wall_job:
             try:
                 fn(*args)
             except Exception as e:
-                app.logger.warning("Multi-view change failed: %s", e)
+                app.logger.warning("Multistream change failed: %s", e)
             finally:
                 _wall_pending[0] -= 1
         if _wall_pending[0] == 0:
@@ -1812,7 +1812,7 @@ def transition_close():
 def osd_swap(label, sock=SOCK, ready=None, max_s=8.0, title=None, source=None, line=None):
     """While a stream or its quality changes in place, cover the picture with a card (the channel, "Switching to 720p" or `line`) until the new picture
     plays, then say "Quality: 720p" for a moment (not for a stream change). `ready()` says the new picture is playing; without it the card stays 2.5 s.
-    In a multi-view tile the small on-screen wheel is used instead. Runs in the background, never blocks the change. Returns the thread."""
+    In a multistream tile the small on-screen wheel is used instead. Runs in the background, never blocks the change. Returns the thread."""
     if sock == SOCK:
         _swapping.set()  # the stall monitor keeps its Buffering / lagging screens off while the card is up
         try:  # the card goes up first (about a second for its window), so the change happens behind it, not before it
@@ -1970,7 +1970,7 @@ def pi_status():
     running = P("pid") is not None
     data = {"running": running, "url": url, "quality": state["quality"] if sock == SOCK else None, "source": source,
             "streamlink": player == "streamlink",
-            "wall": wall_status()}  # also while the main window restarts, or the multi-view would vanish for those seconds
+            "wall": wall_status()}  # also while the main window restarts, or the multistream would vanish for those seconds
     if _moved["v"] and has_request_context() and accounts.role(g.user) == "admin":
         data["pi_moved"] = _moved["v"]  # only admins can do something about it
     t = pihealth.temperature()
@@ -1995,7 +1995,7 @@ def pi_status():
     else:
         p = state["proc"]
         data["starting"] = bool(p and p.poll() is None) or time.time() - _pending["t"] < 40
-        if wall.active() and wall.selected:  # a window of the multi-view that ended by itself
+        if wall.active() and wall.selected:  # a window of the multistream that ended by itself
             err_ = wall.extras[wall.selected - 1].get("error")
             if err_:
                 data["error"] = err_
@@ -2285,7 +2285,7 @@ _feeds = {}  # Twitch channel -> its chat feed: with several streams on the Pi's
 @app.get("/api/chat/feed")
 def api_chat_feed():
     """New chat messages for the phone's chat view (Twitch only). `since` is the last message id the phone has; `i` is the tile
-    on the Pi's multi-view screen (0 = the main stream)."""
+    on the Pi's multistream screen (0 = the main stream)."""
     c = tgt()
     if c:
         url, source = c.state.get("url"), c.state.get("source")
@@ -2691,11 +2691,11 @@ def versions():
     return _versions
 
 
-heat = {"on": False, "saved": None, "restored": False}  # the heat guard: lowers multi-view pictures while the Pi is very hot
+heat = {"on": False, "saved": None, "restored": False}  # the heat guard: lowers multistream pictures while the Pi is very hot
 
 
 def heat_check(temp):
-    """Above pihealth.HOT: put every multi-view window at 480p (remembering the picks) and say so on the TV; once cooled below
+    """Above pihealth.HOT: put every multistream window at 480p (remembering the picks) and say so on the TV; once cooled below
     pihealth.COOL, give the picks back. If it overheats again after that, they stay lowered until a person raises them."""
     if temp is None:
         return
@@ -2759,7 +2759,7 @@ def stream_title(url):
 
 
 def wall_status():
-    """The multi-view as the phone sees it: the wall's own state, plus whether each stream is live (so its tile can say LIVE)."""
+    """The multistream as the phone sees it: the wall's own state, plus whether each stream is live (so its tile can say LIVE)."""
     w = wall.status()
     if w:
         w["busy"] = _wall_pending[0] > 0
@@ -2783,7 +2783,7 @@ def wall_status():
 
 
 def wall_debug():
-    """Every window of the multi-view for the debug view: where it goes, what it plays, what mpv says about it. None when not in use."""
+    """Every window of the multistream for the debug view: where it goes, what it plays, what mpv says about it. None when not in use."""
     if not wall.active():
         return None
     out = []
@@ -2878,8 +2878,8 @@ def streamer_key(url):
 
 def watched_urls():
     urls = [l["url"] or "" for u in [accounts.OWNER] + accounts.names() for f in load_favs(u) for l in fav_links(f)]  # everyone's: one pass serves all
-    urls += [t["url"] for t in wall.extras]  # the streams on the multi-view screen, so their tiles can say LIVE
-    urls += [r.get("url") or "" for r in load_recents()]  # recents too: the multi-view suggests the ones that are live
+    urls += [t["url"] for t in wall.extras]  # the streams on the multistream screen, so their tiles can say LIVE
+    urls += [r.get("url") or "" for r in load_recents()]  # recents too: the multistream suggests the ones that are live
     if state.get("url"):
         urls.append(state["url"])
     return list(dict.fromkeys(u for u in urls if is_channel(u)))
@@ -3202,7 +3202,7 @@ def twitch_avatars():
 
 @app.get("/api/browse")
 def api_browse():
-    """Who is live now on Kick and Twitch (?site=kick|twitch, ?n=), each with the picture, title, game and viewers, ready to play or add to a multi-view."""
+    """Who is live now on Kick and Twitch (?site=kick|twitch, ?n=), each with the picture, title, game and viewers, ready to play or add to a multistream."""
     site = request.args.get("site", "")
     try:
         n = max(1, min(int(request.args.get("n", 24)), 50))

@@ -23,7 +23,7 @@ docker logs --tail 30 tvremote
 Optional `.env` (copy `.env.example`): set `VIDEO_GID` / `RENDER_GID` to the numbers from `getent group video render`.
 `compose.yaml` passes `/dev/dri`, `/dev/cec0` and `/dev/video10-16,18,19`; remove any that don't exist on your Pi.
 
-The desktop needs window rules so the multi-view, chat and transition windows land in the right place: `cp ~/tvremote/config/labwc-rc.xml ~/.config/labwc/rc.xml && kill -HUP $(pgrep -x labwc)` (once, and again after the rules change; `tools/make_labwc_rules.py` writes the file).
+The desktop needs window rules so the multistream, chat and transition windows land in the right place: `cp ~/tvremote/config/labwc-rc.xml ~/.config/labwc/rc.xml && kill -HUP $(pgrep -x labwc)` (once, and again after the rules change; `tools/make_labwc_rules.py` writes the file).
 
 Update: `cd ~/tvremote && git pull && docker compose up -d --build`. Every Python package is pinned in `requirements.lock`, so a rebuild changes nothing by surprise. Kick, Twitch and YouTube change often: to take newer streamlink or yt-dlp, run `docker compose build --build-arg YTDLP_VERSION=<new> --build-arg STREAMLINK_VERSION=<new>` and, once they work, put the same versions in `requirements.lock`.
 
@@ -82,9 +82,9 @@ When a stream or its quality changes in place, a **transition card** (a window o
 - Playing no longer re-selects an input the TV is already on (that relaunched the input and flashed the screen): the app asks the Roku what it is showing first. This needs the TV's Roku and input saved in the wizard.
 - The screens are written as a subtitle file timed ahead (one event per second for the clock, whose colon blinks), so nothing redraws; redrawing flashed the whole screen, and osd-overlay text never stayed on that window. The logo and text are centred as one group. If the home screen won't open: `docker exec tvremote cat /tmp/tvremote-shell.log`. It tries a plain software window first (`wlshm`), then `gpu`; on this Pi `SHELL_VO=gpu,wlshm` in `.env` is what is used. The Debug drawer shows nothing about it yet.
 
-## Several streams at once (multi-view)
+## Several streams at once (multistream)
 
-The **Multi-view** card on a Pi TV opens a sheet to add up to four streams: Grid or Focus layout, sound per stream (any number can be heard), quality per stream, Replace, Enlarge (Focus: the enlarged stream gets the sound and the one it replaces is muted), Full screen, and Sync (line the pictures up in time). Streams that end show "Went offline" with Try again and are taken off the screen after 3 minutes. The Pi's decoder handles about one 1080p60 stream in total, so Auto gives each window the quality its size needs; the 1080 pick is there if you want it, at the cost of dropped frames.
+The **Multistream** card on a Pi TV opens a sheet to add up to four streams: Grid or Focus layout, sound per stream (any number can be heard), quality per stream, Replace, Enlarge (Focus: the enlarged stream gets the sound and the one it replaces is muted), Full screen, and Sync (line the pictures up in time). Streams that end show "Went offline" with Try again and are taken off the screen after 3 minutes. The Pi's decoder handles about one 1080p60 stream in total, so Auto gives each window the quality its size needs; the 1080 pick is there if you want it, at the cost of dropped frames.
 
 ## Chat on the TV
 
@@ -92,11 +92,11 @@ The **Chat** card has a button (the HDMI icon) that shows the chat of the stream
 
 ## Groups
 
-Save the streams on screen as a **group** from the Multi-view sheet ("Save these as a group"), or accept a suggestion: a set of streams that was on screen together for a minute or more in two separate sessions is offered, with how often. Groups show as stacked profile pictures with the platforms and how many are live, in quick play (when two or more are live), in a Groups section above favourites, and in the Multi-view sheet. Tapping one replaces what is on the TV with all its streams at once (it asks first if something is playing). Groups are per account; guests have none.
+Save the streams on screen as a **group** from the Multistream sheet ("Save these as a group"), or accept a suggestion: a set of streams that was on screen together for a minute or more in two separate sessions is offered, with how often. Groups show as stacked profile pictures with the platforms and how many are live, in quick play (when two or more are live), in a Groups section above favourites, and in the Multistream sheet. Tapping one replaces what is on the TV with all its streams at once (it asks first if something is playing). Groups are per account; guests have none.
 
 ## Pi health
 
-The Debug drawer's **Pi health** section shows temperature, throttle flags, CPU, memory and each player's load. Above 78 C the remote says the Pi is running hot; above 82 C multi-view drops to 480p until it cools (74 C), and your picks come back once.
+The Debug drawer's **Pi health** section shows temperature, throttle flags, CPU, memory and each player's load. Above 78 C the remote says the Pi is running hot; above 82 C multistream drops to 480p until it cools (74 C), and your picks come back once.
 
 ## On the remote
 
@@ -108,7 +108,7 @@ The Debug drawer's **Pi health** section shows temperature, throttle flags, CPU,
 - **Seek bar** (videos): drag to any position. Live streams have no seek bar.
 - **Sleep timer:** pick 15, 30, 60 or 90 minutes. When it runs out the app stops playback and sends the Roku a power-off (Roku has no way for an app to set its own sleep timer). Cancel from the same menu.
 - **Stop** cancels a start that is still loading, and the TV goes straight to Ready.
-- **Chat** (read-only): under the player while a Twitch or Kick channel plays, with a tab per stream in multi-view. Twitch is read by the Pi and shown as a list; Kick embeds Kick's own popout chat page. The link icon opens the chat on the site; the HDMI icon shows it on the TV (see Chat on the TV).
+- **Chat** (read-only): under the player while a Twitch or Kick channel plays, with a tab per stream in multistream. Twitch is read by the Pi and shown as a list; Kick embeds Kick's own popout chat page. The link icon opens the chat on the site; the HDMI icon shows it on the TV (see Chat on the TV).
 - **TV off:** if the TV is in standby or not answering, the player shows "The TV is off" with a Turn on button. Switching the TV off stops a live stream on the Pi and pauses a video or the Chromecast, whether you used the app or the TV's own remote.
 - **Debug drawer:** a "Stats on the TV" switch draws dropped frames, buffer and fps on the TV. It costs frames, so keep it off for normal watching.
 - **Volume** on the TV shows as a block bar for 1.5 s; mute shows "Muted". The Pi remembers the volume you chose across restarts. The TV screens (Loading, Refreshing) take the site's colour too.
@@ -125,7 +125,7 @@ Routing lives in the `SOURCES` table at the top of `app/app.py`; a new streamlin
 
 ## API
 
-`GET /play?u=&q=&target=&via=` · `POST /api/play` (answers at once; the stream starts in the background and the remote shows Starting) · `POST /api/wall` (multi-view) · `GET/POST/DELETE /api/groups`, `POST /api/groups/play|rename|dismiss` · `GET/POST /api/tvs` · `GET /api/discover` · `POST /api/cmd` (pause, mute, volume, volume_delta, seek, seek_to, stop, restart) · `GET/POST /api/sleep` · `GET /api/recents` · `GET /api/chat/feed` · `GET /api/status` · `GET /api/qualities` · `GET /api/search?q=` · `GET/POST/DELETE /api/favourites` · `GET /api/targets` · `GET /api/tv` · `GET /api/roku` · `POST /api/roku/key` · `GET /api/debug`
+`GET /play?u=&q=&target=&via=` · `POST /api/play` (answers at once; the stream starts in the background and the remote shows Starting) · `POST /api/wall` (multistream) · `GET/POST/DELETE /api/groups`, `POST /api/groups/play|rename|dismiss` · `GET/POST /api/tvs` · `GET /api/discover` · `POST /api/cmd` (pause, mute, volume, volume_delta, seek, seek_to, stop, restart) · `GET/POST /api/sleep` · `GET /api/recents` · `GET /api/chat/feed` · `GET /api/status` · `GET /api/qualities` · `GET /api/search?q=` · `GET/POST/DELETE /api/favourites` · `GET /api/targets` · `GET /api/tv` · `GET /api/roku` · `POST /api/roku/key` · `GET /api/debug`
 
 Add `?target=bedroom` to the API calls to act on the Chromecast. `/api/status` includes `hwdec` (should be `v4l2m2m` on the Pi) and `drops`. The **Debug** button on the remote opens a drawer with player state, mpv properties, versions, the command line and the log.
 
@@ -135,7 +135,7 @@ Changing the volume from the remote shows a short volume bar on the Pi's screen.
 
 - **The Pi is unreachable from the network but still playing, or dropped off Wi-Fi:** NetworkManager once reported a false IP conflict and dropped the Pi's own LAN route. Fixed here with `ipv4.dad-timeout=0` (`/etc/NetworkManager/conf.d/99-no-dad.conf`), a router DHCP reservation for the Pi's Wi-Fi address and a watchdog (`/usr/local/bin/wifi-watchdog.sh` on a timer) that reconnects, and reboots after a few minutes without a local route. A network cable is still the best fix. After a reboot, check `journalctl -u NetworkManager -b | grep -i conflict` and `journalctl -t wifi-watchdog -b`.
 - **Slow to start a stream, or the log says "No direct stream address":** streamlink and yt-dlp run inside the app (`app/inproc.py`); yt-dlp must be imported before streamlink or streamlink's requests fail and everything takes the slow command path.
-- **Chat, multi-view or transition windows in the wrong place:** the window rules are not installed (see Setup) or the Pi was not reloaded after changing them.
+- **Chat, multistream or transition windows in the wrong place:** the window rules are not installed (see Setup) or the Pi was not reloaded after changing them.
 - **Black screen / no picture:** `docker logs --tail 50 tvremote`; the player output is also in `/data/player.log` inside the container. Check the Wayland socket exists: `ls /run/user/1000`.
 - **Dropped frames:** `hwdec` must be `v4l2m2m` and the display 1920x1080@60. The entrypoint sets this with `wlr-randr`; dmabuf-wayland doesn't scale, so stream resolution should match the display.
 - **hwdec empty or `no`:** a decoder node isn't passed through or GIDs are wrong. Use numeric GIDs in `.env`, make sure `/dev/video10-19` exist.

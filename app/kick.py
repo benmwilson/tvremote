@@ -211,4 +211,5 @@ def live_now(first=24):
         _token["value"] = None
         return []
     return [{"login": r["slug"], "name": r["slug"], "title": r.get("stream_title"), "game": (r.get("category") or {}).get("name"),
-             "viewers": r.get("viewer_count"), "avatar": r.get("profile_picture"), "thumb": r.get("thumbnail")} for r in rows if r.get("slug")]
+             "viewers": r.get("viewer_count"), "avatar": r.get("profile_picture"), "thumb": r.get("thumbnail"),
+             "lang": r.get("language"), "started": r.get("started_at")} for r in rows if r.get("slug")]

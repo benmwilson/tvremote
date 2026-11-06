@@ -185,14 +185,14 @@ class QuickSecondAddTest(unittest.TestCase):
 
 
 class HomeScreenPausedTest(unittest.TestCase):
-    """The home screen is a window behind the streams. If it is left running (the multi-view background has blurred glows) while a stream plays
+    """The home screen is a window behind the streams. If it is left running (the multistream background has blurred glows) while a stream plays
     full screen, the compositor has two windows to draw and the stream drops about 10 frames a minute. It must be paused after every in-place load."""
 
     def test_a_stream_loaded_in_place_tells_the_home_screen_to_pause_even_when_the_wall_has_just_ended(self):
         import app as server
         proc = mock.MagicMock()
         proc.poll.return_value = None
-        server.wall.clear()  # the multi-view just ended: nothing on the wall any more
+        server.wall.clear()  # the multistream just ended: nothing on the wall any more
         with mock.patch.object(server, "HOT", True), mock.patch.dict(server.state, {"proc": proc, "hot": True, "wid": server.wall.main_wid(), "url": "https://kick.com/a"}), \
                 mock.patch.object(server, "resolve", return_value=("Kick", "streamlink")), mock.patch.object(server, "stream_url", return_value="https://cdn/x.m3u8"), \
                 mock.patch.object(server.mpvipc, "send", return_value={"error": "success"}), mock.patch.object(server, "screen") as screen, \
