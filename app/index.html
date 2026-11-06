@@ -170,7 +170,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #wallgroups button .avgroup .av{width:26px;height:26px;font-size:11px;margin-left:-8px;box-shadow:0 0 0 2px var(--card2)}
 #wallgroups button .avgroup .av:first-child{margin-left:0}
 .gsug{border:1px dashed var(--line)}.gsug .gtag{font-size:12px;color:var(--dim);letter-spacing:.04em;text-transform:uppercase}
-.gmembers{font-size:13px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.gmembers{display:block;font-size:13px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 .iconlink{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .nowhead{display:flex;align-items:center;gap:8px}.nowhead .av{width:40px;height:40px}
 .fav .fhead{display:flex;align-items:center;gap:10px;padding-right:30px;margin-bottom:6px}
@@ -1155,6 +1155,7 @@ function drawGroups() {
     x.onclick = async e => { e.stopPropagation(); if (await confirmSheet('Delete ' + g.name + '?', 'The group goes away. The streams stay in your favourites.', 'Delete', true)) { await api('/api/groups', 'DELETE', {id: g.id}); loadGroups(); } };
     head.append(avatarGroup(g.members, true), el('b', null, g.name));
     b.append(head, el('span', 'gmembers', groupWho(g)), ...(live ? [el('span', 'badge live', live + ' LIVE')] : []), x);
+    if (live) b.querySelector('.badge').style.marginTop = '8px';
     b.onclick = () => playGroup(g);
     b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
     rows.push(b);
