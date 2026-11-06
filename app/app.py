@@ -592,6 +592,14 @@ def chat_strip_close():
         _chat["win"].close()
 
 
+def chat_close_all():
+    chat_stop()
+    for k in ("win", "bar"):
+        if _chat[k]:
+            _chat[k].close()
+    _chat["col"] = False
+
+
 def chat_stop():
     c, _chat["obj"] = _chat["obj"], None
     if c:
@@ -1443,6 +1451,8 @@ def api_cmd():
     ok = bool(r and r.get("error") == "success")
     if ok and action == "pause" and sel_info()[3] == SOCK:
         osd_paused(bool(prop("pause")))
+    if ok and action == "pause" and sel_info()[3] == SOCK and prop("pause") is False and prop("duration") is None:
+        mpvipc.send(sel_info()[3], ["seek", 100000, "relative"])  # a live stream resumes at the live edge, not where it was paused
     if ok and action in ("volume", "volume_delta") and sel_info()[3] == SOCK and prop("volume") is not None:
         settings["volume"] = prop("volume")
         if data.get("final") or time.time() - _vol_saved["t"] > 2:  # a drag sends many: write the file when it ends, or every few seconds
@@ -1468,6 +1478,7 @@ def wall_relayout(main_url=None):
             state["wid"] = None
             try:
                 if hot_load(url, wall.saved_quality):
+                    chat_sync()  # chat on: the strip beside the tiles goes, and the single-stream chat column takes its place
                     return
             except Exception as e:
                 app.logger.info("Not changed in place (%s): restarting full screen", e)
@@ -1701,6 +1712,7 @@ def api_wall():
 
 def stop_pi():
     wall.clear()  # every window ends with the stream
+    chat_close_all()  # the chat windows and the picture margin belong to the stream that just ended
     screen("idle")  # first: the home screen still shows its last screen (in the old site's colour) until it is redrawn
     with lock:  # waits for a start that is mid-way, then ends it
         stop_player()

@@ -163,8 +163,8 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .avgroup{display:inline-flex;align-items:center;flex:none;isolation:isolate}
 .avgroup .av{width:34px;height:34px;font-size:13px;margin-left:-11px;box-shadow:0 0 0 2px var(--card)}
 .avgroup .av:first-child{margin-left:0}
-.avgroup .avl{position:relative;display:inline-flex;flex:none;margin-left:-11px}.avgroup .avl:first-child{margin-left:0}.avgroup .avl .av{margin-left:0}.avgroup.lg .avl{margin-left:-12px}.avgroup.lg .avl:first-child{margin-left:0}
-.livedot{position:absolute;right:-1px;bottom:-1px;z-index:2;width:11px;height:11px;border-radius:50%;background:#e5334d;box-shadow:0 0 0 2px var(--card)}
+.av.livehost{position:relative;overflow:visible}.av.livehost img{border-radius:50%}
+.livedot{position:absolute;right:-2px;bottom:-2px;z-index:3;width:12px;height:12px;border-radius:50%;background:#e5334d;box-shadow:0 0 0 2px var(--card)}
 .avgroup.lg .av{width:36px;height:36px;font-size:14px;margin-left:-12px}  /* the list cards' own picture size */
 .avgroup.lg .av:first-child{margin-left:0}
 .quickstrip .wstream .avgroup .av{width:48px;height:48px;font-size:16px;margin-left:-18px}.quickstrip .wstream .avgroup .av:first-child{margin-left:0}  /* the same size as a solo streamer's picture, so names and badges line up across the tiles */
@@ -888,8 +888,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button class="sclose" data-close aria-label="Close" autofocus><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
     <div id="walltiles"></div>
-    <div id="wallgroupswrap" class="hide"><div class="wlabel">Groups</div><div id="wallgroups" class="wallfavs"></div></div>
-    <button id="wallsavegroup" class="hide" type="button" style="margin-top:10px"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg>Save these as a group</button>
+    <div id="wallgroupswrap" class="hide"><div class="wlabel" style="display:flex;align-items:center;justify-content:space-between">Groups<button id="wallsavegroup" class="hide" type="button" style="min-height:30px;padding:0 10px;font-size:12px;gap:5px"><svg class="ic" aria-hidden="true" style="width:14px;height:14px"><use href="#i-multi-grid"/></svg>Save these as a group</button></div><div id="wallgroups" class="wallfavs"></div></div>
         <div id="walladdbox">
       <div class="wlabel" id="walladdlabel">Add a stream</div>
       <form id="walladd" class="row"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
@@ -1134,7 +1133,8 @@ function avatarEl(name, url, cls) {
   const put = src => {
     if (!src) return;
     const i = document.createElement('img'); i.src = src; i.alt = '';
-    a.textContent = ''; a.appendChild(i);
+    const dot = a.querySelector('.livedot');
+    a.textContent = ''; a.appendChild(i); if (dot) a.appendChild(dot);  // (the dot of a live streamer stays)
   };
   if (slug) kickAvatar(slug).then(put); else if (tw) twitchAvatar(tw).then(put);
   return a;
@@ -1364,10 +1364,8 @@ function avatarGroup(members, big) {
   g.setAttribute('aria-hidden', 'true');
   members.slice(0, 4).forEach(m => {
     const a = avatarEl(m.name, m.url);
-    if (m.live !== true) return g.append(a);
-    const w = el('span', 'avl'), d = el('i', 'livedot');  // a streamer who is live right now gets a red dot
-    d.title = 'Live now';
-    w.append(a, d); g.append(w);
+    if (m.live === true) { const d = el('i', 'livedot'); d.title = 'Live now'; a.classList.add('livehost'); a.append(d); }  // a streamer who is live right now gets a red dot, on their own picture
+    g.append(a);
   });
   return g;
 }
@@ -1598,7 +1596,7 @@ async function search(q) {
 // The cards that ask "which one?" when a name is on both Kick and Twitch: its logo, whether they are live there, and how many watch.
 // Used by the multistream add box and by Play something. choose(match, button) does the adding or playing.
 function pickCards(name, matches, choose) {
-  const head = el('div', 'wlabel', name + ' is on both. Which one?');
+  const head = el('div', 'wlabel', matches.length > 1 ? name + ' is on both. Which one?' : name);
   head.style.cssText = 'grid-column:1/-1;margin:0';
   return [head, ...matches.map(m => {
     const site = m.source.toLowerCase(), b = el('button', 'pickc ' + site), pi = el('span', 'pi');
@@ -1614,6 +1612,7 @@ function pickCards(name, matches, choose) {
 }
 
 async function go() {
+  linkSeq++; clearTimeout(linkTimer);
   const t = $('link').value.trim();
   if (!t) return null;
   $('playpick').classList.add('hide'); $('results').innerHTML = '';
@@ -1648,6 +1647,18 @@ $('go').onclick = () => {
   });
 };
 $('link').onkeydown = e => { if (e.key === 'Enter') $('go').click(); };
+let linkTimer = 0, linkSeq = 0;
+$('link').addEventListener('input', () => {  // autofill: a channel name shows where it is and whether it is live; tap one to play it
+  clearTimeout(linkTimer); const n = ++linkSeq, v = $('link').value.trim();
+  if (!/^[\w-]{2,25}$/.test(v) || site === 'youtube') { $('playpick').classList.add('hide'); return; }
+  linkTimer = setTimeout(async () => {
+    const d = await fetch('/api/detect?name=' + encodeURIComponent(v)).then(x => x.json()).catch(() => null);
+    const ms = d && d.ok ? d.matches.filter(m => site === 'auto' || m.source.toLowerCase() === site) : [];
+    if (n !== linkSeq || !ms.length) { if (n === linkSeq) $('playpick').classList.add('hide'); return; }
+    $('playpick').replaceChildren(...pickCards(v, ms, async (m, b) => { await busy(b, () => play(m.url)); $('playpick').classList.add('hide'); }));
+    $('playpick').classList.remove('hide');
+  }, 450);
+});
 $('tvwake').onclick = async () => {
   const r = await busy($('tvwake'), () => api('/api/tv/wake', 'POST'), 7000);  // it takes a few seconds to wake and pick its input
   if (r && r.ok) followTv();
@@ -2994,7 +3005,6 @@ function openReplace(i, name) {
 $('replacecard').addEventListener('close', () => { if (wallReplace !== null) { wallReplace = null; wallSig = ''; renderWall(); } });
 function renderWallGroups(rows) {
   const all = [...groupList.map(g => ({...g, sug: false})), ...groupSug.map(g => ({...g, sug: true}))].filter(g => !ui().groups_live_only || groupLive(g) >= 1);  // only groups someone in is live now (an admin can turn that off)
-  $('wallgroupswrap').classList.toggle('hide', !all.length);
   $('wallgroups').replaceChildren(...all.slice(0, 8).map(g => {
     const b = el('button'); b.title = groupWho(g);
     b.append(avatarGroup(g.members), document.createTextNode((g.sug ? '\u2728 ' : '') + g.name));
@@ -3002,12 +3012,27 @@ function renderWallGroups(rows) {
     return b;
   }));
   const on = new Set(rows.map(r => (r.url || '').toLowerCase())), same = g => g.members.length === on.size && g.members.every(m => on.has(m.url.toLowerCase()));
-  $('wallsavegroup').classList.toggle('hide', rows.length < 2 || groupList.some(same));  // two or more on screen, and not saved already
+  const canSave = rows.length >= 2 && !groupList.some(same);  // two or more on screen, and not saved already
+  $('wallsavegroup').classList.toggle('hide', !canSave);
+  $('wallgroupswrap').classList.toggle('hide', !all.length && !canSave);  // the Groups row also carries the save button
 }
 $('wallsavegroup').onclick = () => busy($('wallsavegroup'), async () => { const r = await api('/api/groups', 'POST', {from_screen: true}); if (r && r.ok) await loadGroups(); return r; });
 function makeAdder(form, input, pick) {  // a name or a link in a box: look the name up, ask which site if it is on both, then add (or replace with) it
+  const add0 = async url => { const r = await wallPut(url); if (r && r.ok) input.value = ''; return r; };
+  let timer = 0, seq = 0;
+  input.addEventListener('input', () => {  // autofill: while a name is typed, show where that streamer is and whether they are live; tap one to add it
+    clearTimeout(timer); const n = ++seq, v = input.value.trim();
+    if (!/^[\w-]{2,25}$/.test(v)) { pick.classList.add('hide'); return; }
+    timer = setTimeout(async () => {
+      const d = await fetch('/api/detect?name=' + encodeURIComponent(v)).then(x => x.json()).catch(() => null);
+      if (n !== seq || !d || !d.ok || !d.matches.length) { if (n === seq) pick.classList.add('hide'); return; }
+      pick.replaceChildren(...pickCards(v, d.matches, async (m, b) => { await busy(b, () => add0(m.url)); pick.classList.add('hide'); }));
+      pick.classList.remove('hide');
+    }, 450);
+  });
   form.onsubmit = async e => {
     e.preventDefault();
+    seq++; clearTimeout(timer);
     const v = input.value.trim();
     if (!v) return;
     pick.classList.add('hide');
