@@ -21,3 +21,10 @@ Whichever is chosen, wire it into the quick toggles (Appearance) and keep it off
 
 ## Cleanup done after the spike
 Chromium process killed, `video-margin-ratio-right` back to 0, `~/.config/labwc/rc.xml` restored. Chromium is still installed inside the *running* container (a rebuild removes it); nothing in the repo or Dockerfile changed.
+
+## Update 2026-11-06: Twitch chat as a column (built)
+- Single Twitch stream, chat switched on: `video-margin-ratio-right 0.25` shifts the picture and `chat.ass_column` draws the chat in the strip (header, newest messages growing up from the bottom, wrapped to 30 characters). Set in `chat_send` (app.py); `chat_sync` resets the flag for a new player. Multi-view keeps the old short-lived lines over the picture (no room for a column).
+- Ben saw it on the TV: the shifted layout looked right, but every overlay redraw flashes on `vo=dmabuf-wayland` (the same reason the volume bar uses `show-text`). The column now redraws every 6 s (`COL_REDRAW_S`). Ben still has to say whether that flash is gone or tolerable.
+- `/api/screen.png` (grim) does not capture mpv's OSD on this video output, so overlay text can only be judged on the TV itself, not from screenshots.
+- **Kick chat cannot be read without a browser (checked 2026-11-06).** Kick left Pusher (its old key is refused on every cluster); its page now talks to `wss://websockets.kick.com/viewer/v1/connect`, which answers 403 outside a logged-in browser and looks like the viewer-tracking socket, not chat. Kick's site started answering 429 after a few bundle downloads. So Kick chat stays on the phone.
+- If the flashing stays: the likely proper fix is to stop drawing the column in the player and give the chat its own surface (the shell mpv behind the stream already draws text reliably; the stream window would have to be narrower than the screen instead of using a margin).
