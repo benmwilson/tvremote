@@ -7,6 +7,7 @@ import io
 import os
 import re
 import threading
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -38,7 +39,7 @@ def _font(path, size):
         return ImageFont.load_default(size)  # no DejaVu (a dev machine): Pillow's own
 
 
-HOSTS = ("static-cdn.jtvnw.net", "cdn.7tv.app", "cdn.betterttv.net", "cdn.frankerfacez.com")  # where emote pictures come from
+HOSTS = ("static-cdn.jtvnw.net", "cdn.7tv.app", "cdn.betterttv.net", "cdn.frankerfacez.com", "files.kick.com")  # where emote pictures come from
 MAX_PIXELS = 1_000_000  # an emote is tiny; a small file can still decode to a huge bitmap, so anything bigger is refused before it is decoded
 
 
@@ -90,7 +91,8 @@ class Pictures:
 
 
 def _tokens(text, native, words):
-    """The pieces of a message: ('w', word) / ('e', url, name). native: Twitch's own emotes as [{id, s, e}] (character positions in `text`);
+    """The pieces of a message: ('w', word) / ('e', url, name). native: the site's own emotes as [{id, s, e}] or [{u, s, e}] with a picture address
+    (character positions in `text`);
     words: {emote name: picture address} for the third-party sets."""
     out, at, chars = [], 0, list(text)
 
@@ -106,90 +108,122 @@ def _tokens(text, native, words):
         if e["s"] < at or e["e"] >= len(chars):
             continue
         plain("".join(chars[at:e["s"]]))
-        out.append(("e", f"https://static-cdn.jtvnw.net/emoticons/v2/{e['id']}/default/dark/2.0", "".join(chars[e["s"]:e["e"] + 1])))
+        out.append(("e", e.get("u") or f"https://static-cdn.jtvnw.net/emoticons/v2/{e['id']}/default/dark/2.0", "".join(chars[e["s"]:e["e"] + 1])))
         at = e["e"] + 1
     plain("".join(chars[at:]))
     return out
 
 
-def render(msgs, pics, width, height, words=None, fonts=None):
-    """Messages [(name, colour, text, native emotes)] as a transparent picture `width` x `height` with the newest at the bottom.
-    Returns (BGRA bytes with premultiplied alpha, width, height) ready for mpv's overlay-add, or None when there is nothing to draw."""
-    if not msgs:
-        return None
-    regular, bold = fonts or (_font(FONT, SIZE), _font(FONT_BOLD, SIZE))
-    words = words or {}
-    scratch = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    rows = []  # one list of drawable items per line: ('t', text, font, colour, width) or ('i', picture, width); None = a gap between messages
+_fonts = []
 
-    for name, colour, text, native in msgs:
-        name = _NOGLYPH.sub("", name) or "?"
-        rgb = tuple(int(colour[i:i + 2], 16) for i in (1, 3, 5)) + (255,) if re.fullmatch(r"#[0-9A-Fa-f]{6}", colour or "") else TEXT
+
+def _default_fonts():
+    if not _fonts:  # loaded once: the same font objects every time, which the cache of drawn messages relies on
+        _fonts.extend((_font(FONT, SIZE), _font(FONT_BOLD, SIZE)))
+    return tuple(_fonts)
+
+
+_cache = OrderedDict()  # one drawn message each: key -> (picture, how many lines). Only a message that has just arrived is drawn; the rest are reused.
+CACHE_KEEP = 60
+
+
+def _measure(font, text):
+    return font.getlength(text)
+
+
+def _draw_message(name, colour, text, native, pics, width, words, regular, bold):
+    """One message as a transparent picture `width` wide and a whole number of lines (LINE px each) tall, with its emotes in it."""
+    rgb = tuple(int(colour[i:i + 2], 16) for i in (1, 3, 5)) + (255,) if re.fullmatch(r"#[0-9A-Fa-f]{6}", colour or "") else TEXT
+    rows, line, x = [], [], 0  # a line is a list of ['t', text, font, colour, width] and ['i', picture, width]
+
+    def newline():
+        nonlocal line, x
+        rows.append(line)
         line, x = [], 0
 
-        def put(item, w):
-            nonlocal line, x
-            if x and x + w > width:
-                rows.append(line)
-                line, x = [], 0
-            line.append(item + (w,))
-            x += w
-        put(("t", name, bold, rgb), scratch.textlength(name, font=bold))
-        put(("t", ": ", regular, TEXT), scratch.textlength(": ", font=regular))
-        for tok in _tokens(text, native, words):
-            if tok[0] == "s":
-                if x:
-                    sp = scratch.textlength(" ", font=regular)
-                    if x + sp <= width:
-                        line.append(("t", " ", regular, TEXT, sp))
-                        x += sp
-                continue
-            pic = pics.get(tok[1]) if tok[0] == "e" else None
-            if tok[0] == "e" and pic is not None:
-                put(("i", pic), pic.width + 2)
-                continue
-            word = tok[2] if tok[0] == "e" else tok[1]  # a picture not here yet: its name for now
-            whole = scratch.textlength(word, font=regular)
-            if x and x + whole > width and whole <= width:  # a word that fits on a line of its own goes to the next one whole
-                rows.append(line)
-                line, x = [], 0
-            while word:  # (only a word wider than the strip is broken, letter by letter)
-                fit = len(word)
-                while fit > 1 and scratch.textlength(word[:fit], font=regular) > width - x:
-                    fit -= 1
-                w = scratch.textlength(word[:fit], font=regular)
-                line.append(("t", word[:fit], regular, TEXT, w))
-                x += w
-                word = word[fit:]
-                if word:
-                    rows.append(line)
-                    line, x = [], 0
-        rows.append(line)
-        rows.append(None)
-    if rows and rows[-1] is None:
-        rows.pop()
+    def add_text(piece, font, col):
+        nonlocal x
+        w = _measure(font, piece)
+        if line and line[-1][0] == "t" and line[-1][2] is font and line[-1][3] == col:  # one drawing call for a run of text in one style
+            line[-1][1] += piece
+            line[-1][4] += w
+        else:
+            line.append(["t", piece, font, col, w])
+        x += w
 
-    pitch = lambda r: GAP if r is None else LINE
-    total = sum(pitch(r) for r in rows)
-    keep, used = [], 0
-    for r in reversed(rows):  # the newest lines that fit, whole
-        if used + pitch(r) > height:
-            break
-        keep.append(r)
-        used += pitch(r)
-    keep.reverse()
-    im = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    add_text(name, bold, rgb)
+    add_text(": ", regular, TEXT)
+    for tok in _tokens(text, native, words):
+        if tok[0] == "s":
+            sp = _measure(regular, " ")
+            if x and x + sp <= width:
+                add_text(" ", regular, TEXT)
+            continue
+        pic = pics.get(tok[1]) if tok[0] == "e" else None
+        if pic is not None:
+            if x and x + pic.width + 2 > width:
+                newline()
+            line.append(["i", pic, pic.width + 2])
+            x += pic.width + 2
+            continue
+        word = tok[2] if tok[0] == "e" else tok[1]  # a picture not here yet: its name for now
+        whole = _measure(regular, word)
+        if x and x + whole > width and whole <= width:  # a word that fits on a line of its own goes to the next one whole
+            newline()
+        while word:  # (only a word wider than the strip is broken, letter by letter)
+            fit = len(word)
+            while fit > 1 and _measure(regular, word[:fit]) > width - x:
+                fit -= 1
+            add_text(word[:fit], regular, TEXT)
+            word = word[fit:]
+            if word:
+                newline()
+    rows.append(line)
+    im = Image.new("RGBA", (width, LINE * len(rows)), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    y = height - used
-    for r in keep:
-        if r is not None:
-            x = 0
-            for item in r:
-                if item[0] == "t":
-                    d.text((x, y + (LINE - SIZE) // 2 - 2), item[1], font=item[2], fill=item[3], stroke_width=2, stroke_fill=OUTLINE)
-                else:
-                    im.alpha_composite(item[1], (int(x), y + (LINE - item[1].height) // 2))
-                x += item[-1]
-        y += pitch(r)
-    r, g, b, a = im.convert("RGBa").split()
+    for n, r in enumerate(rows):
+        y, x = n * LINE, 0
+        for item in r:
+            if item[0] == "t":
+                d.text((x, y + (LINE - SIZE) // 2 - 2), item[1], font=item[2], fill=item[3])
+            else:
+                im.alpha_composite(item[1], (int(x), y + (LINE - item[1].height) // 2))
+            x += item[-1]
+    return im, len(rows)
+
+
+def render(msgs, pics, width, height, words=None, fonts=None):
+    """Messages [(name, colour, text, native emotes)] as a transparent picture `width` x `height` with the newest at the bottom.
+    Returns (BGRA bytes with premultiplied alpha, width, height) ready for mpv's overlay-add, or None when there is nothing to draw.
+    A message is drawn once and kept: a redraw only draws what has arrived since (the Pi spent most of a second drawing them all every time)."""
+    if not msgs:
+        return None
+    regular, bold = fonts or _default_fonts()
+    words = words or {}
+    pieces, used = [], 0  # newest first
+    for name, colour, text, native in reversed(msgs):
+        name = _NOGLYPH.sub("", name) or "?"
+        has_emote = bool(native) or any(w in words for w in text.split())
+        key = (name, colour, text, tuple(tuple(sorted(e.items())) for e in native or ()), width, pics.version if has_emote else 0, id(regular))
+        hit = _cache.get(key)
+        if hit is None:
+            hit = _cache[key] = _draw_message(name, colour, text, native, pics, width, words, regular, bold)
+            while len(_cache) > CACHE_KEEP:
+                _cache.popitem(last=False)
+        else:
+            _cache.move_to_end(key)
+        im, lines = hit
+        room = height - used - (GAP if pieces else 0)
+        if room < LINE:
+            break
+        keep = min(lines, room // LINE)  # a message that does not fit whole shows its last lines
+        pieces.append((im if keep == lines else im.crop((0, (lines - keep) * LINE, width, lines * LINE)), keep))
+        used += keep * LINE + (GAP if len(pieces) > 1 else 0)
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    y = height
+    for i, (im, keep) in enumerate(pieces):
+        y -= keep * LINE
+        canvas.alpha_composite(im, (0, y))
+        y -= GAP
+    r, g, b, a = canvas.convert("RGBa").split()
     return Image.merge("RGBA", (b, g, r, a)).tobytes(), width, height

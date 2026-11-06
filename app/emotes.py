@@ -92,6 +92,34 @@ def _set(provider, scope, tid):
     return emotes
 
 
+def _kick_channel_7tv(uid):
+    j = _get(f"https://7tv.io/v3/users/kick/{uid}")
+    return _7tv_list((j.get("emote_set") or {}).get("emotes"))
+
+
+def for_kick(uid):
+    """The 7TV emotes for a Kick streamer (by Kick user id): the channel's own set, then 7TV's global set. [] sets are left out."""
+    sets = []
+    if uid:
+        key = ("7tv", "kick-channel", str(uid))
+        now = time.time()
+        with _lock:
+            hit = _cache.get(key)
+        if hit and now - hit[0] < hit[1]:
+            em = hit[2]
+        else:
+            try:
+                em, ttl = _kick_channel_7tv(uid)[:MAX_PER_SET], TTL["channel"]
+            except Exception as e:
+                print("Emotes 7tv kick:", twitch.describe(e), flush=True)
+                em, ttl = [], TTL["failed"]
+            with _lock:
+                _cache[key] = (now, ttl, em)
+        sets.append({"provider": "7tv", "scope": "channel", "emotes": em})
+    sets.append({"provider": "7tv", "scope": "global", "emotes": _set("7tv", "global", None)})
+    return [s for s in sets if s["emotes"]]
+
+
 def for_channel(login):
     """[{"provider", "scope", "emotes": [{"n", "u", "a"}]}] for a Twitch channel: channel sets first, then the global ones.
     Providers that have nothing for it (or are down) are left out. Without Twitch credentials only the third-party global sets come back."""

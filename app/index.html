@@ -182,9 +182,9 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #gear[aria-pressed=true]{color:var(--fg);background:var(--line)}
 #logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .sub.warn{color:var(--warn,#ffb062)}
-#chatcard{margin-top:14px;padding:6px 8px 12px 16px}
+#chatcard{margin-top:12px;padding:6px 16px 12px 16px}
 #wallopencard,#browsecard{margin-top:12px;padding:8px 16px}#playsec{margin-top:6px}#chattabs{flex-wrap:wrap;margin:2px 8px 6px 0}
-#chatcard #chatbox{margin-right:8px}
+#chatcard #chatbox{margin-right:0}
 .chatpoplink{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:40px;margin:8px 8px 0 0;color:var(--dim);font-size:14px}.chatpoplink .ic{width:16px;height:16px}
 .chathead .chev{margin:0 8px}
 #chatcomp{margin:8px 8px 0 0}
@@ -194,6 +194,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 body.chatfull{overflow:hidden}
 #chatcard.full{position:fixed;left:0;right:0;top:var(--vvt,0);height:var(--vvh,100dvh);z-index:50;margin:0 auto;width:min(100%,640px);border-radius:0;display:flex;flex-direction:column;box-sizing:border-box;padding:calc(10px + env(safe-area-inset-top)) 12px calc(10px + env(safe-area-inset-bottom));background:var(--bg);animation:sheetup .22s ease-out}
 #chatcard.full #chatbox{flex:1 1 auto;height:auto;min-height:0;max-height:none;margin:8px 0 0;font-size:16px}
+#chatcard.full #chatbox iframe{flex:1 1 auto;height:auto;min-height:0}  /* Kick's own chat page fills the drawer too */
 #chatcard.full #chatcomp,#chatcard.full #chatlink,#chatcard.full #chatcount{margin-right:0}
 #chatcard.full #chatcomp{flex:none}
 #chatcard.full #emotepick{display:flex;flex-direction:column;height:min(46vh,360px);animation:sheetup .2s ease-out}
@@ -2773,7 +2774,7 @@ const langName = c => { try { return new Intl.DisplayNames(['en'], {type: 'langu
 function browseTiles(rows) {  // one tile per streamer: a name live on both sites is one tile with both buttons
   const by = new Map();
   rows.forEach(r => {
-    const k = r.login.toLowerCase();
+    const k = r.login.toLowerCase().replace(/-/g, '_');  // Kick writes an underscore in a name as a hyphen
     if (!by.has(k)) by.set(k, {name: r.name, avatar: r.avatar, title: r.title, game: r.game, lang: r.lang || '', started: 0, total: 0, plats: []});
     const t = by.get(k);
     t.total += r.viewers || 0; t.plats.push({source: r.source, url: r.url, viewers: r.viewers || 0});

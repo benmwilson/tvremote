@@ -75,6 +75,37 @@ class Render(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE, "Pillow is not installed here (it is in the container)")
+class Reuse(unittest.TestCase):
+    def test_a_redraw_only_draws_the_messages_that_arrived_since(self):
+        from unittest import mock
+        chatimg._cache.clear()
+        pics = chatimg.Pictures(download=lambda u: png((0, 0, 0, 255)))
+        msgs = [(f"U{i}", "", f"message number {i}", []) for i in range(10)]
+        real = chatimg._draw_message
+        with mock.patch.object(chatimg, "_draw_message", wraps=real) as m:
+            a = chatimg.render(msgs, pics, 424, 900)
+            self.assertEqual(m.call_count, 10)
+            b = chatimg.render(msgs, pics, 424, 900)
+            self.assertEqual(m.call_count, 10)  # nothing new: nothing drawn
+            c = chatimg.render(msgs + [("New", "", "hi", [])], pics, 424, 900)
+            self.assertEqual(m.call_count, 11)  # one new message: one drawn
+        self.assertEqual(a, b)
+        self.assertNotEqual(a, c)
+
+    def test_a_message_with_emotes_is_drawn_again_when_a_picture_arrives(self):
+        from unittest import mock
+        chatimg._cache.clear()
+        pics = chatimg.Pictures(download=lambda u: png((0, 255, 0, 255)))
+        msgs = [("Ann", "", "Kappa", [])]
+        with mock.patch.object(chatimg, "_draw_message", wraps=chatimg._draw_message) as m:
+            first = chatimg.render(msgs, pics, 424, 200, words={"Kappa": "https://cdn.7tv.app/k"})  # starts the download: the name is shown for now
+            settle(pics, "https://cdn.7tv.app/k")
+            second = chatimg.render(msgs, pics, 424, 200, words={"Kappa": "https://cdn.7tv.app/k"})
+        self.assertEqual(m.call_count, 2)
+        self.assertNotEqual(first, second)  # now the picture
+
+
+@unittest.skipUnless(HAVE, "Pillow is not installed here (it is in the container)")
 class Safety(unittest.TestCase):
     def test_a_huge_image_is_refused_before_it_is_decoded_and_other_hosts_are_not_fetched(self):
         pics = chatimg.Pictures(download=lambda url: png((0, 0, 0, 255), (3000, 3000)))  # a few KB as a file, 36 MB as a bitmap

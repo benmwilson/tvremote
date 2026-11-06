@@ -198,6 +198,24 @@ def check(slug):
             "uptime_s": up, "viewers": st.get("viewer_count")}
 
 
+def live_among(slugs):
+    """The ones of these channels (Kick slugs) that are live right now, in live_now's shape ([] on any failure). One request for up to 50."""
+    slugs = [s for s in dict.fromkeys(x.lower() for x in slugs if x)][:50]
+    if not enabled() or not slugs:
+        return []
+    try:
+        req = Request("https://api.kick.com/public/v1/channels?" + urlencode([("slug", s) for s in slugs]), headers={"Authorization": "Bearer " + _app_token()})
+        rows = json.loads(_open(req)).get("data") or []
+    except Exception as e:
+        print("Kick live lookup:", describe(e), flush=True)
+        _token["value"] = None
+        return []
+    return [{"login": r["slug"], "name": r["slug"], "title": r.get("stream_title"), "game": (r.get("category") or {}).get("name"),
+             "viewers": (r.get("stream") or {}).get("viewer_count"), "avatar": None, "lang": (r.get("stream") or {}).get("language"),
+             "started": (r.get("stream") or {}).get("start_time"), "thumb": (r.get("stream") or {}).get("thumbnail")}
+            for r in rows if r.get("slug") and (r.get("stream") or {}).get("is_live")]
+
+
 def live_now(first=24):
     """Who is live right now, biggest first, in the same shape as twitch.live_now. [] when it can't be fetched."""
     if not enabled():

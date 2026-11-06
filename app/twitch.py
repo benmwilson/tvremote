@@ -136,6 +136,24 @@ def live_now(first=24, game=None):
              "thumb": (r.get("thumbnail_url") or "").replace("{width}", "440").replace("{height}", "248")} for r in rows if r.get("type") == "live"]
 
 
+def live_among(logins):
+    """The ones of these channel names that are live right now, in live_now's shape ([] on any failure). One request for up to 100 names:
+    this is how the browse list finds out whether a streamer from the other site is live here too."""
+    logins = [l for l in dict.fromkeys(x.lower() for x in logins if x)][:100]
+    if not enabled() or not logins:
+        return []
+    try:
+        rows = _helix("streams", [("user_login", l) for l in logins]).get("data") or []
+    except Exception as e:
+        print("Twitch live lookup:", describe(e), flush=True)
+        _token["value"] = None
+        return []
+    pics = users([r["user_login"] for r in rows])
+    return [{"login": r["user_login"], "name": r.get("user_name") or r["user_login"], "title": r.get("title"), "game": r.get("game_name"),
+             "viewers": r.get("viewer_count"), "avatar": (pics.get(r["user_login"]) or {}).get("avatar"), "lang": r.get("language"), "started": r.get("started_at"),
+             "thumb": (r.get("thumbnail_url") or "").replace("{width}", "440").replace("{height}", "248")} for r in rows if r.get("type") == "live"]
+
+
 # ---- linking an account (so chat messages go out as that person) ----
 
 def _path(user):

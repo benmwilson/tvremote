@@ -196,8 +196,8 @@ class TwitchChat:
         self.channel, self.send, self.column = channel, send, column
         self.msgs = deque(maxlen=COL_LINES if column else MAX_LINES)  # (arrival time, (name, colour, text, Twitch's own emotes))
         self.stopped = threading.Event()
-        # Emotes in the column: drawn as a picture over the window (chatimg) when Pillow is there. Twitch only (Kick's come as names).
-        self.pics = chatimg.Pictures() if column and self.SOURCE == "Twitch" and chatimg.available() else None
+        # Emotes in the column: drawn as a picture over the window (chatimg) when Pillow is there.
+        self.pics = chatimg.Pictures() if column and chatimg.available() else None
         self.words = {}  # third-party emote name -> picture address, filled in the background
         if self.pics:
             threading.Thread(target=self._load_emotes, daemon=True).start()
@@ -256,13 +256,31 @@ def _kick_get(path):
         return json.load(r)
 
 
+KICK_EMOTE = re.compile(r"\[emote:(\d+):([^\]]+)\]")
+
+
+def kick_text(content):
+    """Kick's message text with each [emote:id:name] written as its name, and where those names are: (text, [{u: picture address, s, e}])."""
+    out, emotes, at = [], [], 0
+    pos = 0
+    for m in KICK_EMOTE.finditer(content or ""):
+        out.append(content[at:m.start()])
+        pos += m.start() - at
+        emotes.append({"u": f"https://files.kick.com/emotes/{m.group(1)}/fullsize", "s": pos, "e": pos + len(m.group(2)) - 1})
+        out.append(m.group(2))
+        pos += len(m.group(2))
+        at = m.end()
+    out.append((content or "")[at:])
+    return "".join(out), emotes
+
+
 def kick_parse(m):
-    """(name, colour, text) from one of Kick's message objects, emotes as their names; None for anything but a plain message."""
+    """(name, colour, text, emotes) from one of Kick's message objects, emotes as their names (and where they are); None for anything but a plain message."""
     if m.get("type") != "message":
         return None
     who = m.get("sender") or {}
-    text = re.sub(r"\[emote:\d+:([^\]]+)\]", r"\1", m.get("content") or "")
-    return ((who.get("username") or "?"), ((who.get("identity") or {}).get("color") or ""), text) if text.strip() else None
+    text, emotes = kick_text(m.get("content"))
+    return ((who.get("username") or "?"), ((who.get("identity") or {}).get("color") or ""), text, emotes) if text.strip() else None
 
 
 class KickChat(TwitchChat):
@@ -273,6 +291,15 @@ class KickChat(TwitchChat):
     def __init__(self, channel, send, column=False, get=_kick_get):
         self._get = get
         super().__init__(channel, send, column)
+
+    def _load_emotes(self):  # Kick's own come with each message; the channel's 7TV set and 7TV's global one are looked up by the streamer's id
+        try:
+            import emotes
+            j = self._get(self.channel)
+            uid = j.get("user_id") or (j.get("user") or {}).get("id")
+            self.words = {e["n"]: e["u"] for s in emotes.for_kick(uid) for e in reversed(s["emotes"])}  # (reversed, so the first of a name wins)
+        except Exception:
+            pass
 
     def _read(self):
         seen, room = set(), None

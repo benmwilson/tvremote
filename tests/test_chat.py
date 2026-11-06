@@ -166,9 +166,24 @@ class KickFeedTests(unittest.TestCase):
         k._get, k.channel, k.stopped, k.msgs = get, "omie", threading.Event(), __import__("collections").deque()
         k.stopped.wait = lambda t=None: k.stopped.set()  # one pass, then stop
         k._read()
-        self.assertEqual([m for _, m in k.msgs], [("Al", "#FF0000", "first"), ("Bo", "#00FF00", "KEKW second")])
+        self.assertEqual([m for _, m in k.msgs], [("Al", "#FF0000", "first", []), ("Bo", "#00FF00", "KEKW second", [{"u": "https://files.kick.com/emotes/1/fullsize", "s": 0, "e": 3}])])
         self.assertEqual(calls[0], "omie")
         self.assertTrue(calls[1].startswith("89448/messages?_="))
+
+
+class KickEmotes(unittest.TestCase):
+    def test_emote_tags_become_names_with_their_positions(self):
+        text, em = chat.kick_text("hi [emote:6206062:zetarkPop] and [emote:1:A]!")
+        self.assertEqual(text, "hi zetarkPop and A!")
+        self.assertEqual([(e["s"], e["e"], text[e["s"]:e["e"] + 1]) for e in em], [(3, 11, "zetarkPop"), (17, 17, "A")])
+        self.assertEqual(em[0]["u"], "https://files.kick.com/emotes/6206062/fullsize")
+
+    def test_kick_parse_returns_the_positions_too_and_skips_empty_or_other_messages(self):
+        m = {"type": "message", "content": "gg [emote:5:Pog]", "sender": {"username": "Bo", "identity": {"color": "#ff0000"}}}
+        self.assertEqual(chat.kick_parse(m)[:3], ("Bo", "#ff0000", "gg Pog"))
+        self.assertEqual(chat.kick_parse(m)[3][0]["s"], 3)
+        self.assertIsNone(chat.kick_parse({"type": "reply", "content": "x"}))
+        self.assertIsNone(chat.kick_parse({"type": "message", "content": "  "}))
 
 
 class History(unittest.TestCase):

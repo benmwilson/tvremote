@@ -3319,6 +3319,9 @@ def twitch_avatars():
     return jsonify({n: u["avatar"] for n, u in twitch.users(names).items() if u.get("avatar")})
 
 
+_browse_cache = {}  # (site, n) -> (when, answer)
+
+
 @app.get("/api/browse")
 def api_browse():
     """Who is live now on Kick and Twitch (?site=kick|twitch, ?n=), each with the picture, title, game and viewers, ready to play or add to a multistream."""
@@ -3327,12 +3330,21 @@ def api_browse():
         n = max(1, min(int(request.args.get("n", 24)), 50))
     except ValueError:
         n = 24
-    out = []
-    for name, fn, base in (("Kick", kick.live_now, "https://kick.com/"), ("Twitch", twitch.live_now, "https://www.twitch.tv/")):
-        if site and site.lower() != name.lower():
-            continue
-        out += [{**r, "source": name, "url": base + r["login"]} for r in fn(n)]
-    return jsonify(streams=out, kick=kick.enabled(), twitch=twitch.enabled())
+    key = (site.lower(), n)
+    hit = _browse_cache.get(key)
+    if hit and time.time() - hit[0] < 45:
+        return jsonify(hit[1])  # (the page also keeps it for 30 s: opening and closing the sheet costs no requests)
+    rows = {"Kick": kick.live_now(n) if site.lower() in ("", "kick") else [], "Twitch": twitch.live_now(n) if site.lower() in ("", "twitch") else []}
+    if not site:  # both sites: a streamer in one list may be live on the other too without being in its top list: look them up, so "live on both" is real
+        norm = lambda s: s.lower().replace("-", "_")  # Kick turns an underscore in a name into a hyphen
+        have = {name: {norm(r["login"]) for r in rs} for name, rs in rows.items()}
+        rows["Twitch"] += twitch.live_among([norm(r["login"]) for r in rows["Kick"] if norm(r["login"]) not in have["Twitch"]])
+        rows["Kick"] += kick.live_among([r["login"].lower().replace("_", "-") for r in rows["Twitch"] if norm(r["login"]) not in have["Kick"]])
+    base = {"Kick": "https://kick.com/", "Twitch": "https://www.twitch.tv/"}
+    out = [{**r, "source": name, "url": base[name] + r["login"]} for name in ("Kick", "Twitch") for r in rows[name]]
+    body = {"streams": out, "kick": kick.enabled(), "twitch": twitch.enabled()}
+    _browse_cache[key] = (time.time(), body)
+    return jsonify(body)
 
 
 @app.post("/api/kick/chat")
