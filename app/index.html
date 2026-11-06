@@ -188,6 +188,18 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .chatpoplink{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:40px;margin:8px 8px 0 0;color:var(--dim);font-size:14px}.chatpoplink .ic{width:16px;height:16px}
 .chathead .chev{margin:0 8px}
 #chatcomp{margin:8px 8px 0 0}
+.cin{position:relative;flex:1;min-width:0}.cin input{display:block;width:100%;box-sizing:border-box;font-size:16px;min-height:52px;padding:0 52px 0 16px}
+.cin .emobtn{position:absolute;right:4px;top:4px;width:44px;min-height:44px;height:44px;padding:0;background:none;color:var(--dim);border-radius:12px}
+.cin .emobtn .ic{width:24px;height:24px}.cin .emobtn[aria-pressed=true]{color:var(--tv,#62b0ff)}
+body.chatfull{overflow:hidden}
+#chatcard.full{position:fixed;left:0;right:0;top:var(--vvt,0);height:var(--vvh,100dvh);z-index:50;margin:0 auto;width:min(100%,640px);border-radius:0;display:flex;flex-direction:column;box-sizing:border-box;padding:calc(10px + env(safe-area-inset-top)) 12px calc(10px + env(safe-area-inset-bottom));background:var(--bg);animation:sheetup .22s ease-out}
+#chatcard.full #chatbox{flex:1 1 auto;height:auto;min-height:0;max-height:none;margin:8px 0 0;font-size:16px}
+#chatcard.full #chatcomp,#chatcard.full #chatlink,#chatcard.full #chatcount{margin-right:0}
+#chatcard.full #chatcomp{flex:none}
+#chatcard.full .chatbtn[aria-expanded=true] .chev{transform:none}
+#chatcard.full #emotepick{display:flex;flex-direction:column;height:min(46vh,360px);animation:sheetup .2s ease-out}
+#chatcard.full #emotegrid{flex:1;max-height:none}
+#chatcard.full #chattabs{margin-right:0}
 #emotesuggest{display:flex;gap:6px;overflow-x:auto;padding:0 0 6px;scrollbar-width:none}#emotesuggest::-webkit-scrollbar{display:none}
 #emotesuggest button{min-height:40px;padding:0 10px;flex:none;font-size:14px;gap:6px}#emotesuggest img{height:26px;max-width:64px;object-fit:contain}
 #emotepick{background:var(--bg);border-radius:14px;padding:8px;margin:0 0 8px}
@@ -508,6 +520,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
 <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M5 7.5l4.5 4.5L5 16.5M12 17h7"/></symbol>
 <symbol id="i-hdmi" viewBox="0 0 24 24"><path d="M4.5 8h15v5.5l-3 3.2h-9l-3-3.2z"/></symbol>
+<symbol id="i-emote" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.2c.9 1.5 2.1 2.3 3.5 2.3s2.6-.8 3.5-2.3"/><path d="M9 9.6v.6M15 9.6v.6"/></symbol>
 <symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12.5" rx="2"/><path d="M8.5 20.5h7M12 17v3.5"/></symbol>
 <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
@@ -815,7 +828,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <div class="wseg" id="emotetabs" role="group" aria-label="Emote source"><button type="button" data-p="all" aria-pressed="true">All</button><button type="button" data-p="twitch" aria-pressed="false">Twitch</button><button type="button" data-p="7tv" aria-pressed="false">7TV</button><button type="button" data-p="bttv" aria-pressed="false">BTTV</button><button type="button" data-p="ffz" aria-pressed="false">FFZ</button></div>
       <div id="emotegrid"></div>
     </div>
-    <form id="kicksend" class="row hide" style="margin:0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Emotes" title="Emotes" aria-pressed="false" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" id="chatsendbtn" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
+    <form id="kicksend" class="row hide" style="margin:0"><div class="cin"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" placeholder="Send a message"><button id="kickfull" type="button" class="emobtn" aria-label="Emotes" title="Emotes" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-emote"/></svg></button></div><button class="go" id="chatsendbtn" style="flex:0 0 auto;padding:0 20px;min-height:52px">Chat</button></form>
     <p id="chatcount" class="sub hide"></p>
   </div>
   <button id="chatlink" type="button" class="hide" style="margin:8px 8px 0 0;width:calc(100% - 8px)">Link Twitch to chat as yourself</button>
@@ -2443,7 +2456,7 @@ async function loadRecents() {
 // Twitch: the Pi reads the chat and the phone asks it for new messages. Kick: its own popout chat page is embedded (the Pi
 // can't read Kick: kick.com refuses non-browser clients).
 let chatOpen = false, chatLast = 0, chatTimer = null, chatKey = '';
-try { chatOpen = localStorage.getItem('chatOpen') === '1'; } catch (e) {}
+// (the chat is a full-screen drawer now: it opens when asked, not by itself because it was open last time)
 
 // parts: [{t: 'text'} | {img: url, alt: 'name'}]
 function chatRow(name, color, parts) {
@@ -2478,6 +2491,13 @@ function withEmotes(text) {  // a word that is an emote's name becomes its pictu
 }
 const emoteRecent = () => { try { return JSON.parse(localStorage.getItem('emoteRecent') || '[]'); } catch (e) { return []; } };
 function pushRecent(m) { try { localStorage.setItem('emoteRecent', JSON.stringify([m, ...emoteRecent().filter(x => x.n !== m.n)].slice(0, 24))); } catch (e) {} }
+function fitChat() {
+  const v = window.visualViewport, c = $('chatcard');
+  if (!v) return;
+  c.style.setProperty('--vvh', v.height + 'px'); c.style.setProperty('--vvt', v.offsetTop + 'px');
+}
+if (window.visualViewport) { visualViewport.addEventListener('resize', fitChat); visualViewport.addEventListener('scroll', fitChat); fitChat(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && chatOpen && !tourOpen()) { chatOpen = false; chatShow(); } });
 let pickOpen = false, pickTab = 'all';
 function emoteBtn(m) {
   const b = el('button'), i = document.createElement('img');
@@ -2615,6 +2635,7 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   if (!tabs.some(t => t.i === chatTab)) chatTab = tabs.length ? tabs[0].i : 0;
   const cur = tabs.find(t => t.i === chatTab) || {}, kick = cur.kick || null, tw = cur.tw || '';
   $('chatcard').classList.toggle('hide', !on);
+  $('chatcard').classList.toggle('full', want); document.body.classList.toggle('chatfull', want);
   const bar = $('chattabs'), sig = tabs.map(t => t.i + ':' + (t.kick || t.tw)).join('|') + '@' + chatTab;
   bar.classList.toggle('hide', tabs.length < 2);
   if (bar.dataset.sig !== sig) {
@@ -2656,7 +2677,7 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   if (kick) kickEmbed(kick);
   else { chatPoll(); chatTimer = setInterval(chatPoll, 2000); }
 }
-$('chatTog').onclick = $('chatChev').onclick = () => { chatOpen = !chatOpen; try { localStorage.setItem('chatOpen', chatOpen ? '1' : '0'); } catch (e) {} chatShow(); };
+$('chatTog').onclick = $('chatChev').onclick = () => { chatOpen = !chatOpen; chatShow(); };
 
 // ---- Browse live channels: who is live on Kick and Twitch, tap to play or add to the multistream ----
 let browseSite = '', browseData = null, browseAt = 0, browseGame = '', browseLang = '', browseBoth = false, browseSort = 'viewers';
