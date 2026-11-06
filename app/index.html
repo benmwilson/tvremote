@@ -2355,7 +2355,7 @@ function renderBrowse() {
     const b = el('div', 'btile'), av = el('span', 'av', initials(t.name));
     av.style.background = 'hsl(' + hueOf(t.name) + ' 45% 32%)';
     if (t.avatar) { const i = document.createElement('img'); i.src = t.avatar; i.alt = ''; i.loading = 'lazy'; i.referrerPolicy = 'no-referrer'; av.textContent = ''; av.appendChild(i); }
-    b.append(av, el('b', null, t.name), el('span', 'sub', [t.game, fmtViewers(t.total) + ' watching'].filter(Boolean).join(' \u00b7 ')));
+    b.append(av, el('b', null, t.name), el('span', 'badge live', 'LIVE'), el('span', 'sub', [t.game, fmtViewers(t.total) + ' watching'].filter(Boolean).join(' \u00b7 ')));
     const acts = el('div', 'bacts');
     t.plats.forEach(pl => {
       const row = el('div', 'bact'), go = el('button', 'bp ' + pl.source, '\u25B6 ' + pl.source);
