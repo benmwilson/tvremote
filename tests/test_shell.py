@@ -147,7 +147,7 @@ class Idle(unittest.TestCase):
         s.start()
         cmd = popen.call_args[0][0]
         self.assertIn("--loop-file=inf", cmd)
-        self.assertTrue(cmd[-1].startswith("av://lavfi:color="))
+        self.assertTrue(cmd[-1].startswith("av://lavfi:color=") or cmd[-1].startswith("av://lavfi:movie="))  # a looped picture or colour at 2 fps
 
     def test_each_screen_loads_a_new_subtitle_and_drops_the_old_one(self):
         s, popen, sent = make_shell([FakeProc()])

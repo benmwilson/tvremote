@@ -132,7 +132,7 @@ class WallScreenTest(unittest.TestCase):
     def test_background_has_a_name_strip_per_stream_and_no_big_logo(self):
         import shell
         ev = shell.wall_screen("grid", [("alpha", "Kick", False), ("beta", "Twitch", False), ("gamma", "Other", False)])
-        self.assertEqual(len(ev), 2 + 3 * 3)  # two glows, and for each stream a panel, its words and its name
+        self.assertEqual(len(ev), 3 * 3)  # for each stream a panel, its words and its name (the glows are in the background picture)
         self.assertTrue(all(f"{n}" in "".join(ev) for n in ("alpha", "beta", "gamma")))
         self.assertNotIn("fscx260", shell.ass_file([(0, 1, "x")], logo=False))  # no big logo behind the windows
         self.assertIn("fscx260", shell.ass_file([(0, 1, "x")]))
@@ -532,7 +532,7 @@ class OfflineTest(unittest.TestCase):
     def test_the_background_marks_an_ended_streams_slot(self):
         import shell
         ev = shell.wall_screen("grid", [("a", "Kick", False), ("b", "Kick", True)])
-        self.assertEqual(len(ev), 2 + 2 * 3)
+        self.assertEqual(len(ev), 2 * 3)  # no glows of its own now: the background picture has them
         self.assertIn("Loading", "".join(ev))  # the one that is still starting says so
         self.assertIn("Went offline", "".join(ev))
 

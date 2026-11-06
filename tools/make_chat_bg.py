@@ -1,4 +1,4 @@
-"""Write app/assets/chat-bg-strip.png and chat-bg-bar.png: the background behind the stream while chat is on the TV (two soft colour glows over the
+"""Write app/assets/bg-full.png (the home screen's background), chat-bg-strip.png and chat-bg-bar.png: the background behind the stream while chat is on the TV (two soft colour glows over the
 whole 1920x1080 screen, cut into the chat window's piece and the now-playing bar's piece, so the two join up). Baked into pictures because drawing
 the glows as subtitle graphics re-rendered them every frame (about 15% of a core per window on the Pi). Needs Pillow; run on the PC after changing the look."""
 import os
@@ -24,6 +24,7 @@ if __name__ == "__main__":
     out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "assets")
     os.makedirs(out, exist_ok=True)
     full = render()
+    full.save(os.path.join(out, "bg-full.png"), optimize=True)  # the home screen window plays this one, so everything shares the same pixels
     full.crop((1440, 0, 1920, 1080)).save(os.path.join(out, "chat-bg-strip.png"), optimize=True)
     full.crop((0, 810, 1440, 1080)).save(os.path.join(out, "chat-bg-bar.png"), optimize=True)
     print("written to", out)

@@ -83,6 +83,17 @@ def qr_pieces(url):
     return [card, dots, cap]
 
 
+BG_IMAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "bg-full.png")
+
+
+def _source():
+    """The window's video: the shared background picture, looped at 2 frames a second (the 2 fps clock times the subtitles), or a plain colour
+    if the picture is missing. The chat strip and the bar under the picture are cut from the same picture, so the two join with no seam."""
+    if os.path.exists(BG_IMAGE):
+        return f"movie=filename={BG_IMAGE}:loop=0,fps=2,format=yuv420p"
+    return f"color=c=0x{BG}:s={W}x{H}:r=2"
+
+
 ASS_FILES = ("/tmp/tvremote-shell-a.ass", "/tmp/tvremote-shell-b.ass")  # alternate, so a new one loads before the old goes
 IDLE_SPAN = 300  # seconds of clock written ahead; the file is renewed a little before it runs out
 FOREVER = 3 * 86400  # a still screen stays up for days of video time
@@ -151,7 +162,7 @@ def wall_screen(layout, labels):
     labels: [(name, source, ended)] in tile order; an ended stream's slot says so. Returns one ASS event text per piece."""
     def glow(x, y, w, h, colour, alpha):  # a big rectangle, blurred into a soft light
         return r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&\1a&H%s&\blur140}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x, y, colour, alpha, w, w, h, h)
-    out = [glow(-200, -260, 1100, 760, "9A5A2E", "50"), glow(1000, 640, 1100, 760, "8A2E6A", "58")]
+    out = []  # the glows are in the background picture (tools/make_chat_bg.py), so the chat strip matches them exactly
     for (x, y, w, h), (name, source, ended) in zip(multi.tiles(layout, len(labels)), labels):
         # a panel under every window: where a stream is still starting (or has ended) it shows through and says which one. A playing
         # window covers it completely.
@@ -218,7 +229,7 @@ class Shell:
                 "--loop-file=inf", "--pause=no", "--no-audio", "--no-terminal", "--osc=no", "--osd-level=1",
                 "--cursor-autohide=always", "--input-default-bindings=no", "--input-vo-keyboard=no",
                 "--wayland-app-id=tvremote-shell", "--title=TV Remote", f"--input-ipc-server={SOCK}",
-                f"--background-color=#{BG}", f"av://lavfi:color=c=0x{BG}:s={W}x{H}:r=2"]
+                f"--background-color=#{BG}", f"av://lavfi:{_source()}"]
 
     def start(self):
         """Open the window with the first output that works. Returns whether it is running."""
