@@ -91,6 +91,9 @@ def rules_xml():
             for i, (x, y, w, h) in enumerate(tiles(layout, n)):
                 rules.append(f'    <windowRule identifier={quoteattr(window_id(layout, n, i))}><serverDecoration>no</serverDecoration>'
                              f'<action name="MoveTo" x="{x}" y="{y}"/><action name="ResizeTo" width="{w}" height="{h}"/></windowRule>')
+    # the chat window (app/chatwin.py): the right quarter of the screen, above the stream's full-screen window
+    rules.append('    <windowRule identifier="tvr-chat"><serverDecoration>no</serverDecoration><action name="MoveTo" x="1440" y="0"/>'
+                 '<action name="ResizeTo" width="480" height="1080"/><action name="ToggleAlwaysOnTop"/></windowRule>')
     return '<?xml version="1.0"?>\n<labwc_config>\n  <windowRules>\n' + "\n".join(rules) + "\n  </windowRules>\n</labwc_config>\n"
 
 

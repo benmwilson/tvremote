@@ -359,6 +359,7 @@ input[type=range].ruler{--n:10;background-image:repeating-linear-gradient(to rig
 #tvmute.muted .ic{color:#ff8a8a}
 #tvpower.isoff,#tvpower.isoff .ic{color:var(--dim);font-weight:700}#tvpower.isoff .ic{background:none}
 .wseg{display:inline-flex;gap:6px}.wseg button{min-height:44px;min-width:44px;padding:0 14px;font-size:15px}.wseg button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
+#chattabs button[aria-pressed=true][data-site=kick]{background:#53fc18}#chattabs button[aria-pressed=true][data-site=twitch]{background:#a970ff}
 /* a sheet: a popup that slides up from the bottom (a native <dialog>, so focus, Esc and the backdrop come for free) */
 dialog.sheet{position:fixed;inset:auto 0 0 0;margin:0 auto;width:min(100%,560px);max-width:none;max-height:90vh;max-height:90dvh;border:0;border-radius:22px 22px 0 0;background:var(--card);color:var(--fg,#f6f1ee);padding:0;overflow:hidden}
 dialog.sheet[open]{display:flex;flex-direction:column;animation:sheetup .22s ease-out}
@@ -2030,6 +2031,7 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
     bar.dataset.sig = sig;
     bar.replaceChildren(...tabs.map(t => {
       const b = el('button', null, t.kick || t.tw);
+      b.dataset.site = t.kick ? 'kick' : 'twitch';  // the selected tab takes the site's own colour
       b.setAttribute('role', 'tab'); b.setAttribute('aria-pressed', String(t.i === chatTab));
       b.onclick = () => { chatTab = t.i; chatShow(); };
       return b;

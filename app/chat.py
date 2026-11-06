@@ -118,27 +118,47 @@ def ass(msgs):
     return "{\\an1\\fs34\\bord3\\shad0\\q2}" + "\\N".join(rows)
 
 
-COL_REDRAW_S = 6
-COL_X, COL_CHARS, COL_LINES = 1456, 30, 24  # the strip the picture makes room for (it shrinks to 1440 wide), and how much text fits in it
+COL_REDRAW_S = 4      # the chat window is its own surface, so a redraw never touches the stream
+COL_W, COL_H = 480, 1080  # the strip the picture makes room for (the picture is 1440 wide), drawn as a window of its own
+COL_CHARS, COL_LINES = 24, 30
 
 
-def ass_column(channel, msgs):
-    """The chat as a column beside the picture: a header, then the newest messages growing up from the bottom, wrapped to fit."""
+def _plain(s):
+    """Drop emoji and symbols the screen's font draws as empty boxes."""
+    return re.sub("[\U00010000-\U0010ffff\u200d\ufe0f\u2600-\u27bf]", "", s)
+
+
+SITE_BGR = {"Kick": "18FC53", "Twitch": "FF70A9"}  # the sites' colours, as ASS wants them (BGR)
+
+
+def background(accent):
+    """The window's look, the same as the screen behind several streams: two soft colour glows, a header rule."""
+    def glow(x, y, w, h, colour, alpha):
+        return r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&\1a&H%s&\blur90}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x, y, colour, alpha, w, w, h, h)
+    rule = r"{\an7\pos(28,100)\p1\bord0\shad0\1c&H%s&\1a&H60&}m 0 0 l 424 0 424 2 0 2{\p0}" % accent
+    return [glow(-120, -200, 720, 640, "9A5A2E", "50"), glow(-120, 680, 720, 640, "8A2E6A", "58"), rule]
+
+
+def ass_column(channel, msgs, source="Twitch"):
+    """The chat as ASS for the 480x1080 chat window: background, a header, then the newest messages growing up from the bottom, wrapped to fit."""
+    accent = SITE_BGR.get(source, "FFB062")
     lines = []
     for name, colour, text in msgs:
         rgb = colour[1:] if re.fullmatch(r"#[0-9A-Fa-f]{6}", colour) else "FFFFFF"
         bgr = rgb[4:6] + rgb[2:4] + rgb[0:2]
         who = _esc(name)
-        wrapped = textwrap.wrap(who + ": " + _esc(text), COL_CHARS, break_long_words=True) or [who]
+        wrapped = textwrap.wrap(who + ": " + _plain(_esc(text)), COL_CHARS, break_long_words=True) or [who]
         if wrapped[0].startswith(who + ": "):
             wrapped[0] = "{\\c&H" + bgr + "&\\b1}" + who + "{\\r}: " + wrapped[0][len(who) + 2:]
         lines += wrapped
-    head = "{\\an7\\pos(%d,24)\\fs26\\b1\\bord0\\shad0\\1c&HA9978C&}CHAT " % COL_X + _esc(channel).upper()
-    body = "{\\an1\\pos(%d,1056)\\fs30\\bord3\\shad0\\q2}" % COL_X + "\\N".join(lines[-COL_LINES:])
-    return head + "\n" + body
+        lines.append("{\\fs10} ")  # a little air between messages
+    head = "{\\an7\\pos(28,44)\\fs28\\b1\\bord0\\shad0\\1c&H" + accent + "&}\u25cf  {\\1c&HA9978C&\\fsp3}CHAT  {\\1c&HF6F1EE&\\fsp0}" + _esc(channel).upper()
+    body = "{\\an1\\pos(28,1050)\\fs26\\bord2\\shad0\\q2}" + "\\N".join(lines[-COL_LINES:])
+    return "\n".join([*background(accent), head, body])
 
 
 class TwitchChat:
+    SOURCE = "Twitch"
     """send(ass_text or None) draws or clears the overlay and returns True when mpv accepted it.
     column=True: a chat column that stays up (the player has made room for it), else short-lived lines over the picture."""
 
@@ -164,9 +184,58 @@ class TwitchChat:
         while not self.stopped.wait(COL_REDRAW_S if self.column else 1):  # every redraw of the overlay flashes on this video output, so the column redraws rarely
             now = time.time()
             live = [m for t, m in list(self.msgs) if self.column or now - t < SHOW_S]
-            text = ass_column(self.channel, live) if self.column else ass(live) if live else None
+            text = ass_column(self.channel, live, self.SOURCE) if self.column else ass(live) if live else None
             if text != last and self.send(text):  # only remember it once mpv accepted it
                 last = text
+
+
+KICK_API = "https://kick.com/api/v2/channels/"
+KICK_POLL_S = 5
+
+
+def _kick_get(path):
+    """JSON from Kick's own site API, the way a browser asks (Kick refuses plain scripts; keep it gentle: one small request every few seconds)."""
+    import json
+    import urllib.request
+    req = urllib.request.Request(KICK_API + path, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.load(r)
+
+
+def kick_parse(m):
+    """(name, colour, text) from one of Kick's message objects, emotes as their names; None for anything but a plain message."""
+    if m.get("type") != "message":
+        return None
+    who = m.get("sender") or {}
+    text = re.sub(r"\[emote:\d+:([^\]]+)\]", r"\1", m.get("content") or "")
+    return ((who.get("username") or "?"), ((who.get("identity") or {}).get("color") or ""), text) if text.strip() else None
+
+
+class KickChat(TwitchChat):
+    """Kick's chat for the TV column, from its recent-messages endpoint every few seconds (Kick's own websocket is closed to scripts).
+    shortcut: unofficial, can change or block without notice; the phone's chat view still works either way."""
+    SOURCE = "Kick"
+
+    def __init__(self, channel, send, column=False, get=_kick_get):
+        self._get = get
+        super().__init__(channel, send, column)
+
+    def _read(self):
+        seen, room = set(), None
+        while not self.stopped.is_set():
+            try:
+                if room is None:
+                    room = self._get(self.channel)["id"]
+                msgs = (self._get(f"{room}/messages").get("data") or {}).get("messages") or []
+                for m in sorted(msgs, key=lambda x: x.get("created_at", "")):  # oldest first, so the newest ends up at the bottom
+                    if m.get("id") not in seen:
+                        seen.add(m.get("id"))
+                        if (p := kick_parse(m)):
+                            self.msgs.append((time.time(), p))
+                seen &= {m.get("id") for m in msgs}  # only what Kick still sends, so the set can't grow for hours
+            except Exception:
+                room = None
+            self.stopped.wait(KICK_POLL_S)
 
 
 if __name__ == "__main__":

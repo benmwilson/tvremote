@@ -41,6 +41,7 @@ import access
 import accounts
 import activity
 import chat
+import chatwin
 import discover
 import sessions
 import store
@@ -467,17 +468,31 @@ def stop_player():
     chat_stop()
 
 
-_chat = {"obj": None, "pref": False, "col": False}  # off by default: redrawing the overlay drops about 2 frames/s on the Pi
+_chat = {"obj": None, "pref": False, "col": False, "win": None}  # off by default
 
 
 def chat_send(text):
-    """Draw (or clear) the chat overlay in mpv; True when mpv accepted it."""
+    """Draw (or clear) the short-lived chat lines over the picture (used when several streams share the screen); True when mpv accepted it."""
     r = mpv(["osd-overlay", 1, "ass-events", text, 1920, 1080] if text else ["osd-overlay", 1, "none", ""])
-    ok = bool(r and r.get("error") == "success")
-    if ok and bool(text) != _chat["col"]:  # the column: the picture moves over to make room while the chat is up, and back after
-        mpv(["set_property", "video-margin-ratio-right", 0.25 if text else 0])
-        _chat["col"] = bool(text)
-    return ok
+    return bool(r and r.get("error") == "success")
+
+
+def chat_column_send(text):
+    """The chat column: the stream moves over (a quarter of the screen is freed) and the chat shows in a window of its own in that space.
+    text None: close the window and give the screen back to the stream. True when it was done."""
+    win = _chat["win"] = _chat["win"] or chatwin.ChatWindow()
+    if text is None:
+        win.close()
+        if _chat["col"]:
+            mpv(["set_property", "video-margin-ratio-right", 0])
+        _chat["col"] = False
+        return True
+    if not _chat["col"]:
+        r = mpv(["set_property", "video-margin-ratio-right", 0.25])
+        if not (r and r.get("error") == "success"):
+            return False  # the stream's player is not up yet: the chat tries again in a moment
+        _chat["col"] = True
+    return (win.running() or win.open()) and win.update(text)
 
 
 def chat_stop():
@@ -487,12 +502,13 @@ def chat_stop():
 
 
 def chat_sync():
-    """Match the overlay to what is playing: a live Twitch channel with chat switched on."""
+    """Match the chat to what is playing: a live Twitch or Kick channel with chat switched on."""
     chat_stop()
-    _chat["col"] = False  # a new player starts with no margin
-    ch = chat.channel_of(state["url"] or "") if state["source"] == "Twitch" and state["proc"] else None
+    ch = chat.channel_of(state["url"] or "") if state["source"] in ("Twitch", "Kick") and state["proc"] else None
     if ch and _chat["pref"]:
-        _chat["obj"] = chat.TwitchChat(ch, chat_send, column=not wall.active())  # a column only for one stream; multi-view has no room
+        col = not wall.active()  # a column only for one stream; with several there is no room
+        cls = chat.KickChat if state["source"] == "Kick" else chat.TwitchChat
+        _chat["obj"] = cls(ch, chat_column_send if col else chat_send, column=col)
 
 
 def _watch(proc):
@@ -1701,7 +1717,7 @@ def pi_status():
             data["title"] = display_title(url)
         data["stalls"], data["stall_s"] = state.get("stalls", 0), round(state.get("stall_s", 0))
         data["game"], data["live_for"] = facts.get("game"), livewatch.live_for(url or "")
-        data["chat_ok"] = source == "Twitch" and bool(chat.channel_of(url or ""))
+        data["chat_ok"] = source in ("Twitch", "Kick") and bool(chat.channel_of(url or ""))
         data["chat"] = bool(_chat["obj"])
         if wall.active():  # the mute button is the controlled stream's sound switch
             data["muted"] = wall.selected not in wall.sound

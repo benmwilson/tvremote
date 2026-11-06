@@ -136,11 +136,33 @@ if __name__ == "__main__":
 class ColumnTests(unittest.TestCase):
     def test_column_wraps_and_keeps_the_newest(self):
         msgs = [("Foo", "#FF8000", "word " * 30)] + [("Bar", "", "n%d" % i) for i in range(40)]
-        out = chat.ass_column("xqc", msgs)
-        head, body = out.split("\n")
-        self.assertIn("CHAT XQC", head)
+        out = chat.ass_column("xqc", msgs, "Kick")
+        *rest, head, body = out.split("\n")
+        self.assertIn("XQC", head)
+        self.assertIn("18FC53", head)  # Kick green
         self.assertLessEqual(body.count("\\N") + 1, chat.COL_LINES)
         self.assertIn("n39", body)
         self.assertNotIn("Foo", body)  # scrolled off the top
         one = chat.ass_column("xqc", [("Foo", "#FF8000", "hi {\\b1}")])
         self.assertIn("{\\c&H0080FF&\\b1}Foo{\\r}: hi b1", one)
+
+
+class KickFeedTests(unittest.TestCase):
+    def test_messages_are_read_once_oldest_first_with_emotes_as_names(self):
+        import threading
+        calls = []
+
+        def get(path):
+            calls.append(path)
+            if path == "omie":
+                return {"id": 89448}
+            return {"data": {"messages": [
+                {"id": "b", "type": "message", "created_at": "2026-11-06T04:00:02Z", "content": "[emote:1:KEKW] second", "sender": {"username": "Bo", "identity": {"color": "#00FF00"}}},
+                {"id": "a", "type": "message", "created_at": "2026-11-06T04:00:01Z", "content": "first", "sender": {"username": "Al", "identity": {"color": "#FF0000"}}},
+                {"id": "c", "type": "reply", "created_at": "2026-11-06T04:00:03Z", "content": "skip", "sender": {}}]}}
+        k = chat.KickChat.__new__(chat.KickChat)
+        k._get, k.channel, k.stopped, k.msgs = get, "omie", threading.Event(), __import__("collections").deque()
+        k.stopped.wait = lambda t=None: k.stopped.set()  # one pass, then stop
+        k._read()
+        self.assertEqual([m for _, m in k.msgs], [("Al", "#FF0000", "first"), ("Bo", "#00FF00", "KEKW second")])
+        self.assertEqual(calls, ["omie", "89448/messages"])
