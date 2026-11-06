@@ -676,6 +676,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div id="title" class="ttl">Nothing playing</div>
   <div id="game" class="sub hide"></div>
   <div id="meta"></div>
+  <p id="heatnote" class="sub warn hide" role="status" style="margin:8px 2px"></p>
   <div id="quick" class="quick hide"><div class="wlabel" id="quickhead">Live now: tap one to play</div><div id="quicklist" class="quickstrip"></div></div>
   <button id="pp" class="pp" data-a="pause" aria-label="Pause or resume"></button>
   <button id="extpp" class="pp hide" data-k="Play" aria-label="Pause or resume the TV's own app"></button>
@@ -981,6 +982,8 @@ function render() {
   accent();
   const ext = !run && !st.starting && !st.error ? st.external : null;  // the TV is playing something by itself (its own YouTube app, say)
   $('src').textContent = run || st.starting ? (st.source || 'Other') : ext ? 'On the TV' : 'Idle';
+  const hot = st.heat; $('heatnote').classList.toggle('hide', !hot);  // the Pi is hot: say so, and what it is doing about it
+  if (hot) $('heatnote').textContent = 'The Pi is running hot (' + Math.round(hot.temp) + ' °C). ' + (hot.lowered ? 'Picture quality was lowered to cool it down.' : hot.level === 'hot' ? 'Lowering the picture quality.' : 'Frames may drop if it gets hotter.');
   $('src').className = 'badge ' + (run || st.starting ? (st.source || '') : '');
   $('live').classList.toggle('hide', !(run && st.live));
   const swapping = !run && !!st.starting && !!st.wall;  // a window of the multi-view is restarting (a swap, a new layout): the others keep playing

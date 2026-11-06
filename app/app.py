@@ -1848,6 +1848,9 @@ def pi_status():
     data = {"running": running, "url": url, "quality": state["quality"] if sock == SOCK else None, "source": source,
             "streamlink": player == "streamlink",
             "wall": wall_status()}  # also while the main window restarts, or the multi-view would vanish for those seconds
+    t = pihealth.temperature()
+    if pihealth.level(t) in ("warm", "hot"):  # the phone says so: a hot Pi drops frames and, when very hot, has its pictures lowered
+        data["heat"] = {"temp": t, "level": pihealth.level(t), "lowered": heat["on"]}
     if running:
         for key, name in PROPS.items():
             data[key] = P(name)
