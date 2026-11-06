@@ -336,6 +336,7 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appeara
 .hrow .hv{text-align:right;font-variant-numeric:tabular-nums}.hrow .hv .sub{display:block;margin:2px 0 0}.hrow .pill.ok{background:rgba(123,226,154,.15);color:#7be29a}.hrow .pill.warm{background:rgba(255,176,98,.18);color:#ffb062}.hrow .pill.hot{background:rgba(255,107,107,.18);color:#ff6b6b}
 .scat+.shead{margin-top:0}
 html[data-can-desktop="0"] #layoutbtn{display:none}
+body.is-guest #fav{display:none!important}body.is-guest #recents .x{display:none!important}
 /* ===== desktop layout: wide, panels side by side, mouse and keyboard ===== */
 html[data-layout=desktop] body{max-width:1320px;padding-left:32px;padding-right:32px}
 html[data-layout=desktop] header{margin-bottom:22px}
@@ -1889,14 +1890,14 @@ function confirmSheet(title, text, yes, danger) {
 const TOUR = [
   {t: 'Pick a TV', x: 'The first screen has a card for each TV and what it is playing. Tap one to open its remote. Controls only act on the TV you opened.', view: 'all', sel: '#cards .tvcard'},
   {t: 'Play something', x: 'Paste a link, type a channel name or search here. A bare name looks on Kick; the buttons below switch to Twitch or YouTube. From your phone you can also use Share: the \u201cPlay on Pi\u201d Shortcut on an iPhone, or the TV Remote app in the Share list on Android.', view: 'tv', sel: '#link'},
-  {t: 'Favourites', x: 'Tap the star on a stream to keep it here. The LIVE badge shows who is on now, and greyed ones are offline.', view: 'tv', sel: '#favs', when: 'Nothing is saved yet: tap the star on a stream to add one.'},
+  {t: 'Favourites', x: 'Tap the star on a stream to keep it here. The LIVE badge shows who is on now, and greyed ones are offline.', view: 'tv', sel: '#favs', noGuest: true, when: 'Nothing is saved yet: tap the star on a stream to add one.'},
   {t: 'Recents', x: 'What you watched lately. Offline channels are greyed out.', view: 'tv', sel: '#recents', when: 'It fills up as you play things.'},
   {t: 'TV controls', x: 'Volume, mute, power and the TV\u2019s HDMI inputs, for the TV you opened.', view: 'tv', sel: '#tvctl'},
   {t: 'TV apps', x: 'Open the TV\u2019s own apps (YouTube, Netflix and so on) from here.', view: 'tv', sel: '#appsopen', when: 'Only TVs with a Roku have apps.'},
   {t: 'Browse live channels', x: 'See who is live on Kick and Twitch. Search, filter and sort, then play one or add it to the multistream.', view: 'tv', sel: '#browsecard'},
   {t: 'Multistream', x: 'Watch up to four streams at once on the Pi\u2019s screen. Open it, add streams, and use Enlarge to make one big.', view: 'tv', sel: '#wallopencard', needsPlay: true, when: 'Only on the Pi\u2019s screen.'},
   {t: 'Chat', x: 'Read the chat of the Twitch or Kick channel that is playing. Link your account in Settings to type in Twitch chat, or show the chat on the TV.', view: 'tv', sel: '#chatcard', needsPlay: true, when: 'It appears while a Twitch or Kick channel plays.'},
-  {t: 'Link your accounts', x: 'Link Kick or Twitch here to chat as yourself.', view: 'settings', sel: '#platforms', when: 'Guests can\u2019t link accounts.'},
+  {t: 'Link your accounts', x: 'Link Kick or Twitch here to chat as yourself.', view: 'settings', sel: '#platforms', noGuest: true, when: 'Guests can\u2019t link accounts.'},
   {t: 'Help and Home Screen', x: 'More answers live here. To use this like an app, add it to your Home Screen (Safari: Share, Add to Home Screen. Chrome on Android: menu, Install app).', view: 'settings', sel: '#help'},
   {t: 'That\u2019s it', x: 'Tap Take the tour any time to see this again.', view: 'settings', sel: '#tourgo'}];
 let tourI = 0, tourHome = '', tourEl = null, tourSeq = 0, tourSteps = TOUR;
@@ -1932,7 +1933,7 @@ function tourEnd() {
 }
 $('tourgo').onclick = () => {
   tourHome = location.hash; tourI = 0;
-  tourSteps = tourTv() ? TOUR : TOUR.filter(s => s.view !== 'tv');  // no TV set up: skip the steps that need one
+  tourSteps = (tourTv() ? TOUR : TOUR.filter(s => s.view !== 'tv')).filter(s => !(s.noGuest && me && me.guest));  // no TV set up: skip the steps that need one; a guest skips what guests can't use
   $('tourbox').classList.remove('hide'); document.body.classList.add('touring');
   tourShow();
 };
@@ -2274,6 +2275,8 @@ function renderProfile() {
   $('signout').classList.toggle('hide', !me.required);
   $('pwcard').classList.toggle('hide', !me.required || me.user === 'owner' || me.guest);
   $('platforms').classList.toggle('hide', !!me.guest);
+  $('onboardgo').classList.toggle('hide', !me.admin);
+  document.body.classList.toggle('is-guest', !!me.guest);  // hides what a guest can't use (favourites, groups)
   document.querySelectorAll('#help .adm').forEach(e => e.classList.toggle('hide', !me.admin));
   $('adminarea').classList.toggle('hide', !me.admin);
   $('dbgrow').classList.toggle('hide', !me.admin);
@@ -2498,6 +2501,7 @@ function renderSetup() {
 }
 async function openSetup() {
   setupInfo = await fetch('/api/setup').then(r => r.json()).catch(() => ({}));
+  if (setupInfo.done === undefined && !setupInfo.needs_code && !setupInfo.needed) { location.hash = '#/'; return; }  // not an admin (the Pi answers them with nothing): the wizard is not for them
   setupStep = setupStart || (setupInfo.has_admin && !setupInfo.needs_owner ? 2 : 1); setupStart = 0;
   renderSetup();
 }
@@ -2714,7 +2718,7 @@ async function loadTvsAdmin() {
 }
 fetch('/api/setup').then(r => r.json()).then(j => { setupNeeded = !!j.needed; if (setupNeeded && view() !== 'setup') location.hash = '#/setup'; }).catch(() => {});
 
-fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); if (j.ui) { uiCfg = j.ui; quickSig = ''; loadRecents(); renderQuick(); } }).catch(() => {});
+fetch("/api/auth").then(r => r.json()).then(j => { me = j; document.body.classList.toggle("is-guest", !!j.guest); if (j.required) $("logout").classList.remove("hide"); if (j.ui) { uiCfg = j.ui; quickSig = ''; loadRecents(); renderQuick(); } }).catch(() => {});
 
 // ---- seek bar, quality shortcuts, sleep timer ----
 let seekDrag = false;

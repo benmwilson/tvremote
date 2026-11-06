@@ -115,3 +115,24 @@ class Security(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShellStateByRole(unittest.TestCase):
+    """The TV screen's settings (shortcut links, which guest code is showing) are for admins; everyone else gets the bare state."""
+
+    def test_a_non_admin_gets_only_the_bare_screen_state(self):
+        import app as server
+        full = {"enabled": True, "running": True, "qr": True, "error": None, "shortcut_url": "shortcuts://x", "install_url": "https://i", "qr_guest_id": "abcd1234", "vo": "v"}
+        with mock.patch.object(server, "shell_state", return_value=full), mock.patch.object(server.accounts, "role", return_value="user"):
+            with server.app.test_request_context("/api/shell"):
+                server.g.user = "someone"
+                body = server.api_shell().get_json()
+        self.assertEqual(set(body), {"enabled", "running", "qr", "error"})
+
+    def test_an_admin_gets_everything(self):
+        import app as server
+        full = {"enabled": True, "running": True, "qr": True, "shortcut_url": "shortcuts://x"}
+        with mock.patch.object(server, "shell_state", return_value=full), mock.patch.object(server.accounts, "role", return_value="admin"):
+            with server.app.test_request_context("/api/shell"):
+                server.g.user = "someone"
+                self.assertEqual(server.api_shell().get_json(), full)

@@ -2474,7 +2474,10 @@ def api_shell_screenshot():
 
 @app.get("/api/shell")
 def api_shell():
-    return jsonify(shell_state())
+    s = shell_state()
+    if accounts.role(g.user) != "admin":  # the TV screen's settings (shortcut links, which guest code is up) are the admins' business
+        return jsonify({k: s[k] for k in ("enabled", "running", "qr", "error") if k in s})
+    return jsonify(s)
 
 
 @app.post("/api/shell")
