@@ -644,6 +644,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
     </div>
     <h3 class="shead">TVs</h3>
     <div id="tvsadmin" class="s-list"></div>
+    <button id="autosetup" class="s-wide go" style="margin:0 0 8px">Set up automatically</button>
+    <p id="autonote" class="sub s-note" role="status"></p>
     <button id="rerun" class="s-wide" style="margin:0">Change or move a TV</button>
     <p class="sub s-note">Moved the Pi to another TV, or added a Chromecast or Roku? Plug it in, turn that TV on, then tap this. It looks again, shows what it found (including which HDMI port the Pi is on) and lets you rename, re-pair and test each TV.</p>
   </div>
@@ -1978,6 +1980,24 @@ $('sufinish').onclick = async () => {
   if (r && r.ok) { setupNeeded = false; location.hash = '#/'; }
 };
 $('rerun').onclick = () => { location.hash = '#/setup'; };
+// One tap after plugging into a new TV: look for TVs and save what was found, but only when every guess is clear. When it is not sure
+// (a screen with no TV to match, a Chromecast no TV claims, nothing found) it opens the wizard with what it found, instead of saving a guess.
+$('autosetup').onclick = () => busy($('autosetup'), async () => {
+  const note = $('autonote'); note.textContent = 'Looking for TVs\u2026 (a few seconds)';
+  const j = await fetch('/api/discover').then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!j || j.ok === false) { note.textContent = 'Couldn\u2019t scan just now. Try again.'; return; }
+  const tvs = j.tvs || [], hasPi = tvs.some(t => t.pi), hasCc = tvs.some(t => t.chromecast), unsure = [];
+  if (!tvs.length) unsure.push('no TVs were found');
+  if (j.display && !hasPi) unsure.push('the Pi\u2019s screen did not match a TV');
+  if ((j.chromecasts || []).length && !hasCc) unsure.push('a Chromecast did not match a TV');
+  if (tvs.some(t => !t.roku && !t.pi && !t.chromecast)) unsure.push('a TV has nothing plugged into it');
+  if (unsure.length) { note.textContent = 'I wasn\u2019t sure (' + unsure.join('; ') + '). Opening the setup screen so you can check.'; setTimeout(() => { location.hash = '#/setup'; }, 1600); return; }
+  const body = {tvs: tvs.map(t => ({id: t.id, name: t.name, roku: t.roku, pi: t.pi, chromecast: t.chromecast}))};
+  const r = await fetch('/api/tvs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).then(x => x.json()).catch(() => null);
+  if (!r || r.ok === false) { note.textContent = (r && r.error) || 'Couldn\u2019t save. Try the setup screen.'; return; }
+  tvsAdmin = r.tvs; loadTargets(); loadTvsAdmin();
+  note.textContent = 'Saved ' + r.tvs.length + (r.tvs.length === 1 ? ' TV' : ' TVs') + ': ' + r.tvs.map(t => t.name + (t.pi ? ' (Pi on ' + hdmiText(t.pi.input) + ')' : '') + (t.chromecast ? ' (Chromecast)' : '')).join(', ') + '.';
+});
 // ---- Settings > TVs: a card per TV to rename it, correct its Roku address or HDMI inputs, or remove it, without running the wizard ----
 let tvsAdmin = [];
 async function loadTvsAdmin() {
