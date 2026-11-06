@@ -643,6 +643,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <p class="sub">"Watch on phone" shows the TV's stream on the phone, at home only. A bigger picture uses more of the home Wi-Fi.</p>
     </div>
     <h3 class="shead">TVs</h3>
+    <div id="tvsadmin" class="s-list"></div>
     <button id="rerun" class="s-wide" style="margin:0">Change or move a TV</button>
     <p class="sub s-note">Moved the Pi to another TV, or added a Chromecast or Roku? Plug it in, turn that TV on, then tap this. It looks again, shows what it found (including which HDMI port the Pi is on) and lets you rename, re-pair and test each TV.</p>
   </div>
@@ -1977,6 +1978,39 @@ $('sufinish').onclick = async () => {
   if (r && r.ok) { setupNeeded = false; location.hash = '#/'; }
 };
 $('rerun').onclick = () => { location.hash = '#/setup'; };
+// ---- Settings > TVs: a card per TV to rename it, correct its Roku address or HDMI inputs, or remove it, without running the wizard ----
+let tvsAdmin = [];
+async function loadTvsAdmin() {
+  const box = $('tvsadmin');
+  try { if (me.guest || !(me.owner || me.role === 'admin')) { box.replaceChildren(); return; } } catch (e) {}
+  const r = await fetch('/api/tvs').then(x => x.ok ? x.json() : null).catch(() => null);
+  if (!r || !r.tvs) return;
+  tvsAdmin = r.tvs;
+  box.replaceChildren(...tvsAdmin.map(t => {
+    const name = mk('input', {type: 'text', value: t.name, maxlength: 24, 'aria-label': 'Name of this TV', style: 'font-size:16px'});
+    const ip = mk('input', {type: 'text', value: t.roku || '', inputmode: 'decimal', placeholder: '192.168.1.20', 'aria-label': 'Roku address', style: 'font-size:16px'});
+    const piIn = t.pi ? opts(mk('select', {}), HDMI, t.pi.input || '') : null;
+    const ccIn = t.chromecast ? opts(mk('select', {}), HDMI, t.chromecast.input || '') : null;
+    const msg = mk('p', {class: 'sub', style: 'margin:0;min-height:18px'});
+    const save = mk('button', {class: 'go'}, 'Save');
+    const del = mk('button', {class: 'danger'}, 'Remove');
+    save.onclick = () => busy(save, async () => {
+      const list = tvsAdmin.map(x => x.id !== t.id ? x : {...x, name: name.value.trim() || x.name, roku: ip.value.trim(),
+        pi: x.pi ? {...x.pi, input: piIn.value} : x.pi, chromecast: x.chromecast ? {...x.chromecast, input: ccIn.value} : x.chromecast});
+      const res = await fetch('/api/tvs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tvs: list})}).then(x => x.json()).catch(() => null);
+      if (!res || res.ok === false) { msg.textContent = (res && res.error) || 'Couldn\u2019t save.'; msg.style.color = 'var(--bad)'; return; }
+      tvsAdmin = res.tvs; msg.textContent = 'Saved'; msg.style.color = ''; loadTargets();
+    });
+    del.onclick = async () => {
+      if (!(await confirmSheet('Remove ' + t.name + '?', 'It leaves the list of TVs. The TV itself is not touched, and it can be added again from Change or move a TV.', 'Remove', true))) return;
+      const res = await fetch('/api/tvs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tvs: tvsAdmin.filter(x => x.id !== t.id)})}).then(x => x.json()).catch(() => null);
+      if (res && res.ok !== false) { tvsAdmin = res.tvs; loadTargets(); loadTvsAdmin(); } else msg.textContent = (res && res.error) || 'Couldn\u2019t remove it.';
+    };
+    return mk('div', {class: 'card s-form'}, mk('b', {}, t.name),
+      field('Name', name), field('Roku address', ip), ...(piIn ? [field('HDMI input the Pi is on', piIn)] : []),
+      ...(ccIn ? [field('HDMI input the Chromecast is on', ccIn)] : []), mk('div', {class: 's-out'}, save, del), msg);
+  }));
+}
 fetch('/api/setup').then(r => r.json()).then(j => { setupNeeded = !!j.needed; if (setupNeeded && view() !== 'setup') location.hash = '#/setup'; }).catch(() => {});
 
 fetch("/api/auth").then(r => r.json()).then(j => { if (j.required) $("logout").classList.remove("hide"); }).catch(() => {});
@@ -2611,7 +2645,7 @@ function show() {
   ['all', 'share', 'tv', 'settings', 'setup'].forEach(n => $('view-' + n).classList.toggle('hide', n !== v));
   $('back').classList.toggle('hide', v !== 'tv' && v !== 'settings');
   if (v === 'setup') openSetup();
-  if (v === 'settings') { applyAppearance(); paintQp(); loadAccounts(); loadShell(); fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {}); }
+  if (v === 'settings') { applyAppearance(); paintQp(); loadAccounts(); loadShell(); loadTvsAdmin(); fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {}); }
   renderCards(); tvInfo();
   if (v === 'all') loadShell();
   if (v === 'share') renderPicker();
