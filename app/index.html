@@ -731,8 +731,9 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <div class="card">
   <input type="text" id="link" placeholder="Paste a link, a channel name or a search" autocapitalize="off" autocorrect="off" enterkeyhint="go" aria-label="Link, channel or search">
   <div class="row seg" id="site">
-    <button data-s="kick" class="on">Kick</button><button data-s="twitch">Twitch</button><button data-s="youtube">YouTube</button>
+    <button data-s="auto" class="on">Auto</button><button data-s="kick">Kick</button><button data-s="twitch">Twitch</button><button data-s="youtube">YouTube</button>
   </div>
+  <div id="playpick" class="pickrow hide"></div>
   <div class="row"><button id="go" class="go">Play</button></div>
 </div>
 <div id="results" style="margin-top:10px"></div>
@@ -771,7 +772,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 
 <script>
 const $ = id => document.getElementById(id);
-let lastRun = null, site = 'kick', st = {}, dragging = false, qualFor = null, qualAt = 0, qualTries = 0, favList = [], targets = [];
+let lastRun = null, site = 'auto', st = {}, dragging = false, qualFor = null, qualAt = 0, qualTries = 0, favList = [], targets = [];
 let target = '';  // the TV shown in the One TV view; set by the router
 const TV_COLOURS = ['#62b0ff', '#ff8aa8', '#5ad6b0', '#b3a2ff'];
 // While something plays, the remote takes the site's colour (Kick green, Twitch purple, YouTube red); otherwise the TV's own colour.
@@ -1161,8 +1162,8 @@ function checkFavLoading() {
 
 async function play(text) {
   err();
-  const r = await api('/api/play', 'POST', {url: text, site});
-  if (r && r.ok) { $('link').value = ''; $('results').innerHTML = ''; setTimeout(poll, 1500); setTimeout(loadRecents, 2500); }
+  const r = await api('/api/play', 'POST', {url: text, site: site === 'auto' ? 'kick' : site});
+  if (r && r.ok) { $('link').value = ''; $('results').innerHTML = ''; $('playpick').classList.add('hide'); setTimeout(poll, 1500); setTimeout(loadRecents, 2500); }
   return r;
 }
 
@@ -1184,10 +1185,40 @@ async function search(q) {
   return {ok: true, noWait: true};  // results are showing: nothing is starting yet
 }
 
+// The cards that ask "which one?" when a name is on both Kick and Twitch: its logo, whether they are live there, and how many watch.
+// Used by the multi-view add box and by Play something. choose(match, button) does the adding or playing.
+function pickCards(name, matches, choose) {
+  const head = el('div', 'wlabel', name + ' is on both. Which one?');
+  head.style.cssText = 'grid-column:1/-1;margin:0';
+  return [head, ...matches.map(m => {
+    const site = m.source.toLowerCase(), b = el('button', 'pickc ' + site), pi = el('span', 'pi');
+    pi.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-' + site + '"/></svg>';
+    const sub = el('span', 'sub');
+    if (m.live) { sub.append(el('span', 'on', 'LIVE')); if (m.viewers) sub.append(document.createTextNode(' \u00b7 ' + Number(m.viewers).toLocaleString() + ' watching')); }
+    else sub.textContent = 'Offline';
+    b.append(pi, el('b', null, m.source), sub);
+    b.setAttribute('aria-label', 'Use ' + name + ' from ' + m.source + (m.live ? ', live' : ', offline'));
+    b.onclick = () => choose(m, b);
+    return b;
+  })];
+}
+
 async function go() {
   const t = $('link').value.trim();
   if (!t) return null;
-  if (site === 'youtube' && !/https?:\/\//.test(t)) return search(t);
+  $('playpick').classList.add('hide'); $('results').innerHTML = '';
+  const isLink = /https?:\/\//.test(t);
+  if (site === 'youtube' && !isLink) return search(t);
+  if (site === 'auto' && !isLink) {
+    if (!/^[\w-]{2,25}$/.test(t)) return search(t);  // words, not a channel name: look on YouTube
+    const d = await fetch('/api/detect?name=' + encodeURIComponent(t)).then(x => x.json()).catch(() => null);  // which sites is this name on?
+    if (!d || !d.ok) { err('Couldn\u2019t look that up. Try again, or paste a link.'); return {ok: false}; }
+    if (!d.matches.length) return search(t);  // not a channel on Kick or Twitch: try YouTube
+    if (d.pick) return play(d.pick);
+    $('playpick').replaceChildren(...pickCards(t, d.matches, (m, b) => busy(b, () => play(m.url))));
+    $('playpick').classList.remove('hide');
+    return {ok: true, noWait: true};  // it is waiting for the choice: nothing is starting yet
+  }
   return play(t);
 }
 
@@ -2024,19 +2055,7 @@ $('walladd').onsubmit = async e => {
     if (!d || !d.ok) { err('Couldn\u2019t look that up. Try again, or paste a link.'); return {ok: false}; }
     if (!d.matches.length) { err('Couldn\u2019t find ' + v + ' on Kick or Twitch. Paste a link if it is somewhere else.'); return {ok: false}; }
     if (d.pick) return add(d.pick);
-    const head = el('div', 'wlabel', v + ' is on both. Which one?');
-    head.style.cssText = 'grid-column:1/-1;margin:0';
-    $('wallpick').replaceChildren(head, ...d.matches.map(m => {  // a card per site: its logo, whether they are live there, and how many watch
-      const site = m.source.toLowerCase(), b = el('button', 'pickc ' + site), pi = el('span', 'pi');
-      pi.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-' + site + '"/></svg>';
-      const sub = el('span', 'sub');
-      if (m.live) { sub.append(el('span', 'on', 'LIVE')); if (m.viewers) sub.append(document.createTextNode(' \u00b7 ' + Number(m.viewers).toLocaleString() + ' watching')); }
-      else sub.textContent = 'Offline';
-      b.append(pi, el('b', null, m.source), sub);
-      b.setAttribute('aria-label', 'Add ' + v + ' from ' + m.source + (m.live ? ', live' : ', offline'));
-      b.onclick = async () => { await busy(b, () => add(m.url)); $('wallpick').classList.add('hide'); };
-      return b;
-    }));
+    $('wallpick').replaceChildren(...pickCards(v, d.matches, async (m, b) => { await busy(b, () => add(m.url)); $('wallpick').classList.add('hide'); }));
     $('wallpick').classList.remove('hide');
     return {ok: true};
   });

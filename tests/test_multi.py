@@ -184,6 +184,33 @@ class QuickSecondAddTest(unittest.TestCase):
         self.assertEqual(r[1], 400)
 
 
+class PlayFromAWallTest(unittest.TestCase):
+    """Starting something new while several streams are on the screen: the main window goes full screen and loads it in place."""
+
+    def run_play(self, wall_up):
+        import app as server
+        server.wall.extras = [{"url": "https://kick.com/b", "proc": None}] if wall_up else []
+        server.wall.layout = "grid" if wall_up else None
+        server.wall.saved_quality = "720"
+        try:
+            with mock.patch.object(server, "remember"), mock.patch.object(server, "switch_input"), mock.patch.object(server, "resolve", return_value=("Kick", "streamlink")),                     mock.patch.object(server, "wall_relayout") as relayout, mock.patch.object(server, "start_player") as start, mock.patch.object(server.wall, "stop_windows"),                     mock.patch.dict(server.state, {"url": "https://kick.com/a", "started": 0}):
+                server.play_on(None, "https://kick.com/new", None)
+            return relayout, start, server.wall.saved_quality, server.wall.active()
+        finally:
+            server.wall.clear()
+
+    def test_a_new_stream_out_of_a_multi_view_loads_in_place_at_its_own_quality(self):
+        relayout, start, saved, active = self.run_play(True)
+        relayout.assert_called_once_with("https://kick.com/new")
+        start.assert_not_called()  # no new window
+        self.assertEqual((saved, active), (None, False))
+
+    def test_a_new_stream_on_a_single_stream_screen_is_unchanged(self):
+        relayout, start, _, _ = self.run_play(False)
+        start.assert_called_once_with("https://kick.com/new", None)
+        relayout.assert_not_called()
+
+
 class OnlyThisTest(unittest.TestCase):
     def test_keeping_only_an_added_stream_ends_the_wall_and_starts_that_stream_alone(self):
         import app as server

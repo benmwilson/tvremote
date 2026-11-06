@@ -150,7 +150,7 @@ SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/se
 # later) is refused, so a new endpoint is closed to guests until it is listed here on purpose.
 GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
              "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
-             "/api/shell", "/api/stats", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch"}  # /api/watch checks the guest setting itself
+             "/api/shell", "/api/stats", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch", "/api/detect"}  # /api/watch checks the guest setting itself
 GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/api/roku/launch", "/logout"}
 
 
@@ -1024,8 +1024,12 @@ def play_on(c, url, quality, via=None):
     if cur.get("url") == url and time.time() - (cur.get("started") or 0) < 3:
         return  # the same link was started a moment ago (a double tap): leave it be
     remember(url)
+    was_wall = False
     if not c:
+        was_wall = wall.active()
         wall.clear()  # starting something on the Pi's screen is a single stream; more are added from the Multi-view sheet
+        if was_wall:
+            wall.saved_quality = None  # the new stream starts at its own default, not the old main stream's pick
     # Wake the TV first, in the background: working out the link can fail (a channel that is offline), and a Chromecast that is
     # powered by its TV is not even on the network until the TV is awake.
     threading.Thread(target=switch_input, args=(tid,), daemon=True).start()
@@ -1035,9 +1039,13 @@ def play_on(c, url, quality, via=None):
         c.play(url, quality, via, cancelled=lambda: not newest())
     else:
         resolve(url)  # the slow part (cached afterwards), done before taking the player lock so a newer tap is never stuck behind it
-        with lock:
+        if was_wall:  # out of a multi-view: the main window makes itself full screen and loads the new stream in place, instead of every window closing and a new one opening
             if newest():
-                start_player(url, quality)
+                wall_relayout(url)  # takes the player lock itself, and starts a player the usual way when it can't load in place
+        else:
+            with lock:
+                if newest():
+                    start_player(url, quality)
 
 
 @app.post("/api/play")
