@@ -1,6 +1,7 @@
 import json
 import sys
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -62,10 +63,21 @@ class Endpoint(unittest.TestCase):
         self.client = server.app.test_client()
         server._feeds.clear()
 
-    def test_nothing_playing_or_not_twitch_gives_an_empty_answer(self):
-        with mock.patch.dict(server.state, {"url": "https://kick.com/xqc", "source": "Kick"}), mock.patch.object(server, "pi_playing", return_value=True):
+    def test_nothing_playing_or_a_site_without_chat_gives_an_empty_answer(self):
+        with mock.patch.dict(server.state, {"url": "https://www.youtube.com/watch?v=abc", "source": "YouTube"}), mock.patch.object(server, "pi_playing", return_value=True):
             r = self.client.get("/api/chat/feed").get_json()
         self.assertEqual((r["ok"], r["msgs"]), (False, []))
+
+    def test_a_kick_channel_gets_a_kick_feed(self):
+        made = []
+
+        class K(chat.ChatFeed):
+            def __init__(s, ch):
+                super().__init__(ch, autostart=False)
+                made.append(ch)
+        with mock.patch.dict(server.state, {"url": "https://kick.com/xqc", "source": "Kick"}), mock.patch.object(server, "pi_playing", return_value=True),                 mock.patch.object(server.chat, "KickFeed", K):
+            r = self.client.get("/api/chat/feed").get_json()
+        self.assertEqual((r["ok"], r["channel"], made), (True, "xqc", ["xqc"]))
 
     def test_a_twitch_channel_starts_one_feed_and_a_stale_since_resets(self):
         made = []
@@ -77,7 +89,7 @@ class Endpoint(unittest.TestCase):
         with mock.patch.dict(server.state, {"url": "https://www.twitch.tv/xqc", "source": "Twitch"}), mock.patch.object(server, "pi_playing", return_value=True), \
                 mock.patch.object(server.chat, "ChatFeed", F):
             r = self.client.get("/api/chat/feed").get_json()
-            server._feeds["xqc"].on_line(LINE)
+            server._feeds[("Twitch", "xqc")].on_line(LINE)
             r2 = self.client.get("/api/chat/feed?since=0").get_json()
             r3 = self.client.get("/api/chat/feed?since=999").get_json()  # the phone is ahead of a restarted feed
         self.assertTrue(r["ok"])
@@ -169,6 +181,25 @@ class KickFeedTests(unittest.TestCase):
         self.assertEqual([m for _, m in k.msgs], [("Al", "#FF0000", "first", []), ("Bo", "#00FF00", "KEKW second", [{"u": "https://files.kick.com/emotes/1/fullsize", "s": 0, "e": 3}])])
         self.assertEqual(calls[0], "omie")
         self.assertTrue(calls[1].startswith("89448/messages?_="))
+
+
+class KickFeedTest(unittest.TestCase):
+    def test_the_first_poll_is_the_history_and_a_message_is_not_added_twice(self):
+        msgs = [{"id": "a", "type": "message", "created_at": "2026-11-06T04:00:01Z", "content": "hi [emote:7:Pog]", "sender": {"username": "Al", "identity": {"color": "#FF0000"}}},
+                {"id": "b", "type": "message", "created_at": "2026-11-06T04:00:02Z", "content": "yo", "sender": {"username": "Bo"}}]
+
+        def get(path):
+            return {"id": 5} if "/" not in path else {"data": {"messages": msgs}}
+        f = chat.KickFeed("chan", get=get)
+        for _ in range(100):
+            if f.n >= 2:
+                break
+            time.sleep(0.02)
+        time.sleep(0.1)
+        f.stop()
+        self.assertEqual([(m["name"], m["text"]) for m in f.since(0)], [("Al", "hi Pog"), ("Bo", "yo")])
+        self.assertEqual(f.since(0)[0]["emotes"], [{"u": "https://files.kick.com/emotes/7/fullsize", "s": 3, "e": 5}])
+        self.assertEqual(f.n, 2)
 
 
 class KickEmotes(unittest.TestCase):

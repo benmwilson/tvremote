@@ -2386,12 +2386,12 @@ def api_stats_set():
     return jsonify(enabled=settings["stats"])
 
 
-_feeds = {}  # Twitch channel -> its chat feed: with several streams on the Pi's screen there is one per stream
+_feeds = {}  # (site, channel) -> its chat feed: with several streams on the Pi's screen there is one per stream
 
 
 @app.get("/api/chat/feed")
 def api_chat_feed():
-    """New chat messages for the phone's chat view (Twitch only). `since` is the last message id the phone has; `i` is the tile
+    """New chat messages for the phone's chat view (Twitch and Kick). `since` is the last message id the phone has; `i` is the tile
     on the Pi's multistream screen (0 = the main stream)."""
     c = tgt()
     if c:
@@ -2401,14 +2401,14 @@ def api_chat_feed():
         url = state["url"] if i == 0 else next(iter(t["url"] for k, t in enumerate(wall.extras, start=1) if k == i), None)
         url = url if pi_playing() else None
         source = state["source"] if i == 0 else route(url or "")[0]
-    ch = chat.channel_of(url or "") if source == "Twitch" else None
+    ch = chat.channel_of(url or "") if source in ("Twitch", "Kick") else None
     if not ch:
         return jsonify(ok=False, channel=None, msgs=[], last=0)
     for k in [k for k, f in _feeds.items() if f.stopped.is_set()]:
         del _feeds[k]  # a feed stops itself when nobody has asked for a minute
-    f = _feeds.get(ch)
+    f = _feeds.get((source, ch))
     if not f:
-        f = _feeds[ch] = chat.ChatFeed(ch)
+        f = _feeds[(source, ch)] = chat.KickFeed(ch) if source == "Kick" else chat.ChatFeed(ch)
     last = request.args.get("since", type=int) or 0
     reset = last > f.n  # the feed was started afresh since the phone last asked
     return jsonify(ok=True, channel=ch, msgs=f.since(0 if reset else last), last=f.n, reset=reset)
@@ -3326,7 +3326,15 @@ def api_emotes():
     login = request.args.get("channel", "").strip().lower()
     if not re.fullmatch(r"\w{2,25}", login):
         return jsonify(ok=False, error="No channel."), 400
-    r = jsonify(ok=True, sets=emotes.for_channel(login))
+    if request.args.get("site") == "kick":  # a Kick channel: Kick's own emotes and the 7TV sets, found by the streamer's id
+        try:
+            j = chat._kick_get(login)
+            sets = emotes.for_kick_channel(login, j.get("user_id") or (j.get("user") or {}).get("id"))
+        except Exception:
+            sets = emotes.for_kick_channel(login, None)
+    else:
+        sets = emotes.for_channel(login)
+    r = jsonify(ok=True, sets=sets)
     r.headers["Cache-Control"] = "private, max-age=300"
     return r
 

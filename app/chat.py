@@ -283,6 +283,35 @@ def kick_parse(m):
     return ((who.get("username") or "?"), ((who.get("identity") or {}).get("color") or ""), text, emotes) if text.strip() else None
 
 
+class KickFeed(ChatFeed):
+    """Kick's last messages for the phone's chat view, from the same recent-messages endpoint as the TV column (see KickChat). A message is
+    {name, color, text, emotes: [{u: picture address, s, e}], id}; stops by itself when nobody has asked for a minute."""
+
+    def __init__(self, channel, get=_kick_get):
+        self._get = get
+        super().__init__(channel, autostart=False)
+        threading.Thread(target=self._poll, daemon=True).start()
+        threading.Thread(target=self._watch, daemon=True).start()
+
+    def _poll(self):
+        seen, room = set(), None
+        while not self.stopped.is_set():
+            try:
+                if room is None:
+                    room = self._get(self.channel)["id"]
+                msgs = (self._get(f"{room}/messages?_={int(time.time() * 1000)}").get("data") or {}).get("messages") or []
+                for m in sorted(msgs, key=lambda x: x.get("created_at", "")):  # oldest first: the first poll is the channel's recent history
+                    if m.get("id") not in seen:
+                        seen.add(m.get("id"))
+                        if (p := kick_parse(m)):
+                            self.n += 1
+                            self.msgs.append({"name": p[0], "color": p[1], "text": p[2], "emotes": p[3], "id": self.n})
+                seen &= {m.get("id") for m in msgs}
+            except Exception:
+                room = None
+            self.stopped.wait(KICK_POLL_S)
+
+
 class KickChat(TwitchChat):
     """Kick's chat for the TV column, from its recent-messages endpoint every few seconds (Kick's own websocket is closed to scripts).
     shortcut: unofficial, can change or block without notice; the phone's chat view still works either way."""

@@ -896,6 +896,15 @@ body:has(dialog.sheet[open]){overflow:hidden}
     </div>
   </div>
 </dialog>
+<dialog id="replacecard" class="sheet" aria-labelledby="replttl">
+  <div class="sh"><div class="grow"><b id="replttl">Replace</b><span class="sub">Pick what goes in its place</span></div>
+    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb">
+    <form id="repladd" class="row"><input id="replurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="The stream to put in its place" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Replace</button></form>
+    <div id="replpick" class="pickrow hide"></div>
+    <div id="replfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="replfavs" class="wallfavs"></div></div>
+  </div>
+</dialog>
 <div id="err" role="status"></div>
 
 <h2 id="tvhead">TV</h2>
@@ -2894,7 +2903,7 @@ const WALL_Q = [['', 'Auto quality'], ['1080', '1080p'], ['720', '720p'], ['480'
 let wallReplace = null;  // the stream the next one added will take the place of (null: it is added to the screen)
 const wallPut = async url => {
   const r = await wallApi(wallReplace !== null ? {action: 'replace', i: wallReplace, url} : {action: 'add', url});
-  if (r && r.ok) { wallReplace = null; wallSig = ''; }
+  if (r && r.ok) { wallReplace = null; wallSig = ''; if ($('replacecard').open) $('replacecard').close(); }
   return r;
 };
 function renderWall() {
@@ -2935,8 +2944,7 @@ function renderWall() {
     if (!r.error) tile.append(ctl);  // sound and quality mean nothing for a stream that ended
     const acts = el('div', 'acts');
     const act = (icon, label, title, fn) => { const x = el('button'); x.innerHTML = ic(icon) + '<span>' + label + '</span>'; x.title = title; x.setAttribute('aria-label', label + ': ' + title); x.onclick = fn; acts.append(x); return x; };
-    const rp = act('swap', 'Replace', 'put a different stream in this window', () => { wallReplace = wallReplace === r.i ? null : r.i; wallSig = ''; renderWall(); if (wallReplace !== null) $('wallurl').focus(); });
-    rp.setAttribute('aria-pressed', String(wallReplace === r.i));
+    act('swap', 'Replace', 'put a different stream in this window', () => openReplace(r.i, name));
     if (r.i && w.layout === 'focus' && !r.error) act('enlarge', 'Enlarge', 'swap places with the big window', () => wallApi({action: 'swap', i: r.i}));
     if (!r.error) act('fullscreen', 'Full screen', 'stop multistream and show only this stream, full screen', () => wallApi({action: 'only', i: r.i}));
     tile.append(acts);
@@ -2949,19 +2957,21 @@ function renderWall() {
   }));
   renderWallGroups(rows);
   const free = !w || rows.length < w.max, replacing = wallReplace !== null;
-  $('walladdbox').classList.toggle('hide', !free && !replacing);
-  $('walladdlabel').textContent = replacing ? 'Replace ' + ((rows.find(r => r.i === wallReplace) || {}).name || 'it') + ' with' : 'Add a stream';
+  $('walladdbox').classList.toggle('hide', !free);
   // suggestions: the favourites that are live now, then the live recents (the live site of a streamer who is on both)
   // never suggest a streamer who is already on the screen: compared by name, so another link form or the other site doesn't slip through
   const key = u => { try { const p = new URL(u).pathname.split('/').filter(Boolean); return (p.length === 1 ? p[0] : String(u)).toLowerCase(); } catch (e) { return String(u).toLowerCase(); } };
   const playing = rows.length ? rows : (st.url ? [{url: st.url, name: chanName(st.url) || ''}] : []);  // before multistream starts, what is playing is the one stream
   const seen = new Set(playing.flatMap(r => [key(r.url), (r.name || '').toLowerCase()])), sugg = [];
-  const offer = (name, url) => { const k = key(url), who = chanName(url) || name, n = (who || '').toLowerCase(); if (seen.has(k) || (n && seen.has(n))) return; seen.add(k); if (n) seen.add(n); sugg.push({name: who, url}); };  // the channel's name: a saved favourite may carry the whole stream title
+  const offer = (name, url) => { const k = key(url), who = chanName(url) || name, n = (who || '').toLowerCase(); if (seen.has(k) || (n && seen.has(n))) return; seen.add(k); if (n) seen.add(n); sugg.push({name: who, url}); };  // the channel's name: a saved fav
   for (const f of favList) if (f.live === true) offer(f.name, f.play_url || f.url);
   for (const x of recentList) if (x.live === true) offer(x.name, x.url);
-  const favs = free || replacing ? sugg.slice(0, 8) : [];
-  $('wallfavswrap').classList.toggle('hide', !favs.length);
-  $('wallfavs').replaceChildren(...favs.map(f => {
+  drawSuggestions($('wallfavswrap'), $('wallfavs'), free ? sugg.slice(0, 8) : []);
+  drawSuggestions($('replfavswrap'), $('replfavs'), replacing ? sugg.slice(0, 8) : []);
+}
+function drawSuggestions(wrap, box, list) {  // the live ones, as buttons: one tap adds (or replaces with) that stream
+  wrap.classList.toggle('hide', !list.length);
+  box.replaceChildren(...list.map(f => {
     const site = /twitch\.tv/i.test(f.url) ? 'twitch' : /kick\.com/i.test(f.url) ? 'kick' : '', b = el('button');
     if (site) { const i = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); i.setAttribute('viewBox', '0 0 24 24'); i.setAttribute('class', 'pico ' + site); i.innerHTML = '<use href="#i-' + site + '"/>'; b.append(i); }
     b.append(document.createTextNode(f.name || f.url));
@@ -2969,6 +2979,13 @@ function renderWall() {
     return b;
   }));
 }
+// Replace: its own drawer. wallReplace is the window being replaced; closing the drawer without picking leaves everything as it was.
+function openReplace(i, name) {
+  wallReplace = i; wallSig = '';
+  $('replttl').textContent = 'Replace ' + name; $('replurl').value = ''; $('replpick').classList.add('hide');
+  renderWall(); $('replacecard').showModal();
+}
+$('replacecard').addEventListener('close', () => { if (wallReplace !== null) { wallReplace = null; wallSig = ''; renderWall(); } });
 function renderWallGroups(rows) {
   const all = [...groupList.map(g => ({...g, sug: false})), ...groupSug.map(g => ({...g, sug: true}))].filter(g => !ui().groups_live_only || groupLive(g) >= 1);  // only groups someone in is live now (an admin can turn that off)
   $('wallgroupswrap').classList.toggle('hide', !all.length);
@@ -2982,23 +2999,27 @@ function renderWallGroups(rows) {
   $('wallsavegroup').classList.toggle('hide', rows.length < 2 || groupList.some(same));  // two or more on screen, and not saved already
 }
 $('wallsavegroup').onclick = () => busy($('wallsavegroup'), async () => { const r = await api('/api/groups', 'POST', {from_screen: true}); if (r && r.ok) await loadGroups(); return r; });
-$('walladd').onsubmit = async e => {
-  e.preventDefault();
-  const v = $('wallurl').value.trim();
-  if (!v) return;
-  $('wallpick').classList.add('hide');
-  const add = async url => { const r = await wallPut(url); if (r && r.ok) $('wallurl').value = ''; return r; };
-  await busy($('walladd').querySelector('button'), async () => {
-    if (!/^[\w-]{2,25}$/.test(v)) return add(v);  // a link: the site is in it
-    const d = await fetch('/api/detect?name=' + encodeURIComponent(v)).then(x => x.json()).catch(() => null);  // a name: which site is it on?
-    if (!d || !d.ok) { err('Couldn\u2019t look that up. Try again, or paste a link.'); return {ok: false}; }
-    if (!d.matches.length) { err('Couldn\u2019t find ' + v + ' on Kick or Twitch. Paste a link if it is somewhere else.'); return {ok: false}; }
-    if (d.pick) return add(d.pick);
-    $('wallpick').replaceChildren(...pickCards(v, d.matches, async (m, b) => { await busy(b, () => add(m.url)); $('wallpick').classList.add('hide'); }));
-    $('wallpick').classList.remove('hide');
-    return {ok: true};
-  });
-};
+function makeAdder(form, input, pick) {  // a name or a link in a box: look the name up, ask which site if it is on both, then add (or replace with) it
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const v = input.value.trim();
+    if (!v) return;
+    pick.classList.add('hide');
+    const add = async url => { const r = await wallPut(url); if (r && r.ok) input.value = ''; return r; };
+    await busy(form.querySelector('button'), async () => {
+      if (!/^[\w-]{2,25}$/.test(v)) return add(v);  // a link: the site is in it
+      const d = await fetch('/api/detect?name=' + encodeURIComponent(v)).then(x => x.json()).catch(() => null);  // a name: which site is it on?
+      if (!d || !d.ok) { err('Couldn\u2019t look that up. Try again, or paste a link.'); return {ok: false}; }
+      if (!d.matches.length) { err('Couldn\u2019t find ' + v + ' on Kick or Twitch. Paste a link if it is somewhere else.'); return {ok: false}; }
+      if (d.pick) return add(d.pick);
+      pick.replaceChildren(...pickCards(v, d.matches, async (m, b) => { await busy(b, () => add(m.url)); pick.classList.add('hide'); }));
+      pick.classList.remove('hide');
+      return {ok: true};
+    });
+  };
+}
+makeAdder($('walladd'), $('wallurl'), $('wallpick'));
+makeAdder($('repladd'), $('replurl'), $('replpick'));
 // Sheets: any <dialog class="sheet"> closes from its X (data-close) or a tap on the dim area behind it.
 document.addEventListener('click', e => {
   const x = e.target.closest('[data-close]');

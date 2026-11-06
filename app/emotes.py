@@ -92,6 +92,35 @@ def _set(provider, scope, tid):
     return emotes
 
 
+def kick_native(slug):
+    """Kick's own emotes for a channel (the channel's, then the global ones): [{"provider": "kick", "scope", "emotes": [{"n", "u", "a", "id"}]}].
+    From the same endpoint kick.com's own chat uses (Kick answers a browser's request, not a plain script's)."""
+    key = ("kick", "native", slug)
+    now = time.time()
+    with _lock:
+        hit = _cache.get(key)
+    if hit and now - hit[0] < hit[1]:
+        return hit[2]
+    try:
+        req = Request(f"https://kick.com/emotes/{slug}", headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+        groups = json.loads(urlopen(req, timeout=8).read())
+        out = []
+        for g in groups:
+            scope = "global" if g.get("id") == "Global" else "channel" if g.get("slug") else None  # the channel's own group has a slug; "Emoji" has neither
+            if scope is None:
+                continue  # (the emoji group is left out: the phone's own keyboard has them)
+            em = [{"n": e["name"], "u": f"https://files.kick.com/emotes/{e['id']}/fullsize", "a": False, "id": e["id"]} for e in g.get("emotes") or [] if e.get("name") and e.get("id")]
+            if em:
+                out.append({"provider": "kick", "scope": scope, "emotes": em[:MAX_PER_SET]})
+        ttl = TTL["channel"]
+    except Exception as e:
+        print("Emotes kick:", twitch.describe(e), flush=True)
+        out, ttl = [], TTL["failed"]
+    with _lock:
+        _cache[key] = (now, ttl, out)
+    return out
+
+
 def _kick_channel_7tv(uid):
     j = _get(f"https://7tv.io/v3/users/kick/{uid}")
     return _7tv_list((j.get("emote_set") or {}).get("emotes"))
@@ -118,6 +147,12 @@ def for_kick(uid):
         sets.append({"provider": "7tv", "scope": "channel", "emotes": em})
     sets.append({"provider": "7tv", "scope": "global", "emotes": _set("7tv", "global", None)})
     return [s for s in sets if s["emotes"]]
+
+
+def for_kick_channel(slug, uid):
+    """Everything for a Kick channel's chat on the phone: Kick's own emotes and the 7TV sets, the channel's before the global ones."""
+    sets = kick_native(slug) + for_kick(uid)
+    return sorted(sets, key=lambda s: s["scope"] == "global")  # (stable: Kick's before 7TV's within each scope)
 
 
 def for_channel(login):
