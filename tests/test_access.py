@@ -182,6 +182,7 @@ class AccessTest(unittest.TestCase):
         t = access.create_invite(1, "qr")
         iid = access.invites_pending()[-1]["id"]
         self.assertEqual(access.invite_token(iid), t)
+        self.assertTrue(all("token" not in row for row in access.invites_pending()))  # the list sent to the browser never carries it
         self.assertIsNone(access.invite_token("short"))
         access.redeem_invite(t)  # a one-device link is gone once opened
         self.assertIsNone(access.invite_token(iid))
