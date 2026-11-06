@@ -1471,8 +1471,12 @@ def api_cmd():
     if ok and action == "pause" and sel_info()[3] == SOCK:
         osd_paused(bool(prop("pause")))
         resume_live(prop("pause"), prop("duration"))
-    elif ok and action == "pause" and prop("pause") is False and prop("duration") is None:
-        mpvipc.send(sel_info()[3], ["seek", 100000, "relative"])  # a multistream window: the best that can be done without restarting it
+    elif ok and action == "pause":  # a multistream window: its own pause symbol, and a live one resumes with a seek (the best that can be done without restarting it)
+        sock = sel_info()[3]
+        paused = sprop(sock, "pause")
+        osd_paused(paused is True, sock)
+        if paused is False and sprop(sock, "duration") is None:
+            mpvipc.send(sock, ["seek", 100000, "relative"])
     if ok and action in ("volume", "volume_delta") and sel_info()[3] == SOCK and prop("volume") is not None:
         settings["volume"] = prop("volume")
         if data.get("final") or time.time() - _vol_saved["t"] > 2:  # a drag sends many: write the file when it ends, or every few seconds
@@ -1816,23 +1820,16 @@ def api_move():
     return jsonify(ok=True, same_tv=same_tv, switched_off=False if same_tv else power_back_off(src))  # the shared TV stays on
 
 
-def paused_screen(title=""):
-    """ASS for the pause overlay: the picture dimmed, a pause symbol and "Paused". Overlay 2 (chat uses 1).
-    Drawn once and left alone: the picture is frozen while paused, so unlike the chat overlay it costs no frames."""
-    parts = [r"{\an7\pos(0,0)\p1\bord0\shad0\1c&H000000&\1a&H99&}m 0 0 l 1920 0 1920 1080 0 1080{\p0}",
-             r"{\an7\pos(0,0)\p1\bord0\shad0\1c&HF6F1EE&}m 850 380 l 920 380 920 580 850 580 m 1000 380 l 1070 380 1070 580 1000 580{\p0}",
-             r"{\an8\pos(960,620)\fs72\b1\bord0\shad0\1c&HF6F1EE&}Paused"]
-    if title:
-        parts.append(r"{\an8\pos(960,720)\fs38\b0\bord0\shad0\1c&HA9978C&}" + chat._esc(title))
-    return "\n".join(parts)
+PAUSED_TEXT = "▌▌  Paused"  # two bars and the word, in the same on-screen text the volume uses (a drawn overlay did not show reliably)
 
 
-def osd_paused(paused):
-    """Show the pause overlay while paused; clear it on resume."""
-    if paused:
-        mpv(["osd-overlay", 2, "ass-events", paused_screen(prop("media-title") or ""), 1920, 1080])
+def osd_paused(paused, sock=SOCK):
+    """Show a pause symbol on the TV for as long as the stream is paused (a very long show-text), and clear it on resume."""
+    cmd = ["show-text", PAUSED_TEXT, 3600000] if paused else ["show-text", "", 1]
+    if sock == SOCK:
+        mpv(cmd)
     else:
-        mpv(["osd-overlay", 2, "none", ""])
+        mpvipc.send(sock, cmd)
 
 
 def volume_text(vol, muted):
@@ -1847,6 +1844,8 @@ def osd_volume(sock=SOCK):
         vol, muted = prop("volume"), prop("mute")
         if vol is not None:
             mpv(["show-text", volume_text(vol, muted), 1500])
+            if prop("pause") is True:  # the volume text replaced the pause symbol: put it back once the volume has gone
+                threading.Timer(1.7, lambda: prop("pause") is True and osd_paused(True)).start()
         return
     vol, muted = sprop(sock, "volume"), sprop(sock, "mute")
     if vol is not None:
