@@ -74,6 +74,9 @@ def tgt():
 def target_for(t):
     if t == "living":
         return None
+    if t in TV_ONLY:  # never fall back to the Pi: nothing is plugged in here
+        abort(Response(json.dumps({"ok": False, "error": "Nothing is plugged in to this TV to play on. Use its TV controls."}),
+                       409, mimetype="application/json"))
     if t == "bedroom":
         if not CAST:  # never fall back to the Pi: that would control the wrong TV
             abort(Response(json.dumps({"ok": False, "error": "The bedroom Chromecast isn't available. "
@@ -1483,6 +1486,8 @@ PROPS = {
 
 @app.get("/api/status")
 def api_status():
+    if request.args.get("target") in TV_ONLY:
+        return jsonify(running=False, starting=False, tvonly=True, target=request.args["target"], error=None, url=None, sleep_at=_sleep.get(request.args["target"]))
     c = tgt()
     if c:
         try:
@@ -1665,7 +1670,8 @@ def cast_segment(token):
 
 ORDER = ["living", "bedroom"]
 LABELS = {"living": "Living room", "bedroom": "Bedroom"}
-KINDS = {"living": ("pi", "Pi on HDMI"), "bedroom": ("chromecast", "Chromecast")}
+KINDS = {"living": ("pi", "Pi on HDMI"), "bedroom": ("chromecast", "Chromecast")}  # TVs with nothing plugged in are added here as ("tv", ...)
+TV_ONLY = {}  # id -> name of each TV that has neither the Pi nor a Chromecast: Roku controls only, nothing to play on
 
 
 def stream_label(quality):
@@ -1773,7 +1779,7 @@ def roku_details(tv_id):
 
 
 def make_card(tv_id, status):
-    kind, connection = KINDS[tv_id]
+    kind, connection = KINDS.get(tv_id, ("tv", "Roku TV"))
     r = roku_details(tv_id)
     busy = status.get("running") or status.get("starting")
     now = {"title": status.get("title") or fav_name(status.get("url") or ""), "source": status.get("source"),
@@ -1802,6 +1808,10 @@ def bedroom_card():
     card = make_card("bedroom", CAST.status())
     card["device"] = CAST.info()["device"]
     return card
+
+
+def tv_only_card(tv_id):
+    return make_card(tv_id, {})
 
 
 cards = targets.Cards({"living": living_card, "bedroom": bedroom_card}, ORDER)
@@ -1932,7 +1942,7 @@ def api_targets():
     for c in cards.snapshot():
         if not TV_ENABLED.get(c["id"], True):
             continue  # switched off in setup (for instance no screen on the Pi)
-        kind, connection = KINDS[c["id"]]
+        kind, connection = KINDS.get(c["id"], ("tv", "Roku TV"))
         out.append({"name": LABELS[c["id"]], "kind": kind, "connection": connection, **c,
                     "type": kind, "online": c["reachable"], "roku": bool(ROKU_IPS.get(c["id"]))})
     return jsonify(out)
@@ -1942,54 +1952,76 @@ INPUTS = {"living": "", "bedroom": ""}  # the HDMI input each TV switches to whe
 TV_ENABLED = {"living": True, "bedroom": True}
 
 
-def apply_tv_config(cfg):
-    """Put the saved TV settings to use: Roku addresses, inputs, names, which TVs show. Takes effect at once, no restart."""
+def apply_tv_config(tvs):
+    """Put the saved TVs to use: the Pi's and the Chromecast's Roku, input and name, a card for every TV with nothing plugged in, and
+    which endpoints show. Takes effect at once, no restart."""
+    ep = tvconfig.endpoints(tvs)
     for tid in tvconfig.IDS:
-        c = cfg.get(tid) or {}
-        ROKU_IPS[tid] = c.get("roku") or ""
-        INPUTS[tid] = c.get("input") or ""
-        TV_ENABLED[tid] = c.get("enabled", True) is not False
-        if c.get("name"):
-            LABELS[tid] = c["name"]
-    b = cfg.get("bedroom") or {}
-    if CAST and b:
-        CAST.cfg.update(name=LABELS["bedroom"], device=b.get("device") or None)
+        ROKU_IPS[tid], INPUTS[tid] = ep[tid]["roku"], ep[tid]["input"]
+        TV_ENABLED[tid], LABELS[tid] = ep[tid]["enabled"], ep[tid]["label"]
+    for tid in list(TV_ONLY):  # TVs that were on their own before
+        for d in (ROKU_IPS, INPUTS, LABELS, TV_ENABLED, KINDS):
+            d.pop(tid, None)
+    TV_ONLY.clear()
+    for t in tvs:
+        if not t.get("pi") and not t.get("chromecast") and t.get("roku"):
+            TV_ONLY[t["id"]] = t["name"]
+            ROKU_IPS[t["id"]], INPUTS[t["id"]], LABELS[t["id"]], TV_ENABLED[t["id"]] = t["roku"], "", t["name"], True
+            KINDS[t["id"]] = ("tv", "Roku TV")
+    ORDER[:] = [*tvconfig.IDS, *TV_ONLY]
+    providers = {"living": living_card, "bedroom": bedroom_card, **{tid: (lambda tid=tid: tv_only_card(tid)) for tid in TV_ONLY}}
+    cards.set(providers, ORDER)
+    if CAST and ep["bedroom"]["enabled"]:
+        CAST.cfg.update(name=LABELS["bedroom"], device=ep["bedroom"]["device"])
         CAST.name = LABELS["bedroom"]
     _roku.clear()  # details cached for the old addresses
     _apps.clear()
     _icons.clear()
 
 
+def init_tvs(data_dir):
+    """At startup: load the saved TVs (converting the old two-slot file the first time, which is kept) and put them to use."""
+    tvs = tvconfig.load_tvs(data_dir)
+    if tvs and not os.path.exists(os.path.join(data_dir, "tvs.json")):
+        tvconfig.save_tvs(data_dir, tvs)
+    apply_tv_config(tvs)
+
+
 @app.get("/api/discover")
 def api_discover():
-    """Look for TVs: Rokus (network search), Chromecasts (already found), the Pi's own screen. Takes a few seconds. Includes a first guess
-    of how they pair up and why; whatever was saved before comes with it so the wizard can show the current choice."""
+    """Look for TVs: Rokus (network search), Chromecasts (already found), the Pi's own screen. Takes a few seconds. Returns a card per TV
+    with a first guess of what is plugged into it (and why); saved TVs keep what was saved."""
     admin_only()
-    saved = tvconfig.load(DATA)
+    saved = tvconfig.load_tvs(DATA)
     ips = discover.roku_scan()
-    ips += [ip for ip in (((saved.get(t) or {}).get("roku")) for t in tvconfig.IDS) if ip and ip not in ips]
+    ips += [t["roku"] for t in saved if t.get("roku") and t["roku"] not in ips]
     rokus = discover.describe(ips, roku.info)
     casts = [{"name": d.friendly_name, "model": d.model_name, "host": str(d.host)}
              for d in (list(CAST.devices.values()) if CAST else []) if d.cast_type == "cast"]
     display = discover.display_connected()
     cec = tv_cec() if display else None
     _phys["t"] = 0  # the Pi may have just been moved: read the address fresh
-    phys = cec_phys()
-    return jsonify(rokus=rokus, chromecasts=casts, display=display, cec_name=(cec or {}).get("name"),
-                   pi_input=discover.phys_input(phys) if display else "",
-                   guess=discover.guess(rokus, casts, display, (cec or {}).get("name"), phys),
-                   saved={t: saved.get(t) or {} for t in tvconfig.IDS})
+    pi_input = discover.phys_input(cec_phys()) if display else ""
+    return jsonify(rokus=rokus, chromecasts=casts, display=display, cec_name=(cec or {}).get("name"), pi_input=pi_input,
+                   tvs=discover.suggest(rokus, casts, display, (cec or {}).get("name"), pi_input, saved))
 
 
-@app.post("/api/targets/config")
-def api_targets_config():
+@app.get("/api/tvs")
+def api_tvs():
+    admin_only()
+    return jsonify(tvs=tvconfig.load_tvs(DATA))
+
+
+@app.post("/api/tvs")
+def api_tvs_set():
+    """Save the TVs and put them to use now. Nothing that is playing is touched."""
     admin_only()
     try:
-        cfg = tvconfig.clean(request.get_json(silent=True) or {})
+        tvs = tvconfig.clean_tvs(request.get_json(silent=True) or {})
     except ValueError as e:
         return jsonify(ok=False, error=str(e)), 400
-    apply_tv_config(tvconfig.save(DATA, cfg))
-    return jsonify(ok=True)
+    apply_tv_config(tvconfig.save_tvs(DATA, tvs))
+    return jsonify(ok=True, tvs=tvs)
 
 
 @app.post("/api/targets/test")
@@ -2873,9 +2905,9 @@ def favs_del():
 
 if __name__ == "__main__":
     os.makedirs(DATA, exist_ok=True)
-    apply_tv_config(tvconfig.load(DATA))
     if CastTarget:
         CAST = CastTarget(DATA, resolve, display_title, YTDL_HEIGHTS, SL_DEFAULT)
+    init_tvs(DATA)  # after the Chromecast exists, so its name and device follow the saved TVs
     cards.start()
     livewatch.start()
     threading.Thread(target=sleep_loop, daemon=True).start()

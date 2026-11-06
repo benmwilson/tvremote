@@ -36,25 +36,6 @@ def lan_address(text):
     return str(a) if a.version == 4 and a.is_private and not a.is_loopback and not a.is_link_local else None
 
 
-def clean(raw):
-    """Check what the wizard sent and return the config to keep. Raises ValueError with a sentence for the person."""
-    out = {}
-    for tid in IDS:
-        c = (raw or {}).get(tid) or {}
-        ip = str(c.get("roku") or "").strip()
-        if ip and not lan_address(ip):
-            raise ValueError("A TV address must be on your home network (like 192.168.1.20).")
-        inp = str(c.get("input") or "")
-        if inp not in INPUTS:
-            raise ValueError("Pick HDMI 1 to 4, or leave it as not switching.")
-        item = {"name": re.sub(r"\s+", " ", str(c.get("name") or "")).strip()[:24] or DEFAULT_NAMES[tid],
-                "roku": ip, "input": inp, "enabled": bool(c.get("enabled", True))}
-        if tid == "bedroom":
-            item["device"] = str(c.get("device") or "").strip()[:60] or None
-        out[tid] = item
-    return out
-
-
 # ---- the TV list (tvs.json): a TV is the saved thing, with what is plugged into it ----
 MAX_TVS = 12
 
@@ -159,12 +140,3 @@ def endpoints(tvs):
                     "label": (t["name"] + (suffix if both else "")) if t else DEFAULT_NAMES[eid]}
     out["bedroom"]["device"] = ((cc or {}).get("chromecast") or {}).get("device") or None
     return out
-
-
-def save(data_dir, cfg):
-    """Write the config, keeping any other keys already in the file (like a Chromecast's `via`)."""
-    current = load(data_dir)
-    for tid, item in cfg.items():
-        current[tid] = {**(current.get(tid) or {}), **item}
-    store.write_json(_path(data_dir), current, indent=2)
-    return current

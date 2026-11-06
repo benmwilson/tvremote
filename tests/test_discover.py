@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 import sys
@@ -16,7 +15,6 @@ import discover  # noqa: E402
 import kick  # noqa: E402
 import roku  # noqa: E402
 import targets  # noqa: E402
-import tvconfig  # noqa: E402
 from helpers import founder_client  # noqa: E402
 
 _REAL_SESSION_USER = server.session_user
@@ -51,36 +49,7 @@ class PiPort(unittest.TestCase):
         self.assertIsNone(discover.parse_phys(""))
         self.assertEqual(discover.phys_input("0.0.0.0"), "")  # not a port on the TV
 
-    def test_a_moved_pi_guesses_its_new_port(self):
-        g = discover.guess([LIVING], [], True, "55C803", "3.0.0.0")
-        self.assertEqual(g["living"]["input"], "HDMI3")
-
-
 class Guessing(unittest.TestCase):
-    def test_the_pi_tv_is_found_by_its_hdmi_name_and_the_leftover_roku_goes_with_the_chromecast(self):
-        g = discover.guess([BEDROOM, LIVING], [CAST], True, "55C803", "1.0.0.0")
-        self.assertEqual((g["living"]["roku"], g["living"]["input"], g["living"]["enabled"]), (LIVING["ip"], "HDMI1", True))
-        self.assertEqual((g["bedroom"]["roku"], g["bedroom"]["input"], g["bedroom"]["device"]), (BEDROOM["ip"], "HDMI2", "Bedroom TV"))
-        self.assertTrue(g["living"]["why"] and g["bedroom"]["why"])  # every guess says why
-
-    def test_nothing_is_claimed_without_evidence(self):
-        g = discover.guess([LIVING, BEDROOM], [CAST], True, "SomethingElse", "1.0.0.0")
-        self.assertEqual(g["living"]["roku"], "")  # the HDMI name matches neither
-        self.assertEqual(g["bedroom"]["roku"], "")  # and two Rokus are left, so it won't pick one
-        self.assertIn("pick one", " ".join(g["bedroom"]["why"]).lower())
-
-    def test_a_tv_that_is_off_and_silent_over_hdmi_says_so_and_pairs_nothing(self):
-        g = discover.guess([LIVING, BEDROOM], [CAST], True, None, "1.0.0.0")  # what happened on the real Pi: the living-room TV was off
-        self.assertEqual((g["living"]["roku"], g["bedroom"]["roku"]), ("", ""))
-        self.assertIn("didn't tell us its name", " ".join(g["living"]["why"]))
-        self.assertIn("Look again", " ".join(g["living"]["why"]))
-
-    def test_no_screen_and_no_chromecast(self):
-        g = discover.guess([LIVING], [], False, None, "1.0.0.0")
-        self.assertFalse(g["living"]["enabled"])
-        self.assertFalse(g["bedroom"]["enabled"])
-        self.assertIsNone(g["bedroom"]["device"])
-
     def test_a_tv_that_would_not_answer_is_still_listed(self):
         def info(ip):
             if ip == "192.168.1.9":
@@ -146,28 +115,6 @@ class Suggesting(unittest.TestCase):
         self.assertEqual((out[0]["pi"], out[0]["chromecast"]["device"]), ({"input": "HDMI3"}, "Bedroom TV"))
 
 
-class Config(unittest.TestCase):
-    def test_validation(self):
-        ok = tvconfig.clean({"living": {"name": "  Living   room ", "roku": "192.168.1.141", "input": "HDMI1"},
-                             "bedroom": {"roku": "", "input": "", "device": "Bedroom TV", "enabled": False}})
-        self.assertEqual(ok["living"], {"name": "Living room", "roku": "192.168.1.141", "input": "HDMI1", "enabled": True})
-        self.assertEqual((ok["bedroom"]["name"], ok["bedroom"]["enabled"], ok["bedroom"]["device"]), ("Bedroom", False, "Bedroom TV"))
-        for bad_ip in ("8.8.8.8", "127.0.0.1", "169.254.1.1", "example.com", "192.168.1.1/24", "::1"):
-            with self.assertRaises(ValueError, msg=bad_ip):
-                tvconfig.clean({"living": {"roku": bad_ip}})  # a TV is on the home network, never "out there"
-        with self.assertRaises(ValueError):
-            tvconfig.clean({"living": {"input": "HDMI9"}})
-
-    def test_saving_keeps_other_keys(self):
-        d = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, d, True)
-        with open(os.path.join(d, "targets.json"), "w") as f:
-            json.dump({"bedroom": {"via": "proxy"}}, f)
-        tvconfig.save(d, tvconfig.clean({"bedroom": {"name": "Guest room", "roku": "192.168.1.142"}}))
-        saved = tvconfig.load(d)["bedroom"]
-        self.assertEqual((saved["via"], saved["name"], saved["roku"]), ("proxy", "Guest room", "192.168.1.142"))
-
-
 class Endpoints(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
@@ -181,31 +128,6 @@ class Endpoints(unittest.TestCase):
             self.addCleanup(p.stop)
         throttle.fails.clear()
         self.admin = founder_client(server)
-
-    def test_discovery_returns_what_it_found_with_guesses_and_is_admin_only(self):
-        with mock.patch.object(discover, "roku_scan", return_value=[LIVING["ip"], BEDROOM["ip"]]), \
-                mock.patch.object(discover, "describe", return_value=[LIVING, BEDROOM]), \
-                mock.patch.object(discover, "display_connected", return_value=True), \
-                mock.patch.object(server, "tv_cec", return_value={"name": "55C803", "power": "on"}):
-            j = self.admin.get("/api/discover").get_json()
-            self.assertEqual([r["ip"] for r in j["rokus"]], [LIVING["ip"], BEDROOM["ip"]])
-            self.assertEqual(j["cec_name"], "55C803")
-            self.assertEqual(j["guess"]["living"]["roku"], LIVING["ip"])
-            accounts.add("sam", "secret1")
-            sam = server.app.test_client()
-            sam.post("/login", data={"username": "sam", "password": "secret1"})
-            self.assertEqual(sam.get("/api/discover").status_code, 403)
-
-    def test_saving_applies_at_once_and_survives_a_restart(self):
-        body = {"living": {"name": "Lounge", "roku": LIVING["ip"], "input": "HDMI1"},
-                "bedroom": {"name": "Spare room", "roku": BEDROOM["ip"], "input": "HDMI2", "device": "Bedroom TV", "enabled": False}}
-        self.assertEqual(self.admin.post("/api/targets/config", json=body).status_code, 200)
-        self.assertEqual((server.ROKU_IPS["living"], server.INPUTS["bedroom"], server.LABELS["living"]), (LIVING["ip"], "HDMI2", "Lounge"))
-        self.assertFalse(server.TV_ENABLED["bedroom"])
-        server.ROKU_IPS["living"] = ""
-        server.apply_tv_config(tvconfig.load(self.dir))  # what startup does
-        self.assertEqual(server.ROKU_IPS["living"], LIVING["ip"])
-        self.assertEqual(self.admin.post("/api/targets/config", json={"living": {"roku": "8.8.8.8"}}).status_code, 400)
 
     def test_a_switched_off_tv_is_not_listed(self):
         provider = lambda: {"name": "x", "power": "PowerOn"}  # noqa: E731

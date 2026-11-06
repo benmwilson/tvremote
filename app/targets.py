@@ -69,6 +69,12 @@ class Cards:
         else:
             self._mark(tv_id, slow=True)
 
+    def set(self, providers, order):
+        """Replace the TVs shown (the setup wizard can add and remove them while the app runs)."""
+        with self._lock:
+            self.providers, self.order = dict(providers), list(order)
+            self._cards = {i: self._cards.get(i, {"id": i, "reachable": False}) for i in self.order}
+
     def refresh_now(self):
         threads = [threading.Thread(target=self._one, args=(i, f)) for i, f in self.providers.items()]
         for t in threads:
