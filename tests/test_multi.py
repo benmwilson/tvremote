@@ -503,6 +503,9 @@ class AddressCacheTest(unittest.TestCase):
     def test_a_stream_address_is_remembered_so_a_swap_does_not_wait_for_streamlink(self):
         import app as server
         server._addr_cache.clear()
+        patch = mock.patch.object(server.inproc, "ENABLED", False)  # this stands in for the streamlink command, not the library
+        patch.start()
+        self.addCleanup(patch.stop)
         ran = []
 
         def fake(cmd, **kw):

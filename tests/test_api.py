@@ -146,6 +146,25 @@ class Routes(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"<title>", r.data)
 
+    def test_the_page_is_compressed_for_phones_and_answers_304_when_unchanged(self):
+        import gzip
+        plain = self.client.get("/")
+        zipped = self.client.get("/", headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(zipped.headers.get("Content-Encoding"), "gzip")
+        self.assertEqual(gzip.decompress(zipped.data), plain.data)
+        self.assertLess(len(zipped.data), len(plain.data) // 2)
+        again = self.client.get("/", headers={"If-None-Match": plain.headers["ETag"]})
+        self.assertEqual((again.status_code, again.data), (304, b""))
+
+    def test_play_returns_at_once_on_the_pi_and_starts_in_the_background(self):
+        started = []
+        done = server.threading.Event()
+        with mock.patch.object(server, "CAST", None), mock.patch.object(server, "play_on", side_effect=lambda *a, **k: (started.append(a), done.set())):
+            r = self.client.post("/api/play", json={"url": "https://kick.com/x", "target": "living"})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(done.wait(3))
+        self.assertEqual(started[0][1], "https://kick.com/x")
+
     def test_play_to_missing_chromecast_does_not_use_the_pi(self):
         with mock.patch.object(server, "CAST", None), mock.patch.object(server, "start_player") as sp:
             r = self.client.post("/api/play?target=bedroom", json={"url": "https://kick.com/chan"})
@@ -250,6 +269,9 @@ class StreamInfoCache(unittest.TestCase):
     def test_old_entries_are_dropped_when_a_new_one_is_added(self):
         server._qcache.clear()
         self.addCleanup(server._qcache.clear)
+        patch = mock.patch.object(server.inproc, "ENABLED", False)  # this stands in for the streamlink command, not the library
+        patch.start()
+        self.addCleanup(patch.stop)
         server._qcache["https://kick.com/old"] = (server.time.time() - 3600, ["720p"], {})
         out = '{"streams": {"best": {}, "1080p60": {}}, "metadata": {}}'
         with mock.patch.object(server.subprocess, "run", return_value=mock.Mock(stdout=out)):
@@ -810,3 +832,23 @@ class InputSwitch(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InProcessLibraries(unittest.TestCase):
+    def test_a_stream_address_is_the_first_quality_that_exists_and_offline_says_so(self):
+        import inproc
+        good = {"streams": {"720p60": {"url": "https://x/720.m3u8"}, "best": {"url": "https://x/best.m3u8"}}}
+        with mock.patch.object(inproc, "streamlink_json", return_value=good):
+            self.assertEqual(inproc.stream_address("https://kick.com/a", "1080p60,720p60,best"), "https://x/720.m3u8")
+            with self.assertRaises(RuntimeError):
+                inproc.stream_address("https://kick.com/a", "480p")
+        with mock.patch.object(inproc, "streamlink_json", return_value={"error": "No playable streams found on this URL: x"}):
+            with self.assertRaises(RuntimeError) as cm:
+                inproc.stream_address("https://kick.com/a", "best")
+            self.assertIn("No playable streams", str(cm.exception))
+
+    def test_switched_off_the_callers_get_unavailable(self):
+        import inproc
+        with mock.patch.object(inproc, "ENABLED", False):
+            with self.assertRaises(inproc.Unavailable):
+                inproc.streamlink_json("https://kick.com/a")

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """TV Remote: web controller for mpv / streamlink on the Pi."""
 import functools
+import gzip
 from datetime import datetime
 import hmac
 import html
@@ -13,6 +14,7 @@ import signal
 import subprocess
 import threading
 import time
+import zlib
 from urllib.parse import quote, urlparse
 
 from flask import Flask, Response, abort, g, has_request_context, jsonify, send_file, redirect, request, send_from_directory
@@ -36,6 +38,7 @@ SL_DEFAULT = "1080p60,best"
 YTDL_HEIGHTS = ("1080", "720", "480")
 
 import hlsproxy
+import inproc
 import live
 import access
 import accounts
@@ -274,9 +277,13 @@ def youtube_is_live(url):
     if hit and now - hit[0] < LIVE_CHECK_TTL:
         return hit[1]
     try:
-        out = subprocess.run(["yt-dlp", "--no-playlist", "--print", "is_live", url],
-                             capture_output=True, text=True, timeout=20).stdout
-        live = out.strip().splitlines()[-1] == "True"
+        try:
+            live = inproc.youtube_is_live(url)
+        except Exception as e:
+            app.logger.info("yt-dlp library failed (%s): using the command", e)
+            out = subprocess.run(["yt-dlp", "--no-playlist", "--print", "is_live", url],
+                                 capture_output=True, text=True, timeout=20).stdout
+            live = out.strip().splitlines()[-1] == "True"
     except (OSError, subprocess.TimeoutExpired, IndexError):
         return False  # could not tell: say "not live" this once, but don't remember it (a blip must not stick until a restart)
     for k in [k for k, v in _live_cache.items() if now - v[0] >= LIVE_CHECK_TTL]:
@@ -700,10 +707,16 @@ def stream_url(url, q, low=False):
     hit = _addr_cache.get((url, q))
     if hit and time.time() - hit[0] < ADDR_TTL:
         return hit[1]
-    p = subprocess.run((["nice", "-n", "10"] if low else []) + ["streamlink", "--stream-url", url, q], capture_output=True, text=True, timeout=30)
-    out = p.stdout.strip().splitlines()
-    if p.returncode or not out:
-        raise RuntimeError((p.stderr.strip().splitlines() or ["no stream"])[-1][:200])
+    try:
+        out = [inproc.stream_address(url, q)]  # in this process: 0.4 s, not 5-9 s for a new command (see inproc.py)
+    except RuntimeError:
+        raise  # nothing to play (offline...): the command would say the same
+    except Exception as e:
+        app.logger.info("streamlink library failed (%s): using the command", e)
+        p = subprocess.run((["nice", "-n", "10"] if low else []) + ["streamlink", "--stream-url", url, q], capture_output=True, text=True, timeout=30)
+        out = p.stdout.strip().splitlines()
+        if p.returncode or not out:
+            raise RuntimeError((p.stderr.strip().splitlines() or ["no stream"])[-1][:200])
     now = time.time()
     for k in [k for k, v in _addr_cache.items() if now - v[0] > ADDR_TTL]:
         del _addr_cache[k]
@@ -894,6 +907,7 @@ def start_player(url, quality=None, screen_kind="loading"):
     log = open(LOG_FILE, "w")
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log,
                             stderr=subprocess.STDOUT, start_new_session=True)
+    _pending["t"] = 0.0
     state.update(proc=proc, url=url, quality=q, source=source, player=player, cmd=cmd, started=time.time(), stalls=0, stall_s=0, wid=wall.main_wid(), ended=False,
                  hot=cmd[0] == "mpv" and player == "streamlink")
     chat_sync()
@@ -942,9 +956,11 @@ def sl_info(url):
     if cached and time.time() - cached[0] < 120:
         return cached[1], cached[2]
     try:
-        out = subprocess.run(["streamlink", "--json", url],
-                             capture_output=True, text=True, timeout=20).stdout
-        j = json.loads(out)
+        try:
+            j = inproc.streamlink_json(url)
+        except Exception as e:
+            app.logger.info("streamlink library failed (%s): using the command", e)
+            j = json.loads(subprocess.run(["streamlink", "--json", url], capture_output=True, text=True, timeout=20).stdout)
         streams, meta = list(j.get("streams", {})), j.get("metadata") or {}
     except (OSError, subprocess.TimeoutExpired, ValueError):
         streams, meta = [], {}
@@ -1003,10 +1019,30 @@ def fav_name(url):
 
 # ---------- routes ----------
 
+_remote_page = {"mtime": None, "raw": b"", "gz": b"", "etag": ""}
+
+
+def remote_page():
+    """The remote's page, read once (again if the file changes) with a compressed copy and a tag, so a phone gets 45 KB instead of 200 KB
+    and, when it already has the current page, a 304 with no body."""
+    path = os.path.join(BASE, "index.html")
+    m = os.path.getmtime(path)
+    if _remote_page["mtime"] != m:
+        with open(path, "rb") as f:
+            raw = f.read()
+        _remote_page.update(mtime=m, raw=raw, gz=gzip.compress(raw, 6), etag='"%x-%x"' % (zlib.crc32(raw), len(raw)))
+    return _remote_page
+
+
 @app.get("/")
 @app.get("/share")
 def index():
-    return send_from_directory(BASE, "index.html", max_age=0)
+    pg = remote_page()
+    head = {"ETag": pg["etag"], "Cache-Control": "no-cache", "Vary": "Accept-Encoding"}  # no-cache: ask every time, and the tag makes that cheap
+    if request.headers.get("If-None-Match") == pg["etag"]:
+        return Response(status=304, headers=head)
+    gz = "gzip" in request.headers.get("Accept-Encoding", "")
+    return Response(pg["gz"] if gz else pg["raw"], mimetype="text/html", headers={**head, **({"Content-Encoding": "gzip"} if gz else {})})
 
 
 @app.get("/logo.svg")
@@ -1039,7 +1075,7 @@ def play_get():
         url = None  # shown as nothing playing; the guest is not told what is on the home network
     if url:
         try:
-            play_on(c, url, request.args.get("q"), request.args.get("via"))
+            play_async(c, url, request.args.get("q"), request.args.get("via"))
         except Exception as e:  # shown on the remote via /api/status
             if c:
                 c.state["error"] = str(e)
@@ -1159,6 +1195,28 @@ def api_recents():
 _start_seq = {}  # per TV: the newest start request. A request that is no longer the newest quits without starting.
 
 
+_pending = {"t": 0.0}  # when a start on the Pi's screen was accepted and has no player yet: the remote shows "Starting" meanwhile
+
+
+def play_async(c, url, quality, via=None):
+    """Start `url` and answer at once. On the Pi the slow part (finding the stream's address, waking the TV) runs in the background, so a tap
+    is answered in milliseconds instead of after seconds; the remote shows Starting until the player is up, and a failure shows on the TV and
+    through /api/status. A Chromecast start is still waited for (it reports its errors to the caller)."""
+    if c:
+        return play_on(c, url, quality, via)
+    _pending["t"] = time.time()
+
+    def run():
+        try:
+            play_on(None, url, quality, via)
+        except Exception as e:
+            app.logger.warning("Starting %s failed: %s", url, e)
+            screen("error", str(e)[:160])
+        finally:
+            _pending["t"] = 0.0  # the player is up (or it failed): "Starting" is over
+    threading.Thread(target=run, daemon=True).start()
+
+
 def play_on(c, url, quality, via=None):
     """Start `url` on the Chromecast target `c`, or on the Pi when c is None. Newest tap wins: an older start that is
     still working out its link (yt-dlp can take ~20 s) gives up instead of running after the newer one."""
@@ -1203,7 +1261,7 @@ def api_play():
         return jsonify(ok=False, error=refused), 403
     c = tgt()  # outside the try: its 503 must reach the client, not be turned into a 502
     try:
-        play_on(c, url, data.get("quality"), data.get("via"))
+        play_async(c, url, data.get("quality"), data.get("via"))
     except Exception as e:
         return jsonify(ok=False, error=str(e)), 502
     return jsonify(ok=True, url=url)
@@ -1803,7 +1861,7 @@ def pi_status():
         data["live"] = player == "streamlink" or data["duration"] is None
     else:
         p = state["proc"]
-        data["starting"] = bool(p and p.poll() is None)
+        data["starting"] = bool(p and p.poll() is None) or time.time() - _pending["t"] < 40
         if wall.active() and wall.selected:  # a window of the multi-view that ended by itself
             err_ = wall.extras[wall.selected - 1].get("error")
             if err_:
@@ -2429,9 +2487,13 @@ def api_search():
     if not q:
         return jsonify([])
     try:
-        out = subprocess.run(["yt-dlp", f"ytsearch10:{q}", "--flat-playlist", "-J"],
-                             capture_output=True, text=True, timeout=30).stdout
-        entries = json.loads(out).get("entries", [])
+        try:
+            entries = inproc.youtube_search(q).get("entries") or []
+        except Exception as e:
+            app.logger.info("yt-dlp library failed (%s): using the command", e)
+            out = subprocess.run(["yt-dlp", f"ytsearch10:{q}", "--flat-playlist", "-J"],
+                                 capture_output=True, text=True, timeout=30).stdout
+            entries = json.loads(out).get("entries", [])
     except (OSError, subprocess.TimeoutExpired, ValueError):
         return jsonify(ok=False, error="Search failed"), 502
     return jsonify([{
@@ -2589,6 +2651,10 @@ def is_channel(url):
 def run_streamlink_json(url, timeout=30):
     """`streamlink --json` for a channel: streams and metadata when it is live, an error when not, None if it could not run.
     Runs at a low priority so it never competes with a stream that is playing."""
+    try:
+        return inproc.streamlink_json(url)
+    except Exception as e:
+        app.logger.info("streamlink library failed (%s): using the command", e)
     try:
         out = subprocess.run(["nice", "-n", "10", "streamlink", "--json", url],
                              capture_output=True, text=True, timeout=timeout).stdout
@@ -3185,6 +3251,7 @@ if __name__ == "__main__":
     threading.Thread(target=_rewarm_loop, daemon=True).start()
     threading.Thread(target=sleep_loop, daemon=True).start()
     threading.Thread(target=heat_loop, daemon=True).start()
+    threading.Thread(target=lambda: (inproc.warm(), versions()), daemon=True).start()  # one-time loads and the tool versions, so no tap pays for them
     settings.update(load_settings())
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
                        qr=lambda: f"http://{shell.lan_ip()}:{PORT}" if settings.get("qr", True) is not False else "",
