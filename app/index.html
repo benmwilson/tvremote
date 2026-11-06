@@ -334,7 +334,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 .wtile .ctl>*{min-height:44px}.wtile .ctl select{flex:1;min-width:0}.wtile .ctl .snd{flex:none;display:flex;align-items:center;gap:6px;padding:0 14px}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
 .wtile .top button{flex:none;width:44px;min-height:44px;padding:0}.wtile .ctl .ib{flex:none;width:44px;padding:0}@keyframes wspin{to{transform:rotate(360deg)}}
 #wallcard.updating #wallttl::after{content:'';display:inline-block;width:14px;height:14px;margin-left:10px;border:2px solid var(--dim);border-top-color:var(--tv,#6bb2ff);border-radius:50%;animation:wspin .8s linear infinite;vertical-align:-2px}
-#wallcard.updating .acts,#wallcard.updating .wtile .top button,#wallcard.updating .wtile select,#wallcard.updating #walllayout,#wallcard.updating #wallclear{opacity:.45;pointer-events:none}
+#wallcard.updating .acts,#wallcard.updating .wtile .top button,#wallcard.updating .wtile select,#wallcard.updating #walllayout{opacity:.45;pointer-events:none}
 .pill{flex:none;padding:2px 9px;border-radius:99px;background:var(--tv,#6bb2ff);color:#0b0e14;font-size:11px;font-weight:700}.wtile .top{cursor:pointer}.wtile .acts button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
 .wtile .wt{margin:6px 2px 0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wtile .err{color:#ff8a8a;font-size:14px;margin-top:10px;display:flex;align-items:center;gap:10px}.wtile .err button{margin-left:auto;min-height:36px;padding:0 14px;background:var(--card);color:var(--fg);font-size:14px}
@@ -608,7 +608,6 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <div id="wallpick" class="wallfavs hide" style="margin-top:10px"></div>
       <div id="wallfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="wallfavs" class="wallfavs"></div></div>
     </div>
-    <button id="wallclear" class="hide" style="margin-top:14px;width:100%">Back to one stream</button>
   </div>
 </dialog>
 <div id="err" role="status"></div>
@@ -1747,7 +1746,6 @@ function renderWall() {
   if (!show) { if ($('wallcard').open) $('wallcard').close(); return; }
   const w = st.wall, rows = w ? wallStreams(w) : [];
   $('wallopensub').textContent = w ? rows.length + ' of ' + w.max + ' on screen. Tap to manage' : 'Watch more than one at once';
-  $('wallclear').classList.toggle('hide', !w);
   $('walllayout').classList.toggle('hide', !w);
   if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
   $('wallsub').textContent = w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') : 'Watch more than one at once';
@@ -1835,7 +1833,6 @@ document.addEventListener('click', e => {
 $('wallnote').onclick = () => $('wallopen').click();
 $('wallopen').onclick = () => { wallSig = ''; renderWall(); $('wallcard').showModal(); Promise.all([loadFavs(), loadRecents()]).then(renderWall); };
 $('walllayout').onclick = e => { const b = e.target.closest('button[data-l]'); if (b) wallApi({action: 'layout', layout: b.dataset.l}); };
-$('wallclear').onclick = () => busy($('wallclear'), () => wallApi({action: 'clear'}));
 
 // ---- stats on the TV (Pi TV only) ----
 async function loadStats() {
