@@ -48,6 +48,7 @@ import throttle
 import kick
 import mpvipc
 import multi
+import pihealth
 from multi import cap
 import roku
 import shell
@@ -2349,6 +2350,48 @@ def versions():
     return _versions
 
 
+heat = {"on": False, "saved": None, "restored": False}  # the heat guard: lowers multi-view pictures while the Pi is very hot
+
+
+def heat_check(temp):
+    """Above pihealth.HOT: put every multi-view window at 480p (remembering the picks) and say so on the TV; once cooled below
+    pihealth.COOL, give the picks back. If it overheats again after that, they stay lowered until a person raises them."""
+    if temp is None:
+        return
+    if temp >= pihealth.HOT and not heat["on"]:
+        heat["on"] = True
+        if wall.active() and not heat["restored"]:
+            heat["saved"] = (wall.main_quality, [e.get("quality") for e in wall.extras])
+        if wall.active():
+            wall.main_quality = "480"
+            for e in wall.extras:
+                e["quality"] = "480"
+            wall_later(_restart_main_quality, "480")
+            wall_later(reconcile_job)
+        mpv(["show-text", f"Pi running hot ({temp:.0f} C): lowering the picture quality", 5000])
+    elif temp < pihealth.COOL and heat["on"]:
+        heat["on"], saved, heat["saved"] = False, heat["saved"], None
+        if saved and wall.active() and len(saved[1]) == len(wall.extras):
+            heat["restored"] = True
+            main, extra = saved
+            if wall.main_quality == "480":
+                wall.main_quality = main
+                wall_later(_restart_main_quality, main)
+            for e, q in zip(wall.extras, extra):
+                if e.get("quality") == "480":
+                    e["quality"] = q
+            wall_later(reconcile_job)
+
+
+def heat_loop():
+    while True:
+        time.sleep(10)
+        try:
+            heat_check(pihealth.temperature())
+        except Exception as e:
+            app.logger.warning("Heat check failed: %s", e)
+
+
 @app.get("/api/debug")
 def api_debug():
     admin_only()
@@ -2365,7 +2408,7 @@ def api_debug():
         proc={"pid": p.pid if p else None, "returncode": p.poll() if p else None},
         uptime=round(time.time() - state["started"]) if state.get("started") else None,
         mpv={k: prop(k) for k in DEBUG_PROPS} if prop("pid") is not None else None,
-        versions=versions(), last_error=last_error(), log=log)
+        versions=versions(), last_error=last_error(), log=log, pi=pihealth.snapshot(), heat=heat["on"])
 
 
 def stream_title(url):
@@ -2379,6 +2422,7 @@ def wall_status():
     w = wall.status()
     if w:
         w["busy"] = _wall_pending[0] > 0
+        w["heat"] = heat["on"]
         snap = livewatch.snapshot()
         for t in w["tiles"]:
             t["live"] = snap.get(t["url"], {}).get("live")
@@ -3029,6 +3073,7 @@ if __name__ == "__main__":
     livewatch.start()
     threading.Thread(target=_rewarm_loop, daemon=True).start()
     threading.Thread(target=sleep_loop, daemon=True).start()
+    threading.Thread(target=heat_loop, daemon=True).start()
     settings.update(load_settings())
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
                        qr=lambda: f"http://{shell.lan_ip()}:{PORT}" if settings.get("qr", True) is not False else "",

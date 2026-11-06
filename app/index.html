@@ -786,6 +786,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <p class="sub" id="d-powerhint" style="margin:0 0 4px"></p>
     <div class="dbmute"><button id="pwon" type="button">TV is on</button><button id="pwoff" type="button">TV is off</button></div>
     <div id="d-wall" class="hide"><h3>Multi-view</h3><table id="d-wallsum"></table><div id="d-walltiles"></div></div>
+    <h3>Pi health</h3><table id="d-pi"></table>
     <h3 id="d-h-player">Player</h3><table id="d-player"></table>
     <h3 id="d-h-mpv">mpv</h3><table id="d-mpv"></table>
     <h3>Versions</h3><table id="d-ver"></table>
@@ -2073,7 +2074,7 @@ function renderWall() {
   $('walllayout').classList.toggle('hide', !w);
   $('wallsync').classList.toggle('hide', !w);
   if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
-  $('wallsub').textContent = syncMsg && Date.now() < syncMsg.until ? syncMsg.text : w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') : 'Watch more than one at once';
+  $('wallsub').textContent = syncMsg && Date.now() < syncMsg.until ? syncMsg.text : w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') + (w.heat ? ' \u00b7 Pi running hot: quality lowered' : '') : 'Watch more than one at once';
   $('wallcard').classList.toggle('updating', !!(w && w.busy));  // the Pi is changing the windows: a spinner, and the buttons that change them wait
   const sig = JSON.stringify([w, wallReplace, favList.map(f => f.live === true), recentList.map(x => x.live === true)]);
   if (sig === wallSig) return;
@@ -2265,6 +2266,12 @@ async function dbgTick() {
   const s = d.state || {};
   fillTable('d-player', {url: s.url, source: s.source, player: s.player, quality: s.quality, pid: d.proc.pid,
     returncode: d.proc.returncode, uptime_s: d.uptime, last_error: d.last_error});
+  const pi = d.pi || {};
+  fillTable('d-pi', {temperature: pi.temp_c == null ? null : pi.temp_c + ' \u00b0C (' + pi.level + (d.heat ? ', quality lowered' : '') + ')',
+    throttled: pi.throttled == null ? null : pi.throttled.length ? pi.throttled.join(', ') : 'no', cpu: pi.cpu_pct == null ? null : pi.cpu_pct + '%',
+    load: (pi.load || []).join(' '), memory: pi.mem_available_mb == null ? null : pi.mem_available_mb + ' of ' + pi.mem_total_mb + ' MB free',
+    swap_used: pi.swap_used_mb == null ? null : pi.swap_used_mb + ' MB', uptime: pi.uptime_s == null ? null : Math.round(pi.uptime_s / 60) + ' min',
+    players: (pi.players || []).map(p => (p.window || 'mpv') + ' ' + (p.cpu_pct == null ? '' : p.cpu_pct + '% ') + p.rss_mb + ' MB').join(' | ') || null});
   fillTable('d-mpv', d.mpv); fillTable('d-ver', d.versions);
   $('d-h-player').textContent = d.wall ? 'Tile 1 player (the big window in Focus)' : 'Player';
   $('d-h-mpv').textContent = d.wall ? 'Tile 1 mpv' : 'mpv';
