@@ -713,7 +713,6 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <p id="heatnote" class="sub warn hide" role="status" style="margin:8px 2px"></p>
   <div id="movedbar" class="card hide" role="status" style="margin:8px 0;display:flex;align-items:center;gap:10px"><span class="grow sub" id="movedtext" style="margin:0"></span><button id="movedgo" type="button">Review TVs</button></div>
   <div id="quick" class="quick hide"><div class="wlabel" id="quickhead">Live now: tap one to play</div><div id="quicklist" class="quickstrip"></div></div>
-  <div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multi-view</span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
   <button id="pp" class="pp" data-a="pause" aria-label="Pause or resume"></button>
   <button id="extpp" class="pp hide" data-k="Play" aria-label="Pause or resume the TV's own app"></button>
   <div class="seekbar hide" id="seekbar"><span id="pos">0:00</span><input type="range" id="seekr" min="0" max="100" step="1" value="0" aria-label="Position"><span id="dur">0:00</span></div>
@@ -757,6 +756,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
 <div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multi-view</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
+<div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multi-view</span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
 <dialog id="tour" class="sheet" aria-labelledby="tourttl">
   <div class="sh"><div class="grow"><b id="tourttl"></b><span class="sub" id="toursub"></span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -767,6 +767,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="sh"><div class="grow"><b id="browsettl">Browse live</b><span class="sub" id="browsesub">Kick and Twitch, biggest first</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
+    <input id="browseq" type="search" placeholder="Search live channels, games, titles" aria-label="Search live channels" autocomplete="off" autocapitalize="off" autocorrect="off" enterkeyhint="search" style="font-size:16px;min-height:48px;margin-bottom:10px">
     <div class="wseg" id="browsesite" role="group" aria-label="Site" style="margin-bottom:10px"><button type="button" data-s="" aria-pressed="true">All</button><button type="button" data-s="kick" aria-pressed="false">Kick</button><button type="button" data-s="twitch" aria-pressed="false">Twitch</button></div>
     <div id="browsegrid" class="bgrid" aria-live="polite"></div>
   </div>
@@ -2345,10 +2346,11 @@ function browseCanAdd() { const cur = targets.find(t => t.id === target) || {}; 
 function renderBrowse() {
   const grid = $('browsegrid');
   if (!browseData) { grid.replaceChildren(el('p', 'bnote', 'Loading\u2026')); return; }
-  const tiles = browseTiles(browseData.streams), canAdd = browseCanAdd();
+  const q = $('browseq').value.trim().toLowerCase(), canAdd = browseCanAdd();
+  const tiles = browseTiles(browseData.streams).filter(t => !q || [t.name, t.game, t.title].some(x => (x || '').toLowerCase().includes(q)));
   if (!tiles.length) {
     const off = browseSite === 'twitch' ? !browseData.twitch : browseSite === 'kick' ? !browseData.kick : !browseData.twitch && !browseData.kick;
-    grid.replaceChildren(el('p', 'bnote', off ? 'That site isn\u2019t set up on this Pi yet.' : 'Nothing came back. Try again in a moment.'));
+    grid.replaceChildren(el('p', 'bnote', q && browseData.streams.length ? 'No live channel matches “' + $('browseq').value.trim() + '”.' : off ?'That site isn\u2019t set up on this Pi yet.' : 'Nothing came back. Try again in a moment.'));
     return;
   }
   grid.replaceChildren(...tiles.map(t => {
@@ -2376,11 +2378,12 @@ function renderBrowse() {
 async function loadBrowse(force) {
   if (!force && browseData && Date.now() - browseAt < 30000 && browseData.site === browseSite) return renderBrowse();
   browseData = null; renderBrowse();
-  const r = await fetch('/api/browse' + (browseSite ? '?site=' + browseSite : '')).then(x => x.json()).catch(() => null);
+  const r = await fetch('/api/browse?n=50' + (browseSite ? '&site=' + browseSite : '')).then(x => x.json()).catch(() => null);
   if (!$('browse').open) return;
   browseData = r ? {...r, site: browseSite} : {streams: [], kick: true, twitch: true, site: browseSite}; browseAt = Date.now();
   renderBrowse();
 }
+$('browseq').oninput = renderBrowse;
 $('browseopen').onclick = () => { $('browse').showModal(); loadBrowse(); };
 $('browsesite').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
