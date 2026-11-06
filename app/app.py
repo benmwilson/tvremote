@@ -1396,6 +1396,24 @@ COMMANDS = {
 _vol_saved = {"t": 0.0}
 
 
+def resume_live(paused, duration, now=None):
+    """Pausing remembers when; resuming a live stream (no duration) that was paused for a few seconds loads it again, so it plays from the live
+    edge. (A seek can't do it: a piped stream (Twitch) can't seek at all, and the player would otherwise carry on from the old picture.)"""
+    now = now or time.time()
+    if paused is True:
+        state["paused_at"] = now
+        return False
+    since = state.pop("paused_at", None)
+    if paused is False and duration is None and since and now - since > RESUME_LIVE_AFTER and state.get("url") and not wall.active():
+        with lock:
+            start_player(state["url"], state.get("quality"), "refresh")
+        return True
+    return False
+
+
+RESUME_LIVE_AFTER = 3  # seconds paused before a live stream is reloaded on resume
+
+
 @app.post("/api/cmd")
 def api_cmd():
     data = request.get_json(silent=True) or {}
@@ -1452,8 +1470,9 @@ def api_cmd():
     ok = bool(r and r.get("error") == "success")
     if ok and action == "pause" and sel_info()[3] == SOCK:
         osd_paused(bool(prop("pause")))
-    if ok and action == "pause" and sel_info()[3] == SOCK and prop("pause") is False and prop("duration") is None:
-        mpvipc.send(sel_info()[3], ["seek", 100000, "relative"])  # a live stream resumes at the live edge, not where it was paused
+        resume_live(prop("pause"), prop("duration"))
+    elif ok and action == "pause" and prop("pause") is False and prop("duration") is None:
+        mpvipc.send(sel_info()[3], ["seek", 100000, "relative"])  # a multistream window: the best that can be done without restarting it
     if ok and action in ("volume", "volume_delta") and sel_info()[3] == SOCK and prop("volume") is not None:
         settings["volume"] = prop("volume")
         if data.get("final") or time.time() - _vol_saved["t"] > 2:  # a drag sends many: write the file when it ends, or every few seconds

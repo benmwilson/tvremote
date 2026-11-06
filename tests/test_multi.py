@@ -595,3 +595,34 @@ class EnlargeSoundTest(unittest.TestCase):
         w = self.make("grid", {0})
         w.swap(1)
         self.assertEqual(w.sound, {1})
+
+
+class ResumeLiveTest(unittest.TestCase):
+    """Pause then resume on a live stream must come back at the live edge: the stream is loaded again if it was paused for a few seconds."""
+
+    def setUp(self):
+        import app as server
+        self.server = server
+        server.state.pop("paused_at", None)
+
+    def run_resume(self, paused_for, duration):
+        server = self.server
+        with mock.patch.object(server, "start_player") as start, mock.patch.dict(server.state, {"url": "https://kick.com/a", "quality": "720p"}):
+            server.resume_live(True, duration, now=100.0)
+            reloaded = server.resume_live(False, duration, now=100.0 + paused_for)
+        return reloaded, start
+
+    def test_a_live_stream_paused_a_while_is_reloaded_on_resume(self):
+        reloaded, start = self.run_resume(30, None)
+        self.assertTrue(reloaded)
+        start.assert_called_once_with("https://kick.com/a", "720p", "refresh")
+
+    def test_a_quick_pause_is_left_alone(self):
+        reloaded, start = self.run_resume(1, None)
+        self.assertFalse(reloaded)
+        start.assert_not_called()
+
+    def test_a_video_with_a_duration_resumes_where_it_was(self):
+        reloaded, start = self.run_resume(60, 3600.0)
+        self.assertFalse(reloaded)
+        start.assert_not_called()

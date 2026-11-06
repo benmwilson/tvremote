@@ -3318,7 +3318,7 @@ async function startWatch(i) {
   live.classList.add('hide'); live.onclick = () => { goLive(); v.play().catch(() => {}); };
   if (r.live) {
     v.onpause = () => { if (!v.ended) pausedAt = Date.now(); };
-    v.onplay = () => { if (pausedAt && Date.now() - pausedAt > 2000) goLive(); pausedAt = 0; };  // a live stream kept going while paused: don't resume in the past
+    v.onplay = () => { if (pausedAt && Date.now() - pausedAt > 2000) { if (edge()) goLive(); else startWatch(watchI); } pausedAt = 0; };  // no edge to jump to: load it again  // a live stream kept going while paused: don't resume in the past
     v.ontimeupdate = () => live.classList.toggle('hide', !(edge() && edge() - v.currentTime > 10));
   } else { v.onpause = v.onplay = v.ontimeupdate = null; }
   if (r.start) v.addEventListener('loadedmetadata', () => { v.currentTime = r.start; }, {once: true});
