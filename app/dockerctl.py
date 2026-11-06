@@ -1,5 +1,5 @@
 """Docker controls from inside the container, through the engine's socket (/var/run/docker.sock mounted into it).
-Only list, inspect, logs and start / stop / restart / kill: nothing that creates, execs into or removes a container.
+Only this app's own container, and only inspect, logs and start / stop / restart / kill: other containers on the host are refused, and nothing creates, execs into or removes a container.
 Anyone who can use the socket has root on the host, so the routes in app.py are admin-only and the whole thing is off when the socket isn't mounted."""
 import http.client
 import json
@@ -41,15 +41,13 @@ def available():
 
 
 def containers():
-    """Every container on the host: name, image, state, status line, and whether it is this app."""
+    """This app's own container only (name, image, state, status line). Other containers on the Pi are neither listed nor touchable."""
     status, body = _call("GET", "/containers/json?all=1")
     if status != 200:
         raise OSError(f"Docker answered {status}")
     rows = [{"name": (c.get("Names") or ["?"])[0].lstrip("/"), "image": c.get("Image"), "state": c.get("State"), "status": c.get("Status")}
             for c in json.loads(body)]
-    for r in rows:
-        r["self"] = r["name"] == SELF
-    return sorted(rows, key=lambda r: (not r["self"], r["name"]))
+    return [{**r, "self": True} for r in rows if r["name"] == SELF]
 
 
 def _known(name):

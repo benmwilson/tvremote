@@ -37,11 +37,15 @@ def fake(routes, seen=None):
 
 
 class DockerTest(unittest.TestCase):
-    def test_list_puts_this_app_first(self):
-        with mock.patch.object(dockerctl, "_call", fake({"/containers/json": (200, LIST)})):
+    def test_only_this_app_is_listed_and_other_containers_are_refused(self):
+        seen = []
+        with mock.patch.object(dockerctl, "_call", fake({"/containers/json": (200, LIST)}, seen)):
             rows = dockerctl.containers()
-        self.assertEqual([r["name"] for r in rows], ["tvremote", "uptime-kuma"])
-        self.assertTrue(rows[0]["self"] and not rows[1]["self"])
+            for fn in (lambda: dockerctl.detail("uptime-kuma"), lambda: dockerctl.logs("uptime-kuma"), lambda: dockerctl.act("uptime-kuma", "stop")):
+                with self.assertRaises(ValueError):
+                    fn()
+        self.assertEqual([r["name"] for r in rows], ["tvremote"])
+        self.assertTrue(all(p.startswith("/containers/json") for _, p in seen[1:]))  # nothing was asked about the other container
 
     def test_unknown_or_odd_names_are_refused_before_any_call(self):
         seen = []
@@ -64,14 +68,7 @@ class DockerTest(unittest.TestCase):
         self.assertNotIn("hunter2", json.dumps(d))
         self.assertEqual((d["restart_policy"], d["network"], d["health"], d["restarts"]), ("unless-stopped", "host", "healthy", 2))
 
-    def test_other_containers_show_no_env_values_and_urls_lose_passwords(self):
-        other = json.loads(json.dumps(INSPECT))
-        other["Config"]["Env"] = ["DB=postgres://bob:pw123@db/x", "MODE=plain"]
-        other["Config"]["Cmd"] = ["run", "https://u:secretpw@host/a"]
-        with mock.patch.object(dockerctl, "_call", fake({"/containers/json": (200, LIST), "/containers/uptime-kuma/json": (200, other)})):
-            d = dockerctl.detail("uptime-kuma")
-        self.assertTrue(all(v is None for _, v in d["env"]))
-        self.assertNotIn("secretpw", d["command"])
+    def test_urls_lose_their_passwords(self):
         self.assertEqual(dockerctl.scrub("x postgres://bob:pw123@db/x y"), "x postgres://bob:****@db/x y")
         self.assertEqual(dict(dockerctl.redact(["A=https://u:p@h"]))["A"], "https://u:****@h")
 
@@ -83,13 +80,13 @@ class DockerTest(unittest.TestCase):
 
     def test_action_results(self):
         seen = []
-        with mock.patch.object(dockerctl, "_call", fake({"/containers/json": (200, LIST), "/containers/uptime-kuma/restart": (204, b""),
-                                                         "/containers/uptime-kuma/start": (304, b""), "/containers/uptime-kuma/kill": (500, {"message": "boom"})}, seen)):
-            self.assertEqual(dockerctl.act("uptime-kuma", "restart"), "Restarted.")
-            self.assertIn("already running", dockerctl.act("uptime-kuma", "start"))
+        with mock.patch.object(dockerctl, "_call", fake({"/containers/json": (200, LIST), "/containers/tvremote/restart": (204, b""),
+                                                         "/containers/tvremote/start": (304, b""), "/containers/tvremote/kill": (500, {"message": "boom"})}, seen)):
+            self.assertEqual(dockerctl.act("tvremote", "restart"), "Restarted.")
+            self.assertIn("already running", dockerctl.act("tvremote", "start"))
             with self.assertRaises(OSError):
-                dockerctl.act("uptime-kuma", "kill")
-        self.assertIn(("POST", "/containers/uptime-kuma/restart?t=5"), seen)
+                dockerctl.act("tvremote", "kill")
+        self.assertIn(("POST", "/containers/tvremote/restart?t=5"), seen)
 
 
 if __name__ == "__main__":
