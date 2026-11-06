@@ -1868,11 +1868,15 @@ def api_watch():
             addr, kind = stream_url(url, f"{h}p60,{h}p,480p,best"), "hls"
         else:
             fmt = f"b[vcodec^=avc1][height<={h}][ext=mp4]/b[ext=mp4][height<={h}]/b[ext=mp4]"
-            p = subprocess.run(["yt-dlp", "--no-playlist", "-g", "-f", fmt, url], capture_output=True, text=True, timeout=45)
-            lines = p.stdout.strip().splitlines()
-            if p.returncode or not lines:
-                raise RuntimeError((p.stderr.strip().splitlines() or ["no video address"])[-1][:200])
-            addr, kind = lines[0], "mp4"
+            try:
+                addr = inproc.ytdlp_address(url, fmt)
+            except Exception:  # the library could not do it (or the video is not available): the command says which
+                p = subprocess.run(["yt-dlp", "--no-playlist", "-g", "-f", fmt, url], capture_output=True, text=True, timeout=45)
+                lines = p.stdout.strip().splitlines()
+                if p.returncode or not lines:
+                    raise RuntimeError((p.stderr.strip().splitlines() or ["no video address"])[-1][:200])
+                addr = lines[0]
+            kind = "mp4"
         pos = (c.status() or {}).get("position") if c else sprop(wall.sock(idx, SOCK) if idx else SOCK, "time-pos")
     except (RuntimeError, OSError, subprocess.TimeoutExpired) as e:
         return jsonify(ok=False, error=f"Couldn't get the stream for the phone: {e}"), 502

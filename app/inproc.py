@@ -116,3 +116,21 @@ def warm():
     except Exception:
         return None
     return time.time() - t
+
+
+def ytdlp_address(url, fmt):
+    """What `yt-dlp -g -f <fmt> <url>` prints first: the address of the chosen format."""
+    with _yt(format=fmt) as ydl:
+        info = ydl.extract_info(url, download=False)
+    if info.get("url"):
+        return info["url"]
+    for f in info.get("requested_formats") or []:
+        if f.get("url"):
+            return f["url"]
+    raise RuntimeError("no video address")
+
+
+def video_id(url):
+    """`yt-dlp --print id <url>`."""
+    with _yt() as ydl:
+        return ydl.extract_info(url, download=False)["id"]

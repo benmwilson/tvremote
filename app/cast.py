@@ -12,6 +12,7 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 import hlsproxy
+import inproc
 import pychromecast
 import store
 import zeroconf
@@ -227,9 +228,19 @@ class CastTarget:
     def _media_url(self, url, source, player, q):
         """(url, content type, stream type) for the Default Media Receiver."""
         if player == "streamlink":
+            try:
+                return inproc.stream_address(url, q), "application/x-mpegURL", "LIVE"  # in this process: no 3 s start of a new command
+            except RuntimeError:
+                raise  # nothing to play (offline...)
+            except Exception:
+                pass  # the library could not do it: the command can
             cmd = ["streamlink", "--stream-url"] + (["--twitch-disable-ads"] if source == "Twitch" else []) + [url, q]
             return run(cmd).splitlines()[0], "application/x-mpegURL", "LIVE"
         fmt = f"b[vcodec^=avc1][height<={q}][ext=mp4]/b[ext=mp4][height<={q}]/b[ext=mp4]"
+        try:
+            return inproc.ytdlp_address(url, fmt), "video/mp4", "BUFFERED"
+        except Exception:
+            pass  # the library could not do it (or the video is not available): the command says which
         return run(["yt-dlp", "--no-playlist", "-g", "-f", fmt, url], 45).splitlines()[0], "video/mp4", "BUFFERED"
 
     def play(self, url, quality=None, via=None, cancelled=lambda: False):
@@ -242,7 +253,12 @@ class CastTarget:
         # Work out the new stream before touching anything. If that fails (a channel that is offline), whatever is playing keeps
         # playing and the status keeps describing it, instead of showing the playing stream under the failed channel's name.
         if source == "YouTube":
-            vid = youtube_id(url) or run(["yt-dlp", "--no-playlist", "--print", "id", url]).splitlines()[0]
+            vid = youtube_id(url)
+            if not vid:
+                try:
+                    vid = inproc.video_id(url)
+                except Exception:
+                    vid = run(["yt-dlp", "--no-playlist", "--print", "id", url]).splitlines()[0]
         else:
             media, ctype, stype = self._media_url(url, source, player, q)
         cast = self._connect(wait=45)
