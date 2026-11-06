@@ -311,7 +311,7 @@ body.chatfull{overflow:hidden}
 .s-danger{color:#ff6b6b}
 input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin:0 2px 0 8px;cursor:pointer;background:var(--dim,#8b93a7);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat}input[type=search]::-webkit-search-cancel-button:hover{background:var(--fg)}
 .qrpick{display:grid;gap:6px}.qrpick button{display:flex;align-items:center;gap:12px;justify-content:flex-start;text-align:left;min-height:52px;padding:8px 14px}.qrpick button.on{outline:2px solid var(--tv,#6bb2ff);outline-offset:-2px}.qrpick .qi .ic{width:22px;height:22px}.qrpick .qc{color:#7be29a}.qrpick b{display:block}.qrpick .sub{display:block;margin:2px 0 0}
-.scat+.shead{margin-top:0}[data-url]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.scat{margin:34px 4px 8px;padding-top:16px;border-top:1px solid var(--line);font-size:20px;font-weight:700;letter-spacing:.2px}#view-settings>.scat:first-child{border-top:0}
+.scat+.shead{margin-top:0}.namechips:not(.hide){margin:10px 0 2px}[data-url]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.scat{margin:34px 4px 8px;padding-top:16px;border-top:1px solid var(--line);font-size:20px;font-weight:700;letter-spacing:.2px}#view-settings>.scat:first-child{border-top:0}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}.iconbtn.on{color:#7be29a}.iconbtn .ic{margin:0}
 #tvsadmin{margin-bottom:12px}
 .dd{position:relative;flex:1;min-width:0;width:100%}.ddnative{display:none!important}
@@ -763,10 +763,9 @@ body:has(dialog.sheet[open]){overflow:hidden}
     </div>
     <h3 class="shead hide" id="qrhead">QR code on the TV</h3>
     <div class="card s-form hide" id="qrbox">
-      <div class="s-cap">QR code on the TV between streams</div>
-      <div id="qrpick" class="qrpick" role="radiogroup" aria-label="Which QR code is on the TV"></div>
+            <div id="qrpick" class="qrpick" role="radiogroup" aria-label="Which QR code is on the TV"></div>
       <div class="s-form" id="qropts">
-        <div><div class="s-cap">What it opens</div>
+        <div><div class="s-cap">The remote's code opens</div>
           <select id="qrmode" aria-label="What the QR code opens"><option value="remote">This remote</option><option value="shortcut">Run the iPhone shortcut</option><option value="install">Add the iPhone shortcut</option></select></div>
         <div id="qrshortcut" class="hide"><div class="s-cap">Shortcut link</div>
           <input id="shortcuturl" placeholder="shortcuts://run-shortcut?name=TV%20Remote" aria-label="The Play on Pi shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"></div>
@@ -777,7 +776,6 @@ body:has(dialog.sheet[open]){overflow:hidden}
           <div class="s-out"><input id="scname" placeholder="TV Remote" aria-label="The shortcut's name, as shown in the Shortcuts app" autocapitalize="off" autocorrect="off"><button id="scuse" type="button">Use it</button></div>
           <p class="sub">Open the Shortcuts app on the iPhone, find the shortcut and type its name here exactly as shown. The QR code then runs that shortcut when it is scanned on an iPhone that has it. No link needed.</p></div>
         <p class="sub" id="qrhelp"></p>
-        <div id="qrguestnote" class="hide row" style="align-items:center;margin:0"><span class="sub grow" style="margin:0">A guest link is showing on the TV.</span><button id="qrguestoff" type="button" style="flex:none">Show the normal QR code</button></div>
       </div>
     </div>
     <h2 class="scat">How the remote behaves</h2>
@@ -1002,7 +1000,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="row seg" id="site">
     <button data-s="auto" class="on">Auto</button><button data-s="kick">Kick</button><button data-s="twitch">Twitch</button><button data-s="youtube">YouTube</button>
   </div>
-  <div id="linksugg" class="sugg hide" role="listbox" aria-label="Live channels that match"></div>
+  <div id="linksugg" class="sugg namechips hide" role="listbox" aria-label="Live channels that match"></div>
   <div id="playpick" class="pickrow hide"></div>
   <div class="row"><button id="go" class="go">Play</button></div>
 </div>
@@ -1775,7 +1773,7 @@ $('link').addEventListener('input', () => {  // autofill: a channel name shows w
   if (!/^[\w-]{2,25}$/.test(v) || site === 'youtube') { $('playpick').classList.add('hide'); return; }
   linkTimer = setTimeout(async () => {
     const d = await fetch('/api/detect?name=' + encodeURIComponent(v)).then(x => x.json()).catch(() => null);
-    const ms = d && d.ok ? d.matches.filter(m => site === 'auto' || m.source.toLowerCase() === site) : [];
+    const ms0 = d && d.ok ? d.matches.filter(m => site === 'auto' || m.source.toLowerCase() === site) : [], ms = ms0.some(m => m.live) ? ms0 : [];  // only a name that is live somewhere gets cards
     if (n !== linkSeq || !ms.length) { if (n === linkSeq) $('playpick').classList.add('hide'); return; }
     $('playpick').replaceChildren(...pickCards(v, ms, async (m, b) => { await busy(b, () => play(m.url)); $('playpick').classList.add('hide'); }));
     $('playpick').classList.remove('hide');
@@ -2087,13 +2085,12 @@ function renderShell() {
   $('qrmode').value = mode;
   if (document.activeElement !== $('shortcuturl')) $('shortcuturl').value = s.shortcut_url || '';
   $('qrshortcut').classList.toggle('hide', mode !== 'shortcut'); $('scname-wrap').classList.toggle('hide', mode !== 'shortcut'); $('qrinstall').classList.toggle('hide', mode !== 'install'); if (document.activeElement !== $('installurl')) $('installurl').value = s.install_url || '';
-  $('qropts').classList.toggle('hide', s.qr === false);
+  $('qropts').classList.toggle('hide', s.qr === false || !!s.qr_guest);  // these only matter while the remote's own code is the one on the TV
   $('qrhelp').textContent = mode === 'install'
     ? (s.install_url ? 'Scanning on an iPhone offers to add the shortcut.' : 'Paste the shortcut iCloud link above. Until then the QR code opens this remote.')
     : mode === 'shortcut'
     ? (/^shortcuts:/.test(s.shortcut_url || '') ? 'Scanning on an iPhone runs that shortcut, if it is installed on the phone.' : s.shortcut_url ? 'Scanning opens the shortcut\u2019s iCloud page, so a phone can add \u201cPlay on Pi\u201d.' : 'Paste the shortcut\u2019s iCloud link, or shortcuts://run-shortcut?name=TV%20Remote, above. Until then the QR code opens this remote.')
     : 'Scanning opens this remote. This works on iPhone and Android; the shortcut options below are for iPhones only.';
-  $('qrguestnote').classList.toggle('hide', !s.qr_guest);
   $('invtv').classList.toggle('hide', !targets.some(t => t.kind === 'pi'));
   $('piicon').setAttribute('href', s.enabled ? '#i-eye-off' : '#i-eye');
   $('pilabel').textContent = s.enabled ? 'Hide the remote from the TV' : 'Show the remote on the TV';
@@ -2116,7 +2113,6 @@ $('scuse').onclick = () => { const n = $('scname').value.trim(); if (n) { $('sho
 $('installurl').onchange = () => qrSet({install_url: $('installurl').value});
 $('installqr').onclick = () => $('installurl').value.trim() ? showQr($('installurl').value.trim(), 'Add the shortcut') : null;
 $('shortcuturl').onchange = () => qrSet({shortcut_url: $('shortcuturl').value});
-$('qrguestoff').onclick = () => qrSet({qr_guest: ''});
 let invClear = 0;  // the new link's panel hides itself after a minute (the link stays in the list, with its QR code)
 async function showQr(url, title) {  // a popup with the QR code of a link; from there it can go up on the TV's idle screen
   const r = await api('/api/qr', 'POST', {url});
@@ -3236,7 +3232,7 @@ function showNameChips(box, input) {
 }
 function makeAdder(form, input, pick) {  // a name or a link in a box: look the name up, ask which site if it is on both, then add (or replace with) it
   const add0 = async url => { const r = await wallPut(url); if (r && r.ok) input.value = ''; return r; };
-  const chips = el('div', 'sugg hide'); chips.setAttribute('role', 'listbox'); chips.setAttribute('aria-label', 'Live channels that match'); pick.before(chips);
+  const chips = el('div', 'sugg namechips hide'); chips.setAttribute('role', 'listbox'); chips.setAttribute('aria-label', 'Live channels that match'); pick.before(chips);
   input.addEventListener('input', () => showNameChips(chips, input));
   let timer = 0, seq = 0;
   input.addEventListener('input', () => {  // autofill: while a name is typed, show where that streamer is and whether they are live; tap one to add it
@@ -3244,7 +3240,7 @@ function makeAdder(form, input, pick) {  // a name or a link in a box: look the 
     if (!/^[\w-]{2,25}$/.test(v)) { pick.classList.add('hide'); return; }
     timer = setTimeout(async () => {
       const d = await fetch('/api/detect?name=' + encodeURIComponent(v)).then(x => x.json()).catch(() => null);
-      if (n !== seq || !d || !d.ok || !d.matches.length) { if (n === seq) pick.classList.add('hide'); return; }
+      if (n !== seq || !d || !d.ok || !d.matches.some(m => m.live)) { if (n === seq) pick.classList.add('hide'); return; }  // only a name that is live somewhere gets cards
       pick.replaceChildren(...pickCards(v, d.matches, async (m, b) => { await busy(b, () => add0(m.url)); pick.classList.add('hide'); }));
       pick.classList.remove('hide');
     }, 450);
