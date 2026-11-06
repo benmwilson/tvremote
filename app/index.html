@@ -103,6 +103,11 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .row3.single .pair{grid-template-columns:minmax(0,1fr)}
 .tvoff{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:12px 14px;border-radius:14px;background:rgba(255,176,98,.12);border:1px solid rgba(255,176,98,.35)}
 /* TV off and nothing playing: the "off" message is the whole card, not a banner above an empty "Nothing playing" */
+/* Watch on phone: a player that stays at the top while you scroll to the controls and the chat */
+.watch{position:sticky;top:8px;z-index:6;padding:10px;box-shadow:0 10px 28px rgba(0,0,0,.5);margin-top:12px}
+.watchbar{display:flex;align-items:center;gap:8px;margin-bottom:8px}.watchbar b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.watchbar button{flex:none;width:44px;min-height:44px;padding:0;display:grid;place-items:center}.watchbar select{flex:none;max-width:46%;min-height:44px;font-size:15px}
+.watch.min #watchbody{display:none}
 .now.offidle>:not(.tvoff){display:none!important}
 .now.offidle .tvoff{flex-direction:column;text-align:center;gap:6px;margin:0;padding:26px 18px 22px;background:linear-gradient(160deg,rgba(255,176,98,.16),rgba(255,176,98,.05));border-color:rgba(255,176,98,.28)}
 .now.offidle .tvoff>.ic{width:46px;height:46px;padding:12px;border-radius:50%;background:rgba(255,176,98,.16);color:#ffb062;box-sizing:content-box;margin-bottom:6px}
@@ -194,7 +199,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .fav .spin{display:none;position:absolute;right:12px;bottom:12px;width:18px;height:18px;border-radius:50%;
   border:3px solid var(--line);border-top-color:var(--tv,var(--fg));animation:spin .8s linear infinite}
 .fav.loading{pointer-events:none}.fav.loading .badge{display:none}
-.fav.loading .starting{display:inline}.fav.loading .spin{display:block}
+.fav.loading .starting{display:inline}.fav.loading .spin{display:block}.fav.loading>.iconlink{display:none}  /* the spinner takes that corner while it loads */
 .fav.loading::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:40%;background:var(--tv,var(--fg));animation:slide 1.2s ease-in-out infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes slide{0%{left:-40%}100%{left:100%}}
@@ -640,6 +645,16 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button id="move" class="hide" style="grid-column:1/-1"><svg class="ic" aria-hidden="true"><use href="#i-swap"/></svg><span id="movelabel">Move to the other TV</span></button>
     <button id="stopall" class="danger hide" style="grid-column:1/-1"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop all streams</button></div>
 </div>
+<div class="card watch hide" id="watchcard" role="region" aria-label="Watching on this phone">
+  <div class="watchbar"><b id="watchttl" class="grow">Watch on phone</b><select id="watchsrc" class="hide" aria-label="Which stream to watch"></select>
+    <button id="watchmin" type="button" aria-expanded="true" aria-label="Hide the picture" title="Hide the picture"><svg class="ic" aria-hidden="true"><use href="#i-eye-off"/></svg></button>
+    <button id="watchclose" type="button" aria-label="Stop watching on this phone" title="Stop watching on this phone"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div id="watchbody">
+    <video id="watchvid" playsinline controls autoplay style="width:100%;border-radius:12px;background:#000;aspect-ratio:16/9"></video>
+    <button id="watchlive" type="button" class="hide" style="margin-top:8px;width:100%">Back to live</button>
+  </div>
+  <p class="sub" id="watchnote" style="margin:8px 2px 0"></p>
+</div>
 <div class="card hide" id="chatcard">
   <div class="chatrow"><button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span><span class="chev">&#9662;</span></button>
 </div>
@@ -667,14 +682,6 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <div id="wallpick" class="pickrow hide"></div>
       <div id="wallfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="wallfavs" class="wallfavs"></div></div>
     </div>
-  </div>
-</dialog>
-<dialog id="watchcard" class="sheet" aria-labelledby="watchttl">
-  <div class="sh"><div class="grow"><b id="watchttl">Watch on phone</b><span class="sub" id="watchsub"></span></div>
-    <button class="sclose" data-close aria-label="Close" autofocus><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
-  <div class="sb">
-    <video id="watchvid" playsinline controls autoplay style="width:100%;border-radius:14px;background:#000;aspect-ratio:16/9"></video>
-    <p class="sub" id="watchnote" style="margin:10px 2px 0"></p>
   </div>
 </dialog>
 <div id="err" role="status"></div>
@@ -946,10 +953,10 @@ function render() {
   }
   $('ctlrow').classList.toggle('single', !up && starting);  // starting: just Stop, so you can cancel
   $('fav').classList.toggle('hide', !up);
-  const to = otherTv();  // shortcut: with two TVs there is one "other"; more TVs would need a picker here
-  $('move').classList.toggle('hide', !up || !to || !st.url);
-  $('watch').classList.toggle('hide', !up || multi || !st.url || me.watch === false);  // one stream only; an admin can switch it off for guests
-  if (to) $('movelabel').textContent = 'Move to ' + to.name;
+  const mv = moveInfo();
+  $('move').classList.toggle('hide', !up || !mv || !st.url);
+  $('watch').classList.toggle('hide', !up || !st.url || me.watch === false);  // an admin can switch it off for guests
+  if (mv) $('movelabel').textContent = mv.label;
   $('pp').classList.toggle('paused', !!st.paused);
   setBtn($('pp'), st.paused ? 'play' : 'pause', st.paused ? 'Paused' : '');
   $('seek').classList.toggle('hide', !run || st.live);
@@ -1000,6 +1007,10 @@ async function poll() {
     if (s.running) lastRun = {...s, at: Date.now()};
     else if (s.starting && !s.error && lastRun && lastRun.url === s.url && Date.now() - lastRun.at < 45000) { Object.assign(s, lastRun, {running: true, starting: false, buffering: true, error: null}); delete s.at; }
     st = s; render();
+    if (watchTv && !$('watchcard').classList.contains('hide')) {  // the picture on the phone ends when the stream on the TV does
+      if (!s.running && !s.starting) closeWatch('The stream ended, so the phone player closed.');
+      else if (watchUrl && s.url && s.url !== watchUrl) closeWatch('A different stream started, so the phone player closed.');
+    }
   }
 }
 
@@ -1182,7 +1193,16 @@ async function loadApps() {
   }));
 }
 $('appsbox').addEventListener('toggle', () => { if ($('appsbox').open) loadApps(); });
-const otherTv = () => (targets || []).find(t => t.id !== target && t.reachable);
+// Where this stream can go: another way to play (the Pi's screen or a Chromecast) that is reachable. The Pi and the Chromecast on one TV are "the
+// same TV": that is a switch of device, not a trip to another room. A TV with nothing plugged in can't play, so it is never offered.
+// shortcut: there are at most two ways to play (one Pi, one Chromecast), so there is one "other"; more would need a picker.
+function moveInfo() {
+  const here = (targets || []).find(t => t.id === target) || {};
+  const to = (targets || []).find(t => t.id !== target && t.reachable && (t.kind === 'pi' || t.kind === 'chromecast'));
+  if (!to || here.kind === 'tv') return null;
+  const same = !!here.tv && here.tv === to.tv, dev = to.kind === 'chromecast' ? 'the Chromecast' : 'the Pi';
+  return {to, here, same, dev, label: same ? 'Switch to ' + dev : 'Move to ' + to.name};
+}
 // A confirmation sheet for something that stops what is playing: resolves true on the confirm button, false on Cancel, Esc or a tap outside.
 function confirmSheet(title, text, yes, danger) {
   return new Promise(resolve => {
@@ -1198,12 +1218,16 @@ function confirmSheet(title, text, yes, danger) {
   });
 }
 $('move').onclick = async () => {
-  const to = otherTv(), url = st.url;
-  if (!to || !url) return;
-  const here = (targets.find(t => t.id === target) || {}).name || 'this TV', who = chanName(url) || 'this stream';
-  const ok = await confirmSheet('Move to ' + to.name + '?', st.wall
-    ? 'Plays ' + who + ' (the stream you are controlling) on ' + to.name + ', and ends the multi-view on ' + here + '.'
-    : 'Plays ' + who + ' on ' + to.name + ' and stops it on ' + here + '.', 'Move');
+  const mv = moveInfo(), url = st.url;
+  if (!mv || !url) return;
+  const {to, here, same, dev} = mv, who = chanName(url) || 'this stream', dest = same ? dev : to.name;
+  const notes = [(st.wall ? 'Plays ' + who + ' (the stream you are controlling) on ' + dest + ', and ends the multi-view on ' + here.name + '.'
+    : 'Plays ' + who + ' on ' + dest + ' and stops it on ' + here.name + '.')];
+  if (same) notes.push('The TV stays on and changes to ' + dev + '\u2019s input.');
+  else if (tvOff(to)) notes.push(to.name + ' is off. It will be turned on, and back off if you move away without anything else using it.');
+  if (to.now && to.now.title) notes.push('This replaces \u201c' + to.now.title + '\u201d on ' + to.name + '.');
+  if (!st.live && st.duration) notes.push('It starts from the beginning.');
+  const ok = await confirmSheet(same ? 'Switch to ' + dev + '?' : 'Move to ' + to.name + '?', notes.join(' '), same ? 'Switch' : 'Move');
   if (!ok) return;
   return busy($('move'), async () => {
     // the Pi starts it on the other TV first (if that fails, what is playing here is left alone), stops this one, and switches
@@ -1730,7 +1754,7 @@ async function loadRecents() {
     b.onkeydown = e => { if (e.key === 'Enter') playFav(it.url); };
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
     const live = it.live === true ? [el('span', 'badge live', 'LIVE')] : [];  // the same chip and line as a favourite
-    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), ...live, el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, x);
+    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), ...live, el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, linkEl(it.url, it.source), x);  // the same open-on-the-site icon as a favourite
     box.append(b);
   });
   markFavs();  // a list redrawn while a tap is still loading keeps its spinner
@@ -1967,24 +1991,53 @@ document.addEventListener('click', e => {
   else if (e.target.matches('dialog.sheet')) e.target.close();  // the dim area behind it counts as a click on the dialog itself
 });
 $('wallnote').onclick = () => $('wallopen').click();
-// Watch on phone: the phone plays what the TV plays, itself (home network only). It runs a few seconds behind the TV.
-$('watch').onclick = async () => {
-  const v = $('watchvid'), note = $('watchnote');
-  $('watchsub').textContent = ''; note.textContent = 'Getting the stream…';
-  v.removeAttribute('src'); v.load();
-  $('watchcard').showModal();
-  const r = await api('/api/watch');
-  if (!$('watchcard').open) return;  // closed while it was loading
+// Watch on phone: the phone plays what the TV plays, itself (home network only), in a player that stays at the top of the remote.
+// Several streams: pick which one; the chat tab below follows. It can run ahead of or behind the TV by a few seconds.
+let watchI = 0, watchUrl = null, watchTv = null;
+function closeWatch(why) {
+  watchUrl = watchTv = null;
+  if (why) err(why);
+  const v = $('watchvid');
+  v.pause(); v.removeAttribute('src'); v.onpause = v.onplay = v.ontimeupdate = v.onerror = null; v.load();
+  $('watchcard').classList.add('hide'); $('watchcard').classList.remove('min');
+}
+async function startWatch(i) {
+  const v = $('watchvid'), note = $('watchnote'), card = $('watchcard');
+  card.classList.remove('hide', 'min'); $('watchmin').setAttribute('aria-expanded', 'true');
+  note.textContent = 'Getting the stream…';
+  v.pause(); v.removeAttribute('src'); v.load();
+  const r = await api('/api/watch' + (i == null ? '' : '?i=' + i));
+  if (card.classList.contains('hide')) return;  // closed while it was loading
   if (!r || r.ok === false) { note.textContent = (r && r.error) || 'Couldn’t start it.'; return; }
+  watchI = r.i || 0; watchTv = target; watchUrl = st.wall ? null : st.url;
+  const sel = $('watchsrc'), streams = st.wall ? wallStreams(st.wall) : [];
+  sel.classList.toggle('hide', streams.length < 2);
+  if (streams.length > 1) { sel.replaceChildren(...streams.map(t => mk('option', {value: String(t.i)}, t.name || 'Stream ' + (t.i + 1)))); sel.value = String(watchI); }
+  if (st.wall && chatTab !== watchI) { chatTab = watchI; chatShow(); }  // the chat below is the one for what you are watching
   $('watchttl').textContent = r.title || 'Watch on phone';
-  $('watchsub').textContent = 'Up to ' + r.quality + 'p';
-  note.textContent = r.live ? 'A few seconds behind the TV. The TV is not affected.' : 'Starts where the TV is. The TV is not affected.';
+  note.textContent = 'Up to ' + r.quality + 'p' + (r.live ? '' : '. Starts where the TV is') + '. The TV is not affected.';
   v.src = r.url;
+  const live = $('watchlive'), edge = () => { const k = v.seekable; return k && k.length ? k.end(k.length - 1) : 0; };
+  const goLive = () => { const e = edge(); if (e) v.currentTime = Math.max(0, e - 2); };  // a few seconds under the edge, so it doesn't stall
+  let pausedAt = 0;
+  live.classList.add('hide'); live.onclick = () => { goLive(); v.play().catch(() => {}); };
+  if (r.live) {
+    v.onpause = () => { if (!v.ended) pausedAt = Date.now(); };
+    v.onplay = () => { if (pausedAt && Date.now() - pausedAt > 2000) goLive(); pausedAt = 0; };  // a live stream kept going while paused: don't resume in the past
+    v.ontimeupdate = () => live.classList.toggle('hide', !(edge() && edge() - v.currentTime > 10));
+  } else { v.onpause = v.onplay = v.ontimeupdate = null; }
   if (r.start) v.addEventListener('loadedmetadata', () => { v.currentTime = r.start; }, {once: true});
   v.onerror = () => { note.textContent = 'This phone couldn’t play that stream. Try the TV, or a lower quality in Settings.'; };
   v.play().catch(() => {});  // autoplay can be refused: the controls are there
+}
+$('watch').onclick = () => startWatch(st.wall ? st.wall.selected : null);
+$('watchsrc').onchange = () => startWatch(Number($('watchsrc').value));
+$('watchclose').onclick = closeWatch;
+$('watchmin').onclick = () => {
+  const min = $('watchcard').classList.toggle('min'), v = $('watchvid');
+  $('watchmin').setAttribute('aria-expanded', String(!min));
+  if (min) v.pause(); else v.play().catch(() => {});  // a hidden picture isn't left playing
 };
-$('watchcard').addEventListener('close', () => { const v = $('watchvid'); v.pause(); v.removeAttribute('src'); v.load(); });  // stop downloading when it closes
 $('remove').onclick = () => st.wall && busy($('remove'), () => wallApi({action: 'remove', i: st.wall.selected}));
 $('enlarge').onclick = () => st.wall && wallApi({action: 'swap', i: st.wall.selected});  // swap windows with the big one; the control choice stays with the stream
 $('wallopen').onclick = () => { wallSig = ''; renderWall(); $('wallcard').showModal(); Promise.all([loadFavs(), loadRecents()]).then(renderWall); };
@@ -2217,6 +2270,7 @@ function show() {
   const v = view();
   $('gear').style.display = v === 'setup' ? 'none' : '';  // no way out of the wizard through the header
   if (v !== 'settings') beforeSettings = location.hash || '#/';
+  if (v !== 'tv' || (watchTv && watchTv !== target)) closeWatch();  // the player belongs to one TV's remote
   $('gear').setAttribute('aria-pressed', String(v === 'settings'));
   $('gear').title = v === 'settings' ? 'Close settings' : 'Settings';
   $('gear').setAttribute('aria-label', $('gear').title);

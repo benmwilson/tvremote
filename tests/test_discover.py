@@ -262,6 +262,21 @@ class MoveSwitchesBackOff(unittest.TestCase):
         self.power["bedroom"] = "PowerOn"
         self.assertFalse(self.move("bedroom", "living").get_json()["switched_off"])  # we can't tell it is still on our input
 
+    def test_switching_between_the_pi_and_the_chromecast_on_one_tv_never_powers_the_tv_off(self):
+        ips = {"living": BEDROOM["ip"], "bedroom": BEDROOM["ip"]}  # both plugged into the same TV, which is off
+        with mock.patch.dict(server.ROKU_IPS, ips), mock.patch.dict(server.TV_OF, {"living": "tv1", "bedroom": "tv1"}):
+            self.power.update(living="Ready", bedroom="Ready")
+            r = self.move("living", "bedroom").get_json()
+            self.assertEqual((r["ok"], r["same_tv"], r["switched_off"]), (True, True, False))
+            self.assertNotIn("bedroom", server._woken)  # nothing was woken by the move, so nothing is switched back off later
+            self.power.update(living="PowerOn", bedroom="PowerOn")
+            self.assertFalse(self.move("bedroom", "living").get_json()["switched_off"])
+        self.assertEqual(self.keys, [])
+
+    def test_a_tv_that_is_switched_off_in_setup_cannot_be_moved_to(self):
+        with mock.patch.dict(server.TV_ENABLED, {"bedroom": False}):
+            self.assertEqual(self.move("living", "bedroom").status_code, 400)
+
     def test_a_failed_start_leaves_everything_alone(self):
         with mock.patch.object(server, "play_on", side_effect=RuntimeError("Chromecast couldn't load the stream")):
             r = self.move("living", "bedroom")

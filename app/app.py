@@ -1420,8 +1420,11 @@ def api_move():
     src, dst, url = d.get("from"), d.get("to"), normalise(d.get("url") or "")
     if src not in tvconfig.IDS or dst not in tvconfig.IDS or src == dst or not url:
         return jsonify(ok=False, error="Pick a different TV to move it to."), 400
+    if not TV_ENABLED.get(dst) or not TV_ENABLED.get(src):
+        return jsonify(ok=False, error="That TV isn't set up to play on."), 400
+    same_tv = bool(TV_OF.get(src) and TV_OF.get(src) == TV_OF.get(dst))  # e.g. the Pi and the Chromecast on one TV
     c_dst = target_for(dst)
-    was_off = tv_is_off(dst)
+    was_off = tv_is_off(dst) and not same_tv
     try:
         play_on(c_dst, url, None)  # start it there first: if that fails, what is playing here is left alone
     except Exception as e:
@@ -1437,7 +1440,7 @@ def api_move():
             app.logger.warning("Couldn't stop the Chromecast after a move: %s", e)
     else:
         stop_pi()
-    return jsonify(ok=True, switched_off=power_back_off(src))
+    return jsonify(ok=True, same_tv=same_tv, switched_off=False if same_tv else power_back_off(src))  # the shared TV stays on
 
 
 def paused_screen(title=""):
@@ -1544,7 +1547,14 @@ def api_watch():
     if g.user == accounts.GUEST and not cfg["phone_guests"]:
         return jsonify(ok=False, error="Watching on the phone is switched off for guests."), 403
     c = tgt()
-    url = (c.state.get("url") if c else state.get("url"))
+    idx = 0
+    if c:
+        url = c.state.get("url")
+    else:  # the Pi: with several streams on its screen, ?i= picks one (default: the one being controlled); 0 is the main window
+        urls = [wall.main_url or state.get("url"), *[t["url"] for t in wall.extras]] if wall.active() else [state.get("url")]
+        want = request.args.get("i", type=int)
+        idx = want if want is not None else (wall.selected if wall.active() else 0)
+        url = urls[idx] if 0 <= idx < len(urls) else None
     if not url:
         return jsonify(ok=False, error="Nothing is playing on this TV."), 409
     h = cfg["phone_quality"]
@@ -1561,10 +1571,10 @@ def api_watch():
             if p.returncode or not lines:
                 raise RuntimeError((p.stderr.strip().splitlines() or ["no video address"])[-1][:200])
             addr, kind = lines[0], "mp4"
-        pos = (c.status() or {}).get("position") if c else sprop(SOCK, "time-pos")
+        pos = (c.status() or {}).get("position") if c else sprop(wall.sock(idx, SOCK) if idx else SOCK, "time-pos")
     except (RuntimeError, OSError, subprocess.TimeoutExpired) as e:
         return jsonify(ok=False, error=f"Couldn't get the stream for the phone: {e}"), 502
-    return jsonify(ok=True, url=addr, kind=kind, live=kind == "hls", quality=h, title=fav_name(url),
+    return jsonify(ok=True, url=addr, kind=kind, live=kind == "hls", quality=h, title=fav_name(url), i=idx,
                    start=pos if isinstance(pos, (int, float)) and kind == "mp4" else 0)
 
 
@@ -1671,6 +1681,7 @@ def cast_segment(token):
 ORDER = ["living", "bedroom"]
 LABELS = {"living": "Living room", "bedroom": "Bedroom"}
 KINDS = {"living": ("pi", "Pi on HDMI"), "bedroom": ("chromecast", "Chromecast")}  # TVs with nothing plugged in are added here as ("tv", ...)
+TV_OF = {}  # playback endpoint (or TV-only id) -> the id of the TV it is on, so two endpoints on one TV can tell
 TV_ONLY = {}  # id -> name of each TV that has neither the Pi nor a Chromecast: Roku controls only, nothing to play on
 
 
@@ -1791,7 +1802,7 @@ def make_card(tv_id, status):
            "streams": [{"name": t["name"], "url": t["url"], "source": t["source"], "live": t.get("live"), "off": bool(t.get("error")),
                         "game": t.get("game"), "live_for": t.get("live_for"), "sound": t["i"] in status["wall"]["sound"]}
                        for t in [status["wall"]["main"], *status["wall"]["tiles"]]] if status.get("wall") else None} if busy else None
-    return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection,
+    return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection, "tv": TV_OF.get(tv_id),
             "external": None if busy or status.get("error") else external_now(tv_id),  # playing on the TV itself, not through this remote
             "brand": r.get("brand"), "model": r.get("model"), "size": r.get("size"), "tv_name": r.get("name"),
             "power": r.get("power"), "input": r.get("app"), "input_id": r.get("app_id"), "now": now, "error": status.get("error"),
@@ -1956,6 +1967,9 @@ def apply_tv_config(tvs):
     """Put the saved TVs to use: the Pi's and the Chromecast's Roku, input and name, a card for every TV with nothing plugged in, and
     which endpoints show. Takes effect at once, no restart."""
     ep = tvconfig.endpoints(tvs)
+    TV_OF.clear()
+    TV_OF.update({"living": next((t["id"] for t in tvs if t.get("pi")), None), "bedroom": next((t["id"] for t in tvs if t.get("chromecast")), None),
+                  **{t["id"]: t["id"] for t in tvs}})
     for tid in tvconfig.IDS:
         ROKU_IPS[tid], INPUTS[tid] = ep[tid]["roku"], ep[tid]["input"]
         TV_ENABLED[tid], LABELS[tid] = ep[tid]["enabled"], ep[tid]["label"]

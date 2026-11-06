@@ -72,5 +72,21 @@ class PhoneViewing(unittest.TestCase):
         self.assertEqual(j["start"], 0)  # a live stream has no position to start from
 
 
+    def test_with_several_streams_the_phone_can_pick_any_and_defaults_to_the_controlled_one(self):
+        urls = {"https://kick.com/a": "A", "https://kick.com/b": "B", "https://kick.com/c": "C"}
+        extras = [{"url": "https://kick.com/b"}, {"url": "https://kick.com/c"}]
+        with mock.patch.dict(server.state, {"url": "https://kick.com/a"}), \
+                mock.patch.object(server.wall, "layout", "grid"), mock.patch.object(server.wall, "extras", extras), \
+                mock.patch.object(server.wall, "main_url", "https://kick.com/a"), mock.patch.object(server.wall, "selected", 2), \
+                mock.patch.object(server, "resolve", return_value=("Kick", "streamlink")), mock.patch.object(server, "sprop", return_value=None), \
+                mock.patch.object(server, "stream_url", side_effect=lambda u, q: "https://cdn.example/" + urls[u]):
+            default = self.admin.get("/api/watch").get_json()
+            first = self.admin.get("/api/watch?i=0").get_json()
+            bad = self.admin.get("/api/watch?i=9")
+        self.assertEqual((default["i"], default["url"]), (2, "https://cdn.example/C"))  # the stream being controlled
+        self.assertEqual((first["i"], first["url"]), (0, "https://cdn.example/A"))
+        self.assertEqual(bad.status_code, 409)  # no such stream
+
+
 if __name__ == "__main__":
     unittest.main()
