@@ -449,7 +449,7 @@ body.touring{padding-bottom:260px}
 .btile .bacts{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:6px}
 .btile .bact{display:flex;gap:6px}.btile .bact button{min-height:40px;padding:0 8px;font-size:13px;font-weight:700}
 .btile .bact .bp{flex:1;min-width:0}.btile .bact .bp.Kick{background:#53fc18;color:#000}.btile .bact .bp.Twitch{background:#9146ff;color:#fff}
-.btile .bact .bpadd{flex:none;width:auto;padding:0 14px;background:rgba(98,176,255,.14);background:color-mix(in srgb,var(--tv,#62b0ff) 16%,transparent);color:var(--tv,#62b0ff);font-weight:800;box-shadow:inset 0 0 0 1.5px var(--tv,#62b0ff)}.btile .bact .bpadd:disabled{opacity:1;background:var(--tv,#62b0ff);color:#0b0e14}
+.btile .bact .bpadd{flex:none;width:44px;min-width:44px;padding:0;display:grid;place-items:center;background:var(--line);color:var(--dim);box-shadow:none}.btile .bact .bpadd .ic{width:20px;height:20px}.btile .bact .bpadd:disabled{opacity:1;background:var(--line);color:#7be29a}
 .bctl{display:flex;gap:8px;align-items:center;margin:0 0 4px}.bctl select{flex:1;min-width:0;min-height:44px;font-size:16px}
 .bfilters summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;color:var(--dim);cursor:pointer}
 .bfilters summary>span:first-child{flex:1}
@@ -3066,8 +3066,8 @@ function renderBrowse() {
       go.onclick = async () => { const r = await busy(go, () => play(pl.url)); if (r && r.ok) $('browse').close(); };
       row.append(go);
       if (canAdd) {
-        const add = el('button', 'bpadd', '+ Add'); add.setAttribute('aria-label', 'Add ' + t.name + ' to the multistream'); add.title = 'Add to the multistream';
-        add.onclick = async () => { const r = await busy(add, () => wallPut(pl.url)); if (r && r.ok) { add.textContent = '\u2713 Added'; add.disabled = true; } };
+        const add = el('button', 'bpadd'); add.innerHTML = ic('plus'); add.setAttribute('aria-label', 'Add ' + t.name + ' to the multistream'); add.title = 'Add to the multistream';
+        add.onclick = async () => { const r = await busy(add, () => wallPut(pl.url)); if (r && r.ok) { add.innerHTML = ic('check'); add.title = 'Added'; add.disabled = true; } };
         row.append(add);
       }
       acts.append(row);
