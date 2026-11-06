@@ -274,6 +274,14 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .s-actions form{display:flex;gap:8px;flex:1 1 100%}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
 .s-danger{color:#ff6b6b}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}
+.drow{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:8px 4px;background:none;border-radius:12px;text-align:left;justify-content:flex-start}
+.drow+.drow{border-top:1px solid var(--line);border-radius:0}.drow .grow{min-width:0}.drow b{display:block}
+.drow .sub{display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sdot{width:10px;height:10px;border-radius:50%;background:var(--dim);flex:none}.sdot.running{background:var(--ok)}.sdot.exited,.sdot.dead{background:var(--bad)}.sdot.restarting,.sdot.paused{background:#ffb062}
+.dfacts{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:14px;margin:14px 2px 0}.dfacts dt{color:var(--dim)}.dfacts dd{margin:0;overflow-wrap:anywhere}
+#dockerover .row,#dockerlogs .row{margin-top:10px}.dsec{margin:16px 2px 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:600}
+#dklogtext{font:11px/1.4 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all;max-height:55vh;overflow:auto;background:var(--bg);border-radius:12px;padding:10px;margin:10px 0 0}
+.dmono{font:12px/1.4 ui-monospace,Menlo,monospace}
 .dropsum{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:52px;padding:0 14px;border-radius:14px;background:var(--card2);color:var(--fg);cursor:pointer;list-style:none;-webkit-user-select:none;user-select:none;transition:filter .12s}
 .dropsum::-webkit-details-marker{display:none}.dropsum:active{filter:brightness(1.4)}
 .dropsum::after{content:"›";font-size:22px;line-height:1;transition:transform .15s}
@@ -690,6 +698,11 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <button id="restartapp" type="button">Restart the app</button>
       <p class="sub" id="restartnote">Restarts the container's app (Docker brings it straight back). It stops what is playing on the Pi's screen. Use it if something is stuck.</p>
     </div>
+    <h3 class="shead hide" id="dockerhead">Docker</h3>
+    <div class="card hide" id="dockerbox">
+      <div id="dockerlist"></div>
+      <p class="sub" id="dockernote" style="margin:8px 4px 0"></p>
+    </div>
     <h3 class="shead">Phone viewing</h3>
     <div class="card s-form" id="cfgcard">
       <select id="cfgq" aria-label="Biggest picture sent to a phone" style="font-size:16px;min-height:52px">
@@ -865,6 +878,23 @@ body:has(dialog.sheet[open]){overflow:hidden}
 
 <p id="dbgrow" class="hide" style="text-align:center;margin-top:26px"><button id="dbgOpen" style="min-height:44px;background:none;color:var(--dim);font-size:14px"><svg class="ic" aria-hidden="true"><use href="#i-terminal"/></svg>Debug</button></p>
 </section>
+<dialog id="docker" class="sheet" aria-labelledby="dockerttl">
+  <div class="sh"><div class="grow"><b id="dockerttl"></b><span class="sub" id="dockersub"></span></div>
+    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb">
+    <div class="wseg" id="dockertabs" role="group" aria-label="Section"><button type="button" data-t="over" aria-pressed="true">Overview</button><button type="button" data-t="logs" aria-pressed="false">Logs</button><button type="button" data-t="cfg" aria-pressed="false">Config</button></div>
+    <p class="sub" id="dockermsg" role="status" style="margin:8px 2px 0"></p>
+    <div id="dockerover">
+      <div class="row"><button id="dkrestart" type="button">Restart</button><button id="dkstop" type="button">Stop</button><button id="dkkill" type="button" class="s-danger">Kill</button></div>
+      <dl class="dfacts" id="dockerfacts"></dl>
+    </div>
+    <div id="dockerlogs" class="hide">
+      <div class="row" style="align-items:center"><select id="dklogtail" aria-label="How many lines"><option value="100">Last 100 lines</option><option value="300" selected>Last 300 lines</option><option value="1000">Last 1000 lines</option></select><button id="dklogrefresh" type="button" style="flex:none">Refresh</button></div>
+      <pre id="dklogtext"></pre>
+    </div>
+    <div id="dockercfg" class="hide"></div>
+  </div>
+</dialog>
 <div id="tourbox" class="hide" role="dialog" aria-live="polite" aria-labelledby="tourttl">
   <div class="tt"><b id="tourttl"></b><span class="sub" id="toursub"></span>
     <button id="tourclose" type="button" class="iconbtn" aria-label="End the tour" title="End the tour"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -1631,6 +1661,95 @@ $('tourback').onclick = () => { if (tourI) { tourI--; tourShow(); } };
 $('tournext').onclick = () => { if (tourI < tourSteps.length - 1) { tourI++; tourShow(); } else tourEnd(); };
 $('tourclose').onclick = tourEnd;
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && tourOpen()) tourEnd(); });
+// ---- Docker (admin): the containers on this Pi, with start / stop / restart / kill, logs and settings. Needs the engine's socket mounted. ----
+let dockerName = '', dockerTab = 'over', dockerInfo = null, dockerMe = '';
+async function loadDocker() {
+  const on = !!(me && me.admin);
+  $('dockerhead').classList.toggle('hide', !on); $('dockerbox').classList.toggle('hide', !on);
+  if (!on) return;
+  const r = await fetch('/api/docker').then(x => x.json()).catch(() => null);
+  const list = $('dockerlist'); list.replaceChildren();
+  if (!r || r.ok === false || !r.available) {
+    $('dockernote').textContent = r && r.ok !== false ? 'Docker isn\u2019t connected to this app. Mount /var/run/docker.sock in compose.yaml to manage containers here.' : 'Couldn\u2019t reach Docker.';
+    return;
+  }
+  dockerMe = r.me;
+  $('dockernote').textContent = 'Tap a container for its logs and settings. Anyone who can use these controls can stop this app.';
+  r.containers.forEach(c => {
+    const b = el('button', 'drow'), dot = el('i', 'sdot ' + c.state), g = el('div', 'grow');
+    b.type = 'button'; dot.setAttribute('aria-hidden', 'true');
+    g.append(el('b', null, c.name + (c.self ? ' (this app)' : '')), el('span', 'sub', c.image + ' \u00b7 ' + c.status));
+    b.append(dot, g, el('span', 'chev', '\u203a'));
+    b.onclick = () => openDocker(c.name);
+    list.append(b);
+  });
+}
+function openDocker(name) {
+  dockerName = name; dockerTab = 'over'; dockerInfo = null;
+  $('dockerttl').textContent = name; $('dockersub').textContent = 'Loading\u2026'; $('dockermsg').textContent = '';
+  dockerShowTab(); $('docker').showModal(); loadDockerDetail();
+}
+async function loadDockerDetail() {
+  const r = await api('/api/docker/' + encodeURIComponent(dockerName));
+  if (!r || !r.ok) { $('dockersub').textContent = 'Couldn\u2019t load.'; return; }
+  dockerInfo = r.detail; renderDocker();
+}
+const dockerWhen = t => { const d = new Date(t); return t && d.getFullYear() > 1971 ? d.toLocaleString() : '\u2013'; };
+function dl(rows) {  // [[label, value]] as a definition list
+  const box = el('dl', 'dfacts');
+  rows.filter(r => r[1] != null && r[1] !== '').forEach(([k, v]) => { box.append(el('dt', null, k), el('dd', null, String(v))); });
+  return box;
+}
+function renderDocker() {
+  const d = dockerInfo; if (!d) return;
+  const running = d.state === 'running';
+  $('dockersub').textContent = d.image + ' \u00b7 ' + d.state + (d.health ? ' \u00b7 ' + d.health : '');
+  $('dkstop').textContent = running ? 'Stop' : 'Start'; $('dkstop').dataset.a = running ? 'stop' : 'start';
+  $('dkrestart').disabled = !running && d.state !== 'exited' && d.state !== 'created'; $('dkkill').disabled = !running;
+  const f = $('dockerfacts'); f.replaceWith(Object.assign(dl([
+    ['State', d.state], ['Health', d.health], ['Started', dockerWhen(d.started)], ['Stopped', running ? '' : dockerWhen(d.finished)],
+    ['Exit code', running ? '' : d.exit_code], ['Restarts', d.restarts], ['Restart policy', d.restart_policy], ['Image', d.image], ['ID', d.id],
+    ['Created', dockerWhen(d.created)], ['Compose', [d.compose.project, d.compose.service].filter(Boolean).join(' / ')]]), {id: 'dockerfacts'}));
+  const c = $('dockercfg'); c.replaceChildren();
+  const sec = (title, node) => { c.append(el('div', 'dsec', title), node); };
+  sec('Run as', dl([['User', d.user], ['Network', d.network], ['Privileged', d.privileged ? 'yes' : 'no'], ['Memory limit', d.memory_limit ? Math.round(d.memory_limit / 1048576) + ' MB' : 'none'],
+    ['Extra groups', (d.group_add || []).join(', ')], ['Ports', (d.ports || []).join(', ')], ['Command', d.command]]));
+  if ((d.devices || []).length) sec('Devices', dl(d.devices.map(x => [x, 'passed through'])));
+  if ((d.mounts || []).length) sec('Mounts', dl(d.mounts.map(m => [m.from, m.to + (m.rw ? '' : ' (read only)')])));
+  sec('Environment', dl((d.env || []).map(([k, v]) => [k, v == null ? '\u2022\u2022\u2022\u2022 (hidden)' : v])));
+  if (d.compose.files) sec('Compose file', el('p', 'sub dmono', d.compose.files));
+  c.querySelectorAll('dd,dt').forEach(n => n.classList.add('dmono'));
+}
+function dockerShowTab() {
+  document.querySelectorAll('#dockertabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === dockerTab)));
+  $('dockerover').classList.toggle('hide', dockerTab !== 'over'); $('dockerlogs').classList.toggle('hide', dockerTab !== 'logs'); $('dockercfg').classList.toggle('hide', dockerTab !== 'cfg');
+}
+async function loadDockerLogs() {
+  const box = $('dklogtext'); box.textContent = 'Loading\u2026';
+  const r = await api('/api/docker/' + encodeURIComponent(dockerName) + '/logs?tail=' + $('dklogtail').value);
+  box.textContent = r && r.ok ? (r.text || '(no log lines)') : 'Couldn\u2019t load the log.';
+  box.scrollTop = box.scrollHeight;
+}
+$('dockertabs').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  dockerTab = b.dataset.t; dockerShowTab(); if (dockerTab === 'logs') loadDockerLogs();
+};
+$('dklogrefresh').onclick = loadDockerLogs; $('dklogtail').onchange = loadDockerLogs;
+async function dockerAct(action) {
+  const self = dockerName === dockerMe, label = {restart: 'Restart', stop: 'Stop', start: 'Start', kill: 'Kill'}[action];
+  const warn = self && action !== 'start' ? 'This is the app you are using. The remote goes offline ' + (action === 'restart' ? 'for a few seconds' : 'until it is started again from the Pi') + ', and what is playing on the Pi\u2019s screen stops.'
+    : action === 'kill' ? 'It is ended at once, without a chance to shut down cleanly.' : action === 'stop' ? 'It stops running until it is started again.' : '';
+  if (warn && !await confirmSheet(label + ' ' + dockerName + '?', warn, label, action === 'kill' || action === 'stop')) return;
+  const btn = action === 'kill' ? $('dkkill') : action === 'restart' ? $('dkrestart') : $('dkstop');
+  const r = await busy(btn, () => api('/api/docker/' + encodeURIComponent(dockerName) + '/' + action, 'POST', {}));
+  if (r && r.ok) {
+    $('dockermsg').textContent = r.message;
+    if (!r.self) setTimeout(() => { loadDockerDetail(); loadDocker(); }, 1200);
+  }
+}
+$('dkrestart').onclick = () => dockerAct('restart');
+$('dkstop').onclick = () => dockerAct($('dkstop').dataset.a || 'stop');
+$('dkkill').onclick = () => dockerAct('kill');
 $('restartapp').onclick = async () => {
   if (!await confirmSheet('Restart the app?', 'It stops what is playing on the Pi’s screen and the remote is unavailable for a few seconds.', 'Restart', true)) return;
   const r = await api('/api/restart', 'POST', {});
@@ -1961,7 +2080,7 @@ async function loadAccess() {
 async function loadSettings() {
   me = await fetch('/api/auth').then(r => r.json()).catch(() => ({}));
   renderProfile();
-  if (me.admin) await Promise.all([loadPeople(), loadAccess(), loadConfig(), loadTvsAdmin()]);
+  if (me.admin) await Promise.all([loadPeople(), loadAccess(), loadConfig(), loadTvsAdmin(), loadDocker()]);
 }
 async function loadConfig() {  // app settings an admin can change; more (and per-role permissions) can be added here
   const c = await fetch('/api/config').then(r => r.json()).catch(() => null);

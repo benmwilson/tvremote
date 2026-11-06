@@ -46,6 +46,7 @@ import store
 import throttle
 import kick
 import twitch
+import dockerctl
 import mpvipc
 import multi
 import pihealth
@@ -2238,6 +2239,54 @@ def api_restart():
     admin_only()
     threading.Timer(1.0, lambda: (stop_player(), os._exit(1))).start()  # after the answer is sent
     return jsonify(ok=True)
+
+
+def _docker(fn, *a):
+    """Run a dockerctl call for a route: admin-only, and its failures become a sentence for the phone."""
+    admin_only()
+    if not dockerctl.available():
+        return jsonify(ok=False, error="Docker isn't connected to this app (the socket isn't mounted)."), 503
+    try:
+        return jsonify(ok=True, **fn(*a))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    except Exception as e:
+        app.logger.warning("Docker: %s", e)
+        return jsonify(ok=False, error=f"Docker said: {e}"), 502
+
+
+@app.get("/api/docker")
+def api_docker():
+    admin_only()
+    if not dockerctl.available():
+        return jsonify(ok=True, available=False)
+    return _docker(lambda: {"available": True, "containers": dockerctl.containers(), "me": dockerctl.SELF})
+
+
+@app.get("/api/docker/<name>")
+def api_docker_detail(name):
+    return _docker(lambda: {"detail": dockerctl.detail(name)})
+
+
+@app.get("/api/docker/<name>/logs")
+def api_docker_logs(name):
+    try:
+        tail = int(request.args.get("tail", 200))
+    except ValueError:
+        tail = 200
+    return _docker(lambda: {"text": dockerctl.logs(name, tail)})
+
+
+@app.post("/api/docker/<name>/<action>")
+def api_docker_act(name, action):
+    def run():
+        if name == dockerctl.SELF and action in ("stop", "kill", "restart"):
+            dockerctl._known(name)  # same checks, then do it after the answer is sent: the engine ends this very process
+            threading.Timer(1.0, lambda: dockerctl.act(name, action)).start()
+            return {"message": {"stop": "Stopping. The remote goes offline until it is started again from the Pi.", "kill": "Killing. Docker starts it again if its restart policy says so.",
+                                "restart": "Restarting. This page works again in a few seconds."}[action], "self": True}
+        return {"message": dockerctl.act(name, action)}
+    return _docker(run)
 
 
 @app.get("/api/stats")

@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     network_mode: host # port ${PORT:-8765} on the LAN, no NAT
     user: "${PI_UID:-1000}:${PI_GID:-1000}"
-    group_add: ["${VIDEO_GID:-44}", "${RENDER_GID:-992}"] # numeric host GIDs (see .env.example)
+    group_add: ["${VIDEO_GID:-44}", "${RENDER_GID:-992}", "${DOCKER_GID:-984}"] # numeric host GIDs (see .env.example)
     devices:
       - /dev/dri:/dev/dri
       - /dev/cec0:/dev/cec0
@@ -22,6 +22,7 @@ services:
     volumes:
       - /run/user/${PI_UID:-1000}:/run/user/${PI_UID:-1000} # Wayland + PipeWire sockets
       - /etc/localtime:/etc/localtime:ro # the clock on the TV's Ready screen uses the Pi's time zone
+      - /var/run/docker.sock:/var/run/docker.sock # Settings > Docker (start, stop, restart, logs). Whoever can use this socket has root on the Pi: delete this line to turn it off
       - tvremote-data:/data # favourites.json, player.log
     environment:
       - XDG_RUNTIME_DIR=/run/user/${PI_UID:-1000}
