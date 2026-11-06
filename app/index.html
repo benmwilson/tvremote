@@ -3453,8 +3453,9 @@ function dbg(open) {
 $('movedgo').onclick = () => { location.hash = '#/setup'; };
 $('chatTv').onclick = async () => {
   const tvHere = !!st.chat_pref && (!st.wall || st.chat_tv === chatTab);
+  st.chat_pref = !tvHere; render();  // the button answers at once; the TV catches up in the background
   await (tvHere ? cmd('chat', 'off') : cmd('chat', 'on', st.wall ? {index: chatTab} : {}));  // in a multistream the chat on screen is the one being read here
-  setTimeout(poll, 600);
+  setTimeout(poll, 600); setTimeout(poll, 3000);
 };
 $('dbgOpen').onclick = () => dbg(true);
 $('dbgClose').onclick = $('scrim').onclick = () => dbg(false);

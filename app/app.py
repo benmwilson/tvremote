@@ -1444,11 +1444,17 @@ def api_cmd():
         if isinstance(idx, int) and not isinstance(idx, bool):
             _chat["tv_i"] = idx if idx >= 0 else None
         _chat["pref"] = data.get("value") != "off"
-        if _chat["pref"]:
-            chat_lower_quality()
-        else:
-            chat_restore_quality()
-        chat_sync()
+
+        def chat_job(on):  # the stream restart and the windows take seconds: answer the tap now and do them in the background
+            try:
+                if on:
+                    chat_lower_quality()
+                else:
+                    chat_restore_quality()
+                chat_sync()
+            except Exception as e:
+                app.logger.warning("Turning the chat on the TV %s failed: %s", "on" if on else "off", e)
+        threading.Thread(target=chat_job, args=(_chat["pref"],), daemon=True).start()
         return jsonify(ok=True)
     fn = COMMANDS.get(action)
     if not fn:
@@ -2307,7 +2313,7 @@ def tv_only_card(tv_id):
 cards = targets.Cards({"living": living_card, "bedroom": bedroom_card}, ORDER)
 
 
-qr_guest = {"url": ""}  # a guest link an admin chose to show on the TV for now; not saved, a restart goes back to the remote
+qr_guest = {"url": ""}  # the guest link an admin chose to show on the TV (saved in the settings; loaded at start)
 
 
 def qr_info():
@@ -2487,7 +2493,7 @@ def api_shell_set():
             u = str(body["qr_guest"] or "")[:300]
             if u and not u.startswith(("http://", "https://")):
                 return jsonify(ok=False, error="Not a link."), 400
-            qr_guest["url"] = u
+            qr_guest["url"] = settings["qr_guest_url"] = u  # saved: a restart keeps the guest code on the TV (it stops by itself when the link is used up or expires)
         save_settings()
         if HOME and HOME.kind == "idle":
             HOME.show("idle")
@@ -3895,6 +3901,7 @@ if __name__ == "__main__":
     threading.Thread(target=_offline_loop, daemon=True).start()
     threading.Thread(target=lambda: (inproc.warm(), versions()), daemon=True).start()  # one-time loads and the tool versions, so no tap pays for them
     settings.update(load_settings())
+    qr_guest["url"] = settings.get("qr_guest_url", "")
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
                        qr=lambda: qr_info()[0], qr_caption=lambda: qr_info()[1],
                        favs=lambda: [(f.get("name") or "")[:28] for f in load_favs()][:5])
