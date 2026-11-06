@@ -345,6 +345,7 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appeara
 .hrow .hv{text-align:right;font-variant-numeric:tabular-nums}.hrow .hv .sub{display:block;margin:2px 0 0}.hrow .pill.ok{background:rgba(123,226,154,.15);color:#7be29a}.hrow .pill.warm{background:rgba(255,176,98,.18);color:#ffb062}.hrow .pill.hot{background:rgba(255,107,107,.18);color:#ff6b6b}
 .scat+.shead{margin-top:0}
 html[data-can-desktop="0"] #layoutbtn{display:none}
+button[data-k=VolumeUp],button[data-k=VolumeDown]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
 body.is-guest #fav{display:none!important}body.is-guest #recents .x{display:none!important}
 /* ===== desktop layout: wide, panels side by side, mouse and keyboard ===== */
 html[data-layout=desktop] body{max-width:1320px;padding-left:32px;padding-right:32px}
@@ -3823,11 +3824,23 @@ function volTap(k) {
   tvMuted[target] = false; renderTvMute();  // changing the volume unmutes a Roku TV
   if (volN >= 15) volFlush(); else { clearTimeout(volTimer); volTimer = setTimeout(volFlush, 90); }
 }
+// Hold a volume button and it keeps pressing, about 8 times a second, until you let go.
+let volHold = 0, volRepeat = 0, volHeld = false;
+const volStop = () => { clearTimeout(volHold); clearInterval(volRepeat); };
+document.addEventListener('pointerdown', e => {
+  const b = e.target.closest('button[data-k=VolumeUp], button[data-k=VolumeDown]');
+  if (!b || e.button) return;
+  volHeld = false; volStop();
+  volHold = setTimeout(() => { volHeld = true; volTap(b.dataset.k); volRepeat = setInterval(() => volTap(b.dataset.k), 125); }, 380);
+});
+['pointerup', 'pointercancel', 'blur'].forEach(n => window.addEventListener(n, volStop, true));
+document.addEventListener('visibilitychange', volStop);
+document.addEventListener('contextmenu', e => { if (e.target.closest('button[data-k=VolumeUp], button[data-k=VolumeDown]')) e.preventDefault(); });
 document.addEventListener('click', async e => {
   const b = e.target.closest('button[data-k]');
   if (!b) return;
   const k = b.dataset.k;
-  if (k === 'VolumeUp' || k === 'VolumeDown') { volTap(k); return; }
+  if (k === 'VolumeUp' || k === 'VolumeDown') { if (volHeld) { volHeld = false; return; } volTap(k); return; }  // (the click that ends a hold is not another press)
   if (b.id === 'tvmute' && muteHeld) { muteHeld = false; return; }  // that was a press-and-hold (a correction), not a tap
   if (b.id === 'tvpower') { if (pwHeld) { pwHeld = false; return; } delete pwOver[target]; }  // a tap acts on what is shown, then waits for the TV
   const pw = b.id === 'tvpower';  // the power button spins until the TV itself reports the new state (or 30 s)
