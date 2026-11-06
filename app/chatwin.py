@@ -51,8 +51,8 @@ class Panel:
                 f"--input-ipc-server={self.sock}", f"--background-color=#{BG}",
                 *(["--image-display-duration=inf", self.bg] if self.bg and os.path.exists(self.bg) else [f"av://lavfi:color=c=0x{BG}:s={self.w}x{self.h}:r=1"])]
 
-    def open(self):
-        """Start the window. True when it is up and answering."""
+    def open(self, tries=24):
+        """Start the window, waiting up to tries x 0.25 s for it. True when it is up and answering."""
         if self.running():
             return True
         try:
@@ -64,7 +64,7 @@ class Panel:
         except OSError:
             out = subprocess.DEVNULL
         self.proc, self._sid, self.last = self._spawn(self.cmd(), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT), None, None
-        for _ in range(24):  # up to ~6 s for the window and its control socket
+        for _ in range(tries):  # for the window and its control socket
             if self.proc.poll() is not None or self._ready():
                 break
             self._sleep(0.25)

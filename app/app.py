@@ -1720,9 +1720,9 @@ _transition = {"win": None}
 
 
 def transition_show(title, line, source):
-    """Put the card over the picture (a window of its own, so it can't flash the stream): True when it is up."""
+    """Put the card over the picture (a window of its own, so it can't flash the stream). Waits up to 2 s for the window: True when it is up."""
     win = _transition["win"] = _transition["win"] or chatwin.transition_panel()
-    return bool((win.running() or win.open()) and win.update(shell.transition_screen(title, line, source)))
+    return bool((win.running() or win.open(tries=8)) and win.update(shell.transition_screen(title, line, source)))
 
 
 def transition_close():
@@ -1734,13 +1734,17 @@ def osd_swap(label, sock=SOCK, ready=None, max_s=8.0, title=None, source=None, l
     """While a stream or its quality changes in place, cover the picture with a card (the channel, "Switching to 720p" or `line`) until the new picture
     plays, then say "Quality: 720p" for a moment (not for a stream change). `ready()` says the new picture is playing; without it the card stays 2.5 s.
     In a multi-view tile the small on-screen wheel is used instead. Runs in the background, never blocks the change. Returns the thread."""
-    def run():
-        frames, t0, i = "\u25d0\u25d3\u25d1\u25d2", time.time(), 0
-        if sock == SOCK:
-            _swapping.set()  # the stall monitor keeps its Buffering / lagging screens off while the card is up
+    if sock == SOCK:
+        _swapping.set()  # the stall monitor keeps its Buffering / lagging screens off while the card is up
+        try:  # the card goes up first (about a second for its window), so the change happens behind it, not before it
+            transition_show(title or fav_name(state["url"] or ""), line or f"Switching to {label}", source or state["source"])
+        except Exception as e:
+            app.logger.info("Transition card not shown (%s)", e)
+
+        def run_main():
+            t0 = time.time()
             try:
-                transition_show(title or fav_name(state["url"] or ""), line or f"Switching to {label}", source or state["source"])
-                time.sleep(0.8)  # long enough to be read, and for the window to be up
+                time.sleep(0.8)  # long enough to be read
                 while time.time() - t0 < (max_s if ready else 2.5) and not (ready and ready()):
                     time.sleep(0.25)
                 transition_close()
@@ -1749,7 +1753,12 @@ def osd_swap(label, sock=SOCK, ready=None, max_s=8.0, title=None, source=None, l
             finally:
                 transition_close()
                 _swapping.clear()
-            return
+        t = threading.Thread(target=run_main, daemon=True)
+        t.start()
+        return t
+
+    def run():
+        frames, t0, i = "◐◓◑◒", time.time(), 0
         try:
             while time.time() - t0 < (max_s if ready else 2.5):
                 r = mpvipc.send(sock, ["show-text", f"{frames[i % 4]}  Switching to {label}", 900])
