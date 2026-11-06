@@ -349,7 +349,18 @@ html[data-layout=desktop] #view-tv{display:grid;grid-template-columns:minmax(400
 html[data-layout=desktop] #view-tv>#tvid{grid-column:1/-1}
 html[data-layout=desktop] #view-tv>#now,html[data-layout=desktop] #view-tv>#watchcard,html[data-layout=desktop] #view-tv>#chatcard,html[data-layout=desktop] #view-tv>#wallopencard,html[data-layout=desktop] #view-tv>#browsecard,html[data-layout=desktop] #view-tv>#tvctl{grid-column:1}
 html[data-layout=desktop] #view-tv>#playsec{grid-column:2;grid-row:2/span 12;margin-top:0}
-html[data-layout=desktop] #playsec .grid.list,html[data-layout=desktop] #favs,html[data-layout=desktop] #recents,html[data-layout=desktop] #groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+html[data-layout=desktop] #favs,html[data-layout=desktop] #recents,html[data-layout=desktop] #groups{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+html[data-layout=desktop] #favs.list,html[data-layout=desktop] #recents.list,html[data-layout=desktop] #groups{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+html[data-layout=desktop] #playsec .bar{margin:34px 0 14px;gap:10px}
+html[data-layout=desktop] #playsec .bar h2{margin:0;font-size:17px;color:var(--fg)}
+html[data-layout=desktop] #playsec #recenthead{margin:34px 0 14px;font-size:17px;color:var(--fg)}
+html[data-layout=desktop] #playsec #groupsbox>h2{font-size:17px;color:var(--fg)}
+html[data-layout=desktop] .sortbtn{margin-left:auto;margin-right:0;min-height:40px;padding:0 16px;background:var(--card);border-radius:12px;font-weight:600}
+html[data-layout=desktop] .sortbtn[aria-pressed=true]{background:var(--tv);color:#0b0e14}
+html[data-layout=desktop] .viewtog{padding:3px;border-radius:12px;background:var(--card)}
+html[data-layout=desktop] .viewtog button{width:auto;min-height:36px;padding:0 14px;display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:600}
+html[data-layout=desktop] .viewtog .ic{width:18px;height:18px}
+html[data-layout=desktop] .dlbl{display:inline}
 html[data-layout=desktop] #view-tv>#now{margin-top:0}
 html[data-layout=desktop] #playsec>h2:first-child{display:none}  /* the Play box sits level with the first card on the left (its placeholder says what it is) */
 html[data-layout=desktop] #view-settings{max-width:780px;margin-left:auto;margin-right:auto}
@@ -362,6 +373,7 @@ html[data-layout=desktop] .kbdhint{display:block}
 .kbdhint{display:none;margin:14px 2px 0;color:var(--dim);font-size:13px}.kbdhint kbd{font:inherit;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--line);color:var(--fg)}.namechips:not(.hide){margin:10px 0 2px}[data-url]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.scat{margin:34px 4px 8px;padding-top:16px;border-top:1px solid var(--line);font-size:20px;font-weight:700;letter-spacing:.2px}#view-settings>.scat:first-child{border-top:0}
 /* the search and filters of a sheet stay in view while its results scroll */
 .stickyc{position:sticky;top:0;z-index:4;background:var(--card);padding:2px 0 8px;margin-bottom:2px;max-height:60vh;overflow:auto}
+.dlbl{display:none}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}.iconbtn.on{color:#7be29a}.iconbtn .ic{margin:0}
 #tvsadmin{margin-bottom:12px}
 .dd{position:relative;flex:1;min-width:0;width:100%}.ddnative{display:none!important}
@@ -1067,10 +1079,10 @@ body:has(dialog.sheet[open]){overflow:hidden}
 
 <div id="groupsbox" class="hide" style="margin-top:26px"><h2>Groups</h2><div class="grid list" id="groups"></div></div>
 <div class="bar" style="margin-top:26px"><h2>Favourites</h2><button id="favSort" class="sortbtn" aria-pressed="false">Reorder</button><div class="viewtog">
-  <button id="favList" aria-label="Show favourites as a list" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg></button>
-  <button id="favTiles" aria-label="Show favourites as tiles" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg></button></div></div>
+  <button id="favList" aria-label="Show favourites and recents as a list" title="List" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg><span class="dlbl">List</span></button>
+  <button id="favTiles" aria-label="Show favourites and recents as tiles" title="Tiles" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg><span class="dlbl">Tiles</span></button></div></div>
 <div class="grid list" id="favs"></div>
-<h2 id="recenthead" class="hide">Recent</h2>
+<h2 id="recenthead" class="hide">Recent <span class="sub" style="font-weight:400">in the order you played them</span></h2>
 <div class="grid list" id="recents"></div>
 </div>
 
@@ -2107,6 +2119,7 @@ let favView = 'list';
 try { favView = localStorage.getItem('favView') || 'list'; } catch (e) {}
 function applyFavView() {
   $('favs').classList.toggle('list', favView === 'list');
+  $('recents').classList.toggle('list', favView === 'list');  // Recents follow the same switch
   $('favList').setAttribute('aria-pressed', String(favView === 'list'));
   $('favTiles').setAttribute('aria-pressed', String(favView === 'tiles'));
   try { localStorage.setItem('favView', favView); } catch (e) {}
