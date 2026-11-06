@@ -149,11 +149,14 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=(), accent=None):
     elif kind in ("loading", "quality"):
         n = dots % 4
         head += "." * n + r"\h" * (3 - n)  # hard spaces keep the line the same width
-    lines = [r"{\fs110\b1\c&H%s&}TV Remote" % TEXT, r"{\fs60\b0\c&H%s&}%s" % (colour, head)]
-    if detail:
-        lines.append(r"{\fs44\c&H%s&}%s" % (TEXT, esc(detail)))
+    if kind == "error":  # what went wrong is the title, the details under it
+        lines = [r"{\fs84\b1\c&H%s&}%s" % (colour, head)]
+        if detail:
+            lines.append(r"{\fs44\b0\c&H%s&}%s" % (TEXT, esc(detail)))
+    else:  # loading, quality, refresh, offline, ended: the channel's name large (else the app's), what is happening under it, like the transition card
+        lines = [r"{\fs84\b1\c&H%s&}%s" % (TEXT, esc(detail) or "TV Remote"), r"{\fs50\b0\c&H%s&}%s" % (colour, head)]
     if hint:
-        lines.append(r"{\fs34\c&H%s&}%s" % (DIM, esc(hint)))
+        lines.append(r"{\fs34\b0\c&H%s&}%s" % (DIM, esc(hint)))
     return r"{\an8\pos(960,@@Y@@)\bord0\shad0}" + r"\N".join(lines)
 
 
