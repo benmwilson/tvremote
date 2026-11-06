@@ -3824,14 +3824,18 @@ function volTap(k) {
   tvMuted[target] = false; renderTvMute();  // changing the volume unmutes a Roku TV
   if (volN >= 15) volFlush(); else { clearTimeout(volTimer); volTimer = setTimeout(volFlush, 90); }
 }
-// Hold a volume button and it keeps pressing, about 8 times a second, until you let go.
+// Hold a volume button and it keeps pressing until you let go, speeding up the longer you hold: about 3 a second at first, up to 10 (the most the TV takes).
 let volHold = 0, volRepeat = 0, volHeld = false;
-const volStop = () => { clearTimeout(volHold); clearInterval(volRepeat); };
+const volStop = () => { clearTimeout(volHold); clearTimeout(volRepeat); };
+function volRun(k, delay) {
+  volTap(k);
+  volRepeat = setTimeout(() => volRun(k, Math.max(100, delay * 0.9)), delay);  // each press comes a little sooner than the last
+}
 document.addEventListener('pointerdown', e => {
   const b = e.target.closest('button[data-k=VolumeUp], button[data-k=VolumeDown]');
   if (!b || e.button) return;
   volHeld = false; volStop();
-  volHold = setTimeout(() => { volHeld = true; volTap(b.dataset.k); volRepeat = setInterval(() => volTap(b.dataset.k), 125); }, 380);
+  volHold = setTimeout(() => { volHeld = true; volRun(b.dataset.k, 300); }, 380);
 });
 ['pointerup', 'pointercancel', 'blur'].forEach(n => window.addEventListener(n, volStop, true));
 document.addEventListener('visibilitychange', volStop);
