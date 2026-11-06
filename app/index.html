@@ -310,7 +310,11 @@ body.chatfull{overflow:hidden}
 .s-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 0 14px 56px}.s-actions button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 12px;font-size:15px}.s-actions .ic{width:18px;height:18px;flex:none}
 .s-actions form{display:flex;gap:8px;grid-column:1/-1}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
 .s-danger{color:#ff6b6b}
-input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin:0 2px 0 8px;cursor:pointer;background:var(--dim,#8b93a7);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat}input[type=search]::-webkit-search-cancel-button:hover{background:var(--fg)}
+input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+.sfield{position:relative;display:block;flex:1;min-width:0}.sfield input{padding-right:46px}
+.sclear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;min-height:0;padding:0;border-radius:50%;background:none;color:var(--dim);display:grid;place-items:center}.sclear .ic{width:18px;height:18px}.sclear:hover{color:var(--fg)}
+.sfield input:placeholder-shown~.sclear{display:none}
+#walladd .chatbtn,#repladd .chatbtn{width:52px;min-width:52px;height:52px;min-height:52px;flex:none}  /* as tall as the field beside it */
 .qrpick{display:grid;gap:6px}.qrpick button{display:flex;align-items:center;gap:12px;justify-content:flex-start;text-align:left;min-height:52px;padding:8px 14px}.qrpick button.on{outline:2px solid var(--tv,#6bb2ff);outline-offset:-2px}.qrpick .qi .ic{width:22px;height:22px}.qrpick .qc{color:#7be29a}.qrpick b{display:block}.qrpick .sub{display:block;margin:2px 0 0}
 .scat+.shead{margin-top:0}.namechips:not(.hide){margin:10px 0 2px}[data-url]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.scat{margin:34px 4px 8px;padding-top:16px;border-top:1px solid var(--line);font-size:20px;font-weight:700;letter-spacing:.2px}#view-settings>.scat:first-child{border-top:0}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}.iconbtn.on{color:#7be29a}.iconbtn .ic{margin:0}
@@ -1688,7 +1692,7 @@ function checkFavLoading() {
 async function play(text) {
   err();
   const r = await api('/api/play', 'POST', {url: text, site: site === 'auto' ? 'kick' : site});
-  if (r && r.ok) { $('link').value = ''; $('results').innerHTML = ''; $('playpick').classList.add('hide'); setTimeout(poll, 1500); setTimeout(loadRecents, 2500); }
+  if (r && r.ok) { window.scrollTo({top: 0, behavior: 'smooth'}); $('link').value = ''; $('results').innerHTML = ''; $('playpick').classList.add('hide'); setTimeout(poll, 1500); setTimeout(loadRecents, 2500); }
   return r;
 }
 
@@ -1767,6 +1771,12 @@ $('go').onclick = () => {
   });
 };
 $('link').onkeydown = e => { if (e.key === 'Enter') $('go').click(); };
+// Each search field gets a clear button that sits in the middle of it, the same in every browser (shown only while there is text).
+['link', 'browseq', 'wallurl', 'replurl'].forEach(id => {
+  const input = $(id), w = el('span', 'sfield'), x = el('button', 'sclear'); x.type = 'button'; x.setAttribute('aria-label', 'Clear'); x.innerHTML = ic('x');
+  input.before(w); w.append(input, x);
+  x.onclick = () => { input.value = ''; input.dispatchEvent(new Event('input')); input.focus(); };
+});
 let linkTimer = 0, linkSeq = 0;
 $('link').addEventListener('input', () => showNameChips($('linksugg'), $('link')));
 $('link').addEventListener('input', () => {  // autofill: a channel name shows where it is and whether it is live; tap one to play it
