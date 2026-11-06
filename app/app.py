@@ -545,7 +545,7 @@ def ensure_full_window(now=None):
     return True
 
 
-def chat_column_send(text):
+def chat_column_send(text, image=False):
     """The chat column: the stream moves over (a quarter of the screen is freed on the right, and the picture sits at the top) and two windows fill
     the space: the chat on the right and a 'now playing' bar under the picture, on one shared background.
     text None: close them and give the screen back to the stream. True when it was done."""
@@ -569,7 +569,10 @@ def chat_column_send(text):
     url, src = state["url"] or "", state["source"] or "Twitch"
     if not (bar.running() or bar.open()) or not bar.update(chat.ass_bar(fav_name(url), stream_title(url) or "", src)):
         return False
-    return (win.running() or win.open()) and win.update(text)
+    ok = (win.running() or win.open()) and win.update(text)
+    if ok and image is not False:
+        ok = win.overlay(image)  # the messages as a picture with the emotes in it (None: take it away); False: not in use, leave it
+    return ok
 
 
 def chat_strip_send(text):

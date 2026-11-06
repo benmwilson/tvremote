@@ -12,6 +12,8 @@ import time
 from collections import deque
 from urllib.request import Request, urlopen
 
+import chatimg
+
 HOST, PORT = "irc.chat.twitch.tv", 6697
 SHOW_S = 25      # a message stays on screen this long
 MAX_LINES = 7
@@ -131,7 +133,7 @@ def _esc(s):
 def ass(msgs):
     """One ASS event block, bottom-left, newest at the bottom."""
     rows = []
-    for name, colour, text in msgs:
+    for name, colour, text, *_ in msgs:
         rgb = colour[1:] if re.fullmatch(r"#[0-9A-Fa-f]{6}", colour) else "FFFFFF"
         bgr = rgb[4:6] + rgb[2:4] + rgb[0:2]  # ASS colours are BGR
         rows.append("{\\c&H" + bgr + "&\\b1}" + _esc(name) + "{\\r}: " + _esc(text))
@@ -141,6 +143,7 @@ def ass(msgs):
 COL_REDRAW_S = 2      # the chat window is its own surface, so a redraw never touches the stream
 COL_W, COL_H = 480, 1080  # the strip the picture makes room for (the picture is 1440 wide), drawn as a window of its own
 COL_CHARS, COL_LINES = 24, 30
+IMG_X, IMG_Y, IMG_H = 28, 118, 932  # where the messages picture goes in the strip: below the header rule, down to the bottom margin
 
 
 def _plain(s):
@@ -155,7 +158,7 @@ def ass_column(channel, msgs, source="Twitch"):
     """The chat as ASS for the 480x1080 chat window: background, a header, then the newest messages growing up from the bottom, wrapped to fit."""
     accent = SITE_BGR.get(source, "FFB062")
     lines = []
-    for name, colour, text in msgs:
+    for name, colour, text, *_ in msgs:
         rgb = colour[1:] if re.fullmatch(r"#[0-9A-Fa-f]{6}", colour) else "FFFFFF"
         bgr = rgb[4:6] + rgb[2:4] + rgb[0:2]
         who = _esc(name)
@@ -191,8 +194,13 @@ class TwitchChat:
 
     def __init__(self, channel, send, column=False):
         self.channel, self.send, self.column = channel, send, column
-        self.msgs = deque(maxlen=COL_LINES if column else MAX_LINES)  # (arrival time, (name, colour, text))
+        self.msgs = deque(maxlen=COL_LINES if column else MAX_LINES)  # (arrival time, (name, colour, text, Twitch's own emotes))
         self.stopped = threading.Event()
+        # Emotes in the column: drawn as a picture over the window (chatimg) when Pillow is there. Twitch only (Kick's come as names).
+        self.pics = chatimg.Pictures() if column and self.SOURCE == "Twitch" and chatimg.available() else None
+        self.words = {}  # third-party emote name -> picture address, filled in the background
+        if self.pics:
+            threading.Thread(target=self._load_emotes, daemon=True).start()
         threading.Thread(target=self._read, daemon=True).start()
         threading.Thread(target=self._draw, daemon=True).start()
 
@@ -200,10 +208,22 @@ class TwitchChat:
         self.stopped.set()
         self.send(None)
 
+    def _load_emotes(self):
+        try:
+            import emotes
+            words = {}
+            for s in emotes.for_channel(self.channel):
+                if s["provider"] != "twitch":  # Twitch's own come with each message
+                    for e in s["emotes"]:
+                        words.setdefault(e["n"], e["u"])  # the channel's sets come first, so they win over the global ones
+            self.words = words
+        except Exception:
+            pass
+
     def _read(self):
         def on_line(line):
-            if (m := parse(line)):
-                self.msgs.append((time.time(), m))
+            if (m := parse_full(line)):
+                self.msgs.append((time.time(), (m["name"], m["color"], m["text"], m["emotes"])))
         read_lines(self.channel, self.stopped, on_line)
 
     def _draw(self):
@@ -211,6 +231,13 @@ class TwitchChat:
         while not self.stopped.wait(COL_REDRAW_S if self.column else 1):  # every redraw of the overlay flashes on this video output, so the column redraws rarely
             now = time.time()
             live = [m for t, m in list(self.msgs) if self.column or now - t < SHOW_S]
+            if self.pics:  # the header is a subtitle; the messages are a picture with the emotes in it. Drawn again only when something changed
+                sig = (tuple(live), self.pics.version, len(self.words))
+                if sig != last:
+                    img = chatimg.render(live, self.pics, COL_W - 2 * IMG_X, IMG_H, self.words)
+                    if self.send(ass_column(self.channel, [], self.SOURCE), (img[0], img[1], img[2], IMG_X, IMG_Y) if img else None):
+                        last = sig
+                continue
             text = ass_column(self.channel, live, self.SOURCE) if self.column else ass(live) if live else None
             if text != last and self.send(text):  # only remember it once mpv accepted it
                 last = text

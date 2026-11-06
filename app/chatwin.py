@@ -92,6 +92,23 @@ class Panel:
         self.last = text
         return True
 
+    def overlay(self, image):
+        """Lay a picture over the window: image = (BGRA bytes with premultiplied alpha, width, height, x, y), or None to take it away. The new picture
+        replaces the old one in a single step (mpv keeps an overlay under its id). True when mpv has it."""
+        if image is None:
+            r = self._ipc(self.sock, ["overlay-remove", 1])
+            return bool(r and r.get("error") in ("success", "property not found"))
+        data, w, h, x, y = image
+        path = self.files[self._n % 2].replace(".ass", ".bgra")
+        self._n += 1
+        try:
+            with open(path, "wb") as f:
+                f.write(data)
+        except OSError:
+            return False
+        r = self._ipc(self.sock, ["overlay-add", 1, x, y, path, 0, "bgra", w, h, w * 4])
+        return bool(r and r.get("error") == "success")
+
     def close(self):
         p, self.proc, self._sid, self.last = self.proc, None, None, None
         if p and p.poll() is None:
