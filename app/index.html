@@ -134,6 +134,7 @@ body.no-marquee .ftitle.mq{text-overflow:ellipsis}body.no-marquee .ftitle.mq>spa
 select{-webkit-appearance:none;appearance:none;min-height:52px;padding:0 42px 0 16px;width:100%;font-size:15px;text-overflow:ellipsis;background:var(--card2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238c97a9' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 16px center / 16px}
 .danger{color:var(--bad)}
 input[type=text],input[type=search]{width:100%;padding:0 14px;min-height:52px;-webkit-appearance:none;appearance:none}
+input[type=search]{height:52px;line-height:normal}  /* an explicit height: iPhone Safari puts the clear button at the top of a search field that only has a min-height */
 /* every text-like field gets the same inner padding (a field with no type attribute, or a password field, used to have almost none) */
 input:not([type]),input[type=text],input[type=password],input[type=search],input[type=url],input[type=email]{padding-left:14px;padding-right:14px;box-sizing:border-box}
 .seg button{background:var(--card2)}.seg button.on{background:var(--fg);color:#0b0e14;font-weight:700}
@@ -933,7 +934,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="sh"><div class="grow"><b id="browsettl">Browse live</b><span class="sub" id="browsesub">Kick and Twitch, biggest first</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
-    <input id="browseq" type="search" placeholder="Search live channels, games, titles" aria-label="Search live channels" autocomplete="off" autocapitalize="off" autocorrect="off" enterkeyhint="search" style="font-size:16px;min-height:46px;margin-bottom:8px">
+    <input id="browseq" type="search" placeholder="Search live channels, games, titles" aria-label="Search live channels" autocomplete="off" autocapitalize="off" autocorrect="off" enterkeyhint="search" style="font-size:16px;height:46px;min-height:46px;margin-bottom:8px">
     <div id="browsesuggest" class="sugg hide" role="listbox" aria-label="Suggestions"></div>
     <div class="bctl"><div class="wseg" id="browsesite" role="group" aria-label="Site"><button type="button" data-s="" aria-pressed="true">All</button><button type="button" data-s="kick" aria-pressed="false">Kick</button><button type="button" data-s="twitch" aria-pressed="false">Twitch</button></div>
       <select id="browsesort" aria-label="Sort by"><option value="viewers">Most viewers</option><option value="fewest">Fewest viewers</option><option value="new">Just started</option><option value="name">A to Z</option></select></div>
