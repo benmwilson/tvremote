@@ -2313,7 +2313,7 @@ def qr_info():
     """(address, caption) for the QR code on the Ready screen: a guest link if one was put up, else the iPhone Shortcut when chosen and set, else the remote."""
     if settings.get("qr", True) is False:
         return "", ""
-    if qr_guest["url"]:
+    if qr_guest["url"] and ("/join/" not in qr_guest["url"] or access.invite_id_for_url(qr_guest["url"])):  # a guest link that was used up, revoked or expired is not shown
         return qr_guest["url"], "Scan to join as a guest"
     if settings.get("qr_mode") == "install" and settings.get("install_url"):  # an iCloud share link: scanning offers to add the shortcut to the phone
         return settings["install_url"], "Scan to add the shortcut to your iPhone"
@@ -2330,7 +2330,7 @@ SHELL_SHOT = "/tmp/tvremote-shell.png"
 def shell_state():
     running = bool(HOME and HOME.running())
     return {"enabled": bool(settings.get("shell")), "running": running, "qr": settings.get("qr", True) is not False,
-            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "install_url": settings.get("install_url", ""), "qr_guest": bool(qr_guest["url"]),
+            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "install_url": settings.get("install_url", ""), "qr_guest": bool(qr_guest["url"]), "qr_guest_id": access.invite_id_for_url(qr_guest["url"]),
             "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None,
             "props": HOME.props() if running and hasattr(HOME, "props") else None}  # what the window is doing, for debugging
 

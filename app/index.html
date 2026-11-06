@@ -308,6 +308,7 @@ body.chatfull{overflow:hidden}
 .s-actions form{display:flex;gap:8px;flex:1 1 100%}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
 .s-danger{color:#ff6b6b}
 input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin:0 2px 0 8px;cursor:pointer;background:var(--dim,#8b93a7);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat}input[type=search]::-webkit-search-cancel-button:hover{background:var(--fg)}
+.qrpick{display:grid;gap:6px}.qrpick button{display:flex;align-items:center;gap:12px;justify-content:flex-start;text-align:left;min-height:52px;padding:8px 14px}.qrpick button.on{outline:2px solid var(--tv,#6bb2ff);outline-offset:-2px}.qrpick .qi .ic{width:22px;height:22px}.qrpick .qc{color:#7be29a}.qrpick b{display:block}.qrpick .sub{display:block;margin:2px 0 0}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}.iconbtn.on{color:#7be29a}.iconbtn .ic{margin:0}
 #tvsadmin{margin-bottom:12px}
 .dd{position:relative;flex:1;min-width:0;width:100%}.ddnative{display:none!important}
@@ -776,7 +777,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
     </div>
     <h3 class="shead hide" id="qrhead">QR code on the TV</h3>
     <div class="card s-form hide" id="qrbox">
-      <label class="s-check" style="justify-content:space-between">Show a QR code between streams<input id="qrtoggle" type="checkbox" class="tg" role="switch"></label>
+      <div class="s-cap">QR code on the TV between streams</div>
+      <div id="qrpick" class="qrpick" role="radiogroup" aria-label="Which QR code is on the TV"></div>
       <div class="s-form" id="qropts">
         <div><div class="s-cap">What it opens</div>
           <select id="qrmode" aria-label="What the QR code opens"><option value="remote">This remote</option><option value="shortcut">Run the iPhone shortcut</option><option value="install">Add the iPhone shortcut</option></select></div>
@@ -1994,6 +1996,23 @@ applyFavView();
 
 // ---- the TV's home screen switch (Pi TV only) ----
 let shellInfo = null;
+// Which QR code the TV shows between streams: nothing, the remote, or one of the guest links (one tap each, no popup).
+function renderQrPick(s) {
+  const box = $('qrpick'); if (!box || !s) return;
+  const on = s.qr === false ? 'off' : s.qr_guest ? (s.qr_guest_id || 'guest') : 'remote';
+  const row = (key, icon, label, sub, fn, off) => {
+    const b = mk('button', {type: 'button', role: 'radio', 'aria-checked': String(on === key), class: on === key ? 'on' : '', onclick: fn});
+    const i = mk('span', {class: 'qi'}); i.innerHTML = ic(icon);
+    b.append(i, mk('span', {class: 'grow'}, mk('b', {}, label), mk('span', {class: 'sub'}, sub)));
+    if (on === key) { const c = mk('span', {class: 'qc'}); c.innerHTML = ic('check'); b.append(c); }
+    b.disabled = !!off; return b;
+  };
+  const guests = ((typeof access === 'object' && access && access.invites) || []).map(g => row(g.id, 'qr', 'Guest link' + (g.label ? ': ' + g.label : ''),
+    g.can_qr ? (g.uses ? 'Partly used' : 'Not opened yet') + ' \u00b7 expires in ' + inFuture(g.redeem_by) : 'Made before this was possible, so it can\u2019t be shown',
+    async () => { const r = await api('/api/invites/' + g.id + '/link'); if (r && r.ok) qrSet({qr: true, qr_guest: r.url}); }, !g.can_qr));
+  box.replaceChildren(row('off', 'x', 'Nothing', 'No QR code on the idle screen', () => qrSet({qr: false, qr_guest: ''})),
+    row('remote', 'qr', 'The remote', 'Scan to open this remote', () => qrSet({qr: true, qr_guest: ''})), ...guests);
+}
 function renderShell() {
   const s = shellInfo;
   if (!s) return;
@@ -2004,7 +2023,7 @@ function renderShell() {
   $('pistate').textContent = !s.enabled ? 'Hidden: the Pi\u2019s own desktop is showing on the TV.' : s.running ? 'Showing on the TV between streams.'
     : s.error ? 'Couldn\u2019t start: ' + s.error : 'Starting\u2026';
   $('desktop').classList.toggle('show', !s.enabled);
-  $('qrtoggle').checked = s.qr !== false;
+  renderQrPick(s);
   const mode = s.qr_mode || 'remote';
   $('qrmode').value = mode;
   if (document.activeElement !== $('shortcuturl')) $('shortcuturl').value = s.shortcut_url || '';
@@ -2032,7 +2051,6 @@ async function loadShell() {
   if (!pi) return;
   try { shellInfo = await (await fetch('/api/shell')).json(); renderShell(); } catch (e) {}
 }
-$('qrtoggle').onchange = async () => { const r = await api('/api/shell', 'POST', {qr: $('qrtoggle').checked}); if (r) { shellInfo = r; renderShell(); } };
 const qrSet = async body => { const r = await api('/api/shell', 'POST', body); if (r) { shellInfo = r; renderShell(); } return r; };
 $('qrmode').onchange = () => qrSet({qr_mode: $('qrmode').value});
 $('scuse').onclick = () => { const n = $('scname').value.trim(); if (n) { $('shortcuturl').value = 'shortcuts://run-shortcut?name=' + encodeURIComponent(n); qrSet({shortcut_url: $('shortcuturl').value}); } };
@@ -2258,7 +2276,7 @@ async function loadPeople() {
 }
 async function loadAccess() {
   const r = await fetch('/api/access').then(x => x.json()).catch(() => null);
-  if (r) { access = r; renderAccess(); }
+  if (r) { access = r; renderAccess(); renderQrPick(shellInfo); }
 }
 async function loadSettings() {
   me = await fetch('/api/auth').then(r => r.json()).catch(() => ({}));

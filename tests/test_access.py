@@ -187,6 +187,15 @@ class AccessTest(unittest.TestCase):
         access.redeem_invite(t)  # a one-device link is gone once opened
         self.assertIsNone(access.invite_token(iid))
 
+    def test_which_guest_link_is_on_the_tv_is_found_from_its_url(self):
+        t = access.create_invite(1, "tv")
+        iid = access.invites_pending()[-1]["id"]
+        self.assertEqual(access.invite_id_for_url("http://pi:8765/join/" + t), iid)
+        self.assertTrue(access.invites_pending()[-1]["can_qr"])
+        self.assertIsNone(access.invite_id_for_url("http://pi:8765/"))
+        access.redeem_invite(t)
+        self.assertIsNone(access.invite_id_for_url("http://pi:8765/join/" + t))  # used up: no longer "the one on the TV"
+
     def test_guest_limits(self):
         url = self.owner.post("/api/invites", json={"hours": 1}).get_json()["url"]
         guest = server.app.test_client()

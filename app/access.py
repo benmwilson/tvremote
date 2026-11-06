@@ -138,7 +138,7 @@ def clear_used(uid=None):
 
 def invites_pending(now=None):
     now = now or time.time()
-    return [{"id": k[:8], **{f: x for f, x in v.items() if f != "token"}} for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now]  # never the token: only invite_token() hands that out, one link at a time
+    return [{"id": k[:8], **{f: x for f, x in v.items() if f != "token"}, "can_qr": bool(v.get("token"))} for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now]  # never the token: only invite_token() hands that out, one link at a time
 
 
 def revoke_invite(iid):
@@ -150,6 +150,12 @@ def revoke_invite(iid):
         if gone:
             _write("invites.json", d)
         return bool(gone)
+
+
+def invite_id_for_url(url):
+    """The list id of the invite a /join/<token> link belongs to (None when it is not one, or is gone): which guest QR is on the TV."""
+    token = (url or "").rsplit("/join/", 1)[-1] if "/join/" in (url or "") else ""
+    return k[:8] if token and (k := _h(token)) in _read("invites.json", {}) else None
 
 
 def invite_token(iid):
