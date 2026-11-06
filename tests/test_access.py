@@ -178,6 +178,14 @@ class AccessTest(unittest.TestCase):
         self.assertIsNone(access.redeem_invite(t2))
         self.assertFalse(access.revoke_invite("short"))  # ids must be the full 8 characters
 
+    def test_an_unopened_link_can_be_shown_again_until_it_is_used_up(self):
+        t = access.create_invite(1, "qr")
+        iid = access.invites_pending()[-1]["id"]
+        self.assertEqual(access.invite_token(iid), t)
+        self.assertIsNone(access.invite_token("short"))
+        access.redeem_invite(t)  # a one-device link is gone once opened
+        self.assertIsNone(access.invite_token(iid))
+
     def test_guest_limits(self):
         url = self.owner.post("/api/invites", json={"hours": 1}).get_json()["url"]
         guest = server.app.test_client()

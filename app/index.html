@@ -210,7 +210,7 @@ body.chatfull{overflow:hidden}
 #chatcard.full #emotepick{display:flex;flex-direction:column;height:min(46vh,360px);animation:sheetup .2s ease-out}
 #chatcard.full #emotegrid{flex:1;max-height:none}
 #emotesuggest,.sugg{display:flex;gap:6px;overflow-x:auto;padding:0 0 6px;scrollbar-width:none}#emotesuggest::-webkit-scrollbar,.sugg::-webkit-scrollbar{display:none}
-#emotesuggest button,.sugg button{min-height:40px;padding:0 12px;flex:none;font-size:14px;gap:6px}#emotesuggest img{height:26px;max-width:64px;object-fit:contain}.sugg .sw{position:relative;display:inline-flex}.sugg img.sav{width:26px;height:26px;border-radius:50%;object-fit:cover}.sugg .sw .livedot{width:9px;height:9px;box-shadow:0 0 0 2px var(--card2,var(--card))}.sugg img.sgame{width:20px;height:28px;border-radius:4px;object-fit:cover}.sugg button small{color:var(--dim);font-size:12px}
+#emotesuggest button,.sugg button{min-height:40px;padding:0 12px;flex:none;font-size:14px;gap:6px}#emotesuggest img{height:26px;max-width:64px;object-fit:contain}.wallfavs .av.sugav{width:28px;height:28px;font-size:11px}.sugg .sgw{position:relative;display:inline-flex}.sugg img.sav{width:26px;height:26px;border-radius:50%;object-fit:cover}.sugg .sgw .livedot{width:9px;height:9px;box-shadow:0 0 0 2px var(--card2,var(--card))}.sugg img.sgame{width:20px;height:28px;border-radius:4px;object-fit:cover}.sugg button small{color:var(--dim);font-size:12px}
 #emotepick{background:var(--bg);border-radius:14px;padding:8px;margin:0 0 8px}
 #emotepick>input{display:block;width:100%;box-sizing:border-box;font-size:16px;min-height:44px;margin-bottom:8px}
 #emotepick .wseg{display:flex;flex-wrap:wrap;margin-bottom:4px}
@@ -307,7 +307,8 @@ body.chatfull{overflow:hidden}
 .s-actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 0 12px 56px}.s-actions button{flex:1 1 auto;min-height:44px;padding:0 14px}
 .s-actions form{display:flex;gap:8px;flex:1 1 100%}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
 .s-danger{color:#ff6b6b}
-.iconbtn{width:44px;min-height:44px;padding:0;flex:none}
+input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin:0 2px 0 8px;cursor:pointer;background:var(--dim,#8b93a7);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat}input[type=search]::-webkit-search-cancel-button:hover{background:var(--fg)}
+.iconbtn{width:44px;min-height:44px;padding:0;flex:none}.iconbtn.on{color:#7be29a}.iconbtn .ic{margin:0}
 #tvsadmin{margin-bottom:12px}
 .dd{position:relative;flex:1;min-width:0;width:100%}.ddnative{display:none!important}
 .ddbtn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:52px;padding:0 16px;text-align:left;font-size:16px;background:var(--card2);border-radius:14px}
@@ -540,6 +541,9 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <symbol id="i-right" viewBox="0 0 24 24"><path d="M5 12h13M12.5 6l6 6-6 6"/></symbol>
 <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5V19a1 1 0 01-1 1h-4.5v-5.5h-5V20H5a1 1 0 01-1-1z"/></symbol>
 <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.01"/></symbol>
+<symbol id="i-qr" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v.01M14.5 20.5v.01M17 20.5h3.5v-3"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5v-3a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2h3"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
 <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M5 7.5l4.5 4.5L5 16.5M12 17h7"/></symbol>
 <symbol id="i-hdmi" viewBox="0 0 24 24"><path d="M4.5 8h15v5.5l-3 3.2h-9l-3-3.2z"/></symbol>
@@ -634,7 +638,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <div id="phoneqr" style="width:200px;margin:8px auto;border-radius:12px;overflow:hidden;background:#fff"></div>
       </div>
       <label class="wz-f"><span>The address for the shortcut's Text action</span>
-        <div class="s-out"><input id="wzaddr" readonly aria-label="The address to put in the shortcut"><button id="wzaddrcopy" type="button">Copy</button></div></label>
+        <div class="s-out"><input id="wzaddr" readonly aria-label="The address to put in the shortcut"><button id="wzaddrcopy" type="button" class="iconbtn" aria-label="Copy the address" title="Copy the address"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg></button></div></label>
       <div data-os-only="ios">
         <label class="wz-f"><span>The shortcut's name (optional)</span><input id="wzscname" placeholder="Play on Pi" autocapitalize="none" autocorrect="off">
           <small>Type it exactly as the Shortcuts app shows it. The QR code on the TV's idle screen can then run it when scanned on an iPhone, with no link to find. You can change this in Settings.</small></label>
@@ -697,7 +701,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   </div>
 
   <h3 class="shead">How to use this</h3>
-  <div class="card s-form"><button id="tourgo" type="button" class="go">Take the tour</button></div>
+  <div class="card s-form"><button id="tourgo" type="button" class="go">Take the tour</button><button id="onboardgo" type="button" class="s-wide">Set up my phone again</button></div>
   <div class="card help" id="help">
     <details open><summary>Play something</summary>
       <p data-os-only="ios">Copy a link, or tap Share in Kick, Twitch, YouTube or Safari, then run the <b>Play on Pi</b> Shortcut. You pick a TV, and it starts playing there.</p>
@@ -752,8 +756,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <option value="3">Works on up to 3 devices</option><option value="5">Works on up to 5 devices</option></select>
       <button class="go" id="invmake">Create a guest link</button>
       <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. It is shown only now, so copy it before you leave this page.</p>
-        <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button">Copy</button></div>
-        <div class="row" style="margin-top:8px"><button id="invqr" type="button">Show QR code</button><button id="invtv" type="button" class="hide">Show on the TV</button></div></div>
+        <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button" class="iconbtn" aria-label="Copy the link" title="Copy the link"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg></button></div>
+        <div class="row" style="margin-top:8px"><button id="invqr" type="button" class="iconbtn" aria-label="Show QR code" title="Show QR code"><svg class="ic" aria-hidden="true"><use href="#i-qr"/></svg></button><button id="invtv" type="button" class="iconbtn hide" aria-label="Show it on the TV" title="Show it on the TV"><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg></button></div></div>
       <p class="sub">A guest can play Kick, Twitch and YouTube links and control the TVs. They can't change favourites, link accounts or manage people and TVs. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
     </div>
     <div class="card hide" id="guests"></div>
@@ -780,7 +784,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <div id="qrshortcut" class="hide"><div class="s-cap">Shortcut link</div>
           <input id="shortcuturl" placeholder="shortcuts://run-shortcut?name=TV%20Remote" aria-label="The Play on Pi shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"></div>
         <div id="qrinstall" class="hide"><div class="s-cap">The shortcut's iCloud link</div>
-          <div class="s-out"><input id="installurl" placeholder="https://www.icloud.com/shortcuts/..." aria-label="The shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"><button id="installqr" type="button">Show QR</button></div>
+          <div class="s-out"><input id="installurl" placeholder="https://www.icloud.com/shortcuts/..." aria-label="The shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"><button id="installqr" type="button" class="iconbtn" aria-label="Show the QR code" title="Show the QR code"><svg class="ic" aria-hidden="true"><use href="#i-qr"/></svg></button></div>
           <p class="sub">To get the link: open the Shortcuts app, touch and hold the shortcut, tap Share, then Copy iCloud Link. Paste it here. Anyone who scans the code on an iPhone is offered the shortcut to add. The shortcut has to be shared this way, so it can't be made for you.</p></div>
         <div id="scname-wrap" class="hide"><div class="s-cap">Or just the shortcut's name</div>
           <div class="s-out"><input id="scname" placeholder="TV Remote" aria-label="The shortcut's name, as shown in the Shortcuts app" autocapitalize="off" autocorrect="off"><button id="scuse" type="button">Use it</button></div>
@@ -908,12 +912,6 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <button id="chatlink" type="button" class="hide" style="margin:8px 8px 0 0;width:calc(100% - 8px)">Link Twitch to chat as yourself</button>
 </div>
 <div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multistream</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev r"></span></span></button></div>
-<dialog id="qrpop" class="sheet" aria-labelledby="qrpopttl">
-  <div class="sh"><div class="grow"><b id="qrpopttl">QR code</b><span class="sub" id="qrpopsub"></span></div>
-    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
-  <div class="sb"><div id="qrpopimg" style="width:min(300px,80vw);margin:0 auto;border-radius:14px;overflow:hidden;background:#fff"></div>
-    <button id="qrpoptv" type="button" class="go" style="margin-top:12px">Show it on the TV</button></div>
-</dialog>
 <dialog id="tvapps" class="sheet" aria-labelledby="tvappsttl">
   <div class="sh"><div class="grow"><b id="tvappsttl">TV apps</b><span class="sub" id="tvappssub">Tap one to open it on the TV</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -944,7 +942,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <div id="wallgroupswrap" class="hide"><div class="wlabel" style="display:flex;align-items:center;justify-content:space-between">Groups<button id="wallsavegroup" class="hide" type="button" style="min-height:30px;padding:0 10px;font-size:12px;gap:5px"><svg class="ic" aria-hidden="true" style="width:14px;height:14px"><use href="#i-multi-grid"/></svg>Save these as a group</button></div><div id="wallgroups" class="wallfavs"></div></div>
         <div id="walladdbox">
       <div class="wlabel" id="walladdlabel">Add a stream</div>
-      <form id="walladd" class="row"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
+      <form id="walladd" class="row"><input id="wallurl" type="search" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
         <div id="wallpick" class="pickrow hide"></div>
       <div id="wallfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="wallfavs" class="wallfavs"></div></div>
     </div>
@@ -954,7 +952,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="sh"><div class="grow"><b id="replttl">Replace</b><span class="sub">Pick what goes in its place</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
-    <form id="repladd" class="row"><input id="replurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="The stream to put in its place" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Replace</button></form>
+    <form id="repladd" class="row"><input id="replurl" type="search" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="The stream to put in its place" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Replace</button></form>
     <div id="replpick" class="pickrow hide"></div>
     <div id="replfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="replfavs" class="wallfavs"></div></div>
   </div>
@@ -987,7 +985,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <div id="playsec">
 <h2>Play something</h2>
 <div class="card">
-  <input type="text" id="link" placeholder="Paste a link, a channel name or a search" autocapitalize="off" autocorrect="off" enterkeyhint="go" aria-label="Link, channel or search">
+  <input type="search" id="link" placeholder="Paste a link, a channel name or a search" autocapitalize="off" autocorrect="off" enterkeyhint="go" aria-label="Link, channel or search">
   <div class="row seg" id="site">
     <button data-s="auto" class="on">Auto</button><button data-s="kick">Kick</button><button data-s="twitch">Twitch</button><button data-s="youtube">YouTube</button>
   </div>
@@ -1023,6 +1021,12 @@ body:has(dialog.sheet[open]){overflow:hidden}
     </div>
     <div id="dockercfg" class="hide"></div>
   </div>
+</dialog>
+<dialog id="qrpop" class="sheet" aria-labelledby="qrpopttl">
+  <div class="sh"><div class="grow"><b id="qrpopttl">QR code</b><span class="sub" id="qrpopsub"></span></div>
+    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb"><div id="qrpopimg" style="width:min(300px,80vw);margin:0 auto;border-radius:14px;overflow:hidden;background:#fff"></div>
+    <button id="qrpoptv" type="button" class="go" style="margin-top:12px">Show it on the TV</button></div>
 </dialog>
 <div id="tourbox" class="hide" role="dialog" aria-live="polite" aria-labelledby="tourttl">
   <div class="tt"><b id="tourttl"></b><span class="sub" id="toursub"></span>
@@ -2041,11 +2045,11 @@ async function showQr(url, title) {  // a popup with the QR code of a link; from
   if (!r || !r.ok) return;
   $('qrpopttl').textContent = title; $('qrpopsub').textContent = 'Scan with a phone camera';
   $('qrpopimg').innerHTML = r.svg; $('qrpopimg').firstElementChild.style.cssText = 'display:block;width:100%;height:auto';
-  $('qrpoptv').textContent = 'Show it on the TV'; $('qrpoptv').onclick = async () => { if (await qrSet({qr_guest: url})) { $('qrpoptv').textContent = 'Showing on the TV'; } };
+  setBtn($('qrpoptv'), 'tv', 'Show it on the TV'); $('qrpoptv').onclick = async () => { if (await qrSet({qr_guest: url})) setBtn($('qrpoptv'), 'check', 'Showing on the TV'); };
   $('qrpop').showModal();
 }
 $('invqr').onclick = () => showQr($('invurl').value, 'Guest link');
-$('invtv').onclick = async () => { const r = await qrSet({qr_guest: $('invurl').value}); if (r) $('invtv').textContent = 'Showing on the TV'; };
+$('invtv').onclick = async () => { const r = await qrSet({qr_guest: $('invurl').value}); if (r) { $('invtv').title = 'Showing on the TV'; $('invtv').classList.add('on'); } };
 let hideSure = null;
 $('desktop').onclick = () => {
   const hide = !shellInfo || shellInfo.enabled;
@@ -2208,6 +2212,7 @@ function requestRow(r) {
     iconBtn('x', 'Deny ' + r.name, 's-danger', async () => { await api('/api/requests/' + r.id, 'DELETE'); loadAccess(); }),
     form, result);
 }
+const iBtn = (icon, label, onclick, cls) => { const b = mk('button', {type: 'button', class: 'iconbtn' + (cls ? ' ' + cls : ''), 'aria-label': label, title: label, onclick}); b.innerHTML = ic(icon); return b; };
 function renderAccess() {
   const n = access.requests.length;
   $('reqcount').textContent = n; $('reqcount').classList.toggle('hide', !n);
@@ -2220,24 +2225,25 @@ function renderAccess() {
       mk('div', {class: 'grow'}, mk('b', {}, g.label || 'Guest'), ' ', mk('span', {class: 'pill guest'}, 'in use'),
         mk('span', {class: 'sub'}, (g.since ? 'Opened ' + ago(g.since) + ' · ' : '') + 'ends in ' + inFuture(g.exp)),
         mk('span', {class: 'sub'}, g.last ? 'Last: ' + g.last.text + ' · ' + ago(g.last.ts) : 'No actions yet')),
-      mk('button', {class: 's-danger', onclick: async () => {
+      iBtn('x', 'Revoke ' + (g.label || 'this guest'), async () => {
         if (!await confirmSheet('Revoke ' + (g.label || 'this guest') + '?', 'They are signed out at once and the link stops working.', 'Revoke', true)) return;
         await api('/api/guests/' + g.id, 'DELETE'); loadAccess();
-      }}, 'Revoke'))),
+      }, 's-danger'))),
     ...access.invites.map(i => mk('div', {class: 's-row'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✉'),
       mk('div', {class: 'grow'}, mk('b', {}, i.label || 'Unopened link'), ' ', mk('span', {class: 'pill'}, i.uses ? 'partly used' : 'not opened'),
         mk('span', {class: 'sub'}, (i.max_uses > 1 ? 'Opened on ' + (i.uses || 0) + ' of ' + i.max_uses + ' devices · ' : '') + hoursText(i.hours) + ' of access each · link expires in ' + inFuture(i.redeem_by))),
-      mk('button', {class: 's-danger', onclick: async () => {
+      iBtn('qr', 'Show this link as a QR code', async () => { const r = await api('/api/invites/' + i.id + '/link'); if (r && r.ok) showQr(r.url, i.label || 'Guest link'); }),
+      iBtn('x', 'Revoke this link', async () => {
         if (!await confirmSheet('Revoke this link?', 'It stops working. Nobody who has not opened it yet will be able to.', 'Revoke', true)) return;
         await api('/api/invites/' + i.id, 'DELETE'); loadAccess();
-      }}, 'Revoke'))),
+      }, 's-danger'))),
     ...used.map(u => mk('div', {class: 's-row', style: 'opacity:.75'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✓'),
       mk('div', {class: 'grow'}, mk('b', {}, u.label || 'Guest link'), ' ', mk('span', {class: 'pill'}, u.ended ? 'ended' : 'revoked'),
         mk('span', {class: 'sub'}, 'Opened ' + ago(u.opened) + ' · ' + hoursText(u.hours) + ' of access')),
-      mk('button', {'aria-label': 'Remove this from the list', title: 'Remove from the list', onclick: async () => {
+      iBtn('x', 'Remove this from the list', async () => {
         if (!await confirmSheet('Remove from the list?', 'This only clears it from the list. Nothing else changes.', 'Remove')) return;
         await api('/api/guest-history/' + u.id, 'DELETE'); loadAccess();
-      }}, 'Remove')))];
+      })))];
   $('guests').classList.toggle('hide', !rows.length);
   $('guests').replaceChildren(mk('div', {class: 's-cap', style: 'display:flex;align-items:center;justify-content:space-between'}, 'Active and recent links',
     used.length ? mk('button', {style: 'min-height:36px;padding:0 12px;font-size:13px', onclick: async () => {
@@ -2292,7 +2298,7 @@ $('acctadd').onsubmit = async e => {
 $('invmake').onclick = async e => {
   e.preventDefault();
   const r = await busy($('invmake'), () => api('/api/invites', 'POST', {hours: Number($('invhours').value), devices: Number($('invdevices').value), label: $('invlabel').value}));
-  if (r && r.ok) { $('invurl').value = r.url; $('invtv').textContent = 'Show its QR code on the TV'; $('invout').classList.remove('hide'); $('invlabel').value = ''; loadAccess(); }
+  if (r && r.ok) { $('invurl').value = r.url; $('invtv').title = 'Show it on the TV'; $('invtv').classList.remove('on'); $('invout').classList.remove('hide'); $('invlabel').value = ''; loadAccess(); }
 };
 
 // ---- Show/Hide on every password field, so you can check two entries match ----
@@ -2314,11 +2320,11 @@ const revealAll = () => document.querySelectorAll('input[type=password]:not([dat
 revealAll();
 new MutationObserver(revealAll).observe(document.body, {childList: true, subtree: true});  // fields the page adds later (reset password, approve a request)
 
-$('invcopy').onclick = () => { copyText($('invurl')); $('invcopy').textContent = 'Copied'; setTimeout(() => { $('invcopy').textContent = 'Copy'; }, 1500); };
+$('invcopy').onclick = () => { copyText($('invurl')); $('invcopy').classList.add('on'); setTimeout(() => $('invcopy').classList.remove('on'), 1500); };
 loadAccounts();
 
 // ---- setup wizard: the admin account first ----
-let setupStep = 1, setupInfo = {}, setupNeeded = false;  // while the wizard is unfinished it is the only page (no Settings, no TVs)
+let setupStep = 1, setupStart = 0, setupInfo = {}, setupNeeded = false;  // while the wizard is unfinished it is the only page (no Settings, no TVs)
 function renderSetup() {
   const claim = setupStep === 1 && setupInfo.has_admin && setupInfo.needs_owner;
   [1, 2, 3, 4].forEach(n => $('setup' + n).classList.toggle('hide', n !== setupStep || (n === 1 && claim)));
@@ -2347,7 +2353,7 @@ function renderSetup() {
 }
 async function openSetup() {
   setupInfo = await fetch('/api/setup').then(r => r.json()).catch(() => ({}));
-  setupStep = setupInfo.has_admin && !setupInfo.needs_owner ? 2 : 1;
+  setupStep = setupStart || (setupInfo.has_admin && !setupInfo.needs_owner ? 2 : 1); setupStart = 0;
   renderSetup();
 }
 $('setupform').onsubmit = async e => {
@@ -2492,7 +2498,7 @@ async function finishSetup(btn, tour) {
 }
 $('sufinish').onclick = () => finishSetup($('sufinish'), false);
 $('sutour').onclick = () => finishSetup($('sutour'), true);
-$('wzaddrcopy').onclick = () => { copyText($('wzaddr')); $('wzaddrcopy').textContent = 'Copied'; setTimeout(() => { $('wzaddrcopy').textContent = 'Copy'; }, 1500); };
+$('wzaddrcopy').onclick = () => { copyText($('wzaddr')); $('wzaddrcopy').classList.add('on'); setTimeout(() => $('wzaddrcopy').classList.remove('on'), 1500); };
 $('suphoneskip').onclick = () => { setupStep = 4; renderSetup(); };
 $('suphonenext').onclick = async () => {
   const n = $('wzscname').value.trim();
@@ -2500,6 +2506,7 @@ $('suphonenext').onclick = async () => {
   setupStep = 4; renderSetup();
 };
 $('rerun').onclick = () => { location.hash = '#/setup'; };
+$('onboardgo').onclick = () => { setupStart = 3; location.hash = '#/setup'; };  // the onboarding again, from the phone step: then the tour
 // One tap after plugging into a new TV: look for TVs and save what was found, but only when every guess is clear. When it is not sure
 // (a screen with no TV to match, a Chromecast no TV claims, nothing found) it opens the wizard with what it found, instead of saving a guess.
 $('autosetup').onclick = () => busy($('autosetup'), async () => {
@@ -2933,7 +2940,7 @@ function suggestBrowse(q, games, base) {  // while typing: matching categories (
     const b = el('button');
     b.type = 'button';
     const pic = it.game ? it.img : it.avatar;  // a category shows its box art, a channel its profile picture
-    if (pic) { const i = document.createElement('img'); i.src = pic; i.alt = ''; i.referrerPolicy = 'no-referrer'; i.className = it.game ? 'sgame' : 'sav'; i.onerror = () => i.remove(); if (it.game) b.append(i); else { const w = el('span', 'sw'); w.append(i); const d = el('i', 'livedot'); w.append(d); b.append(w); } }  // a channel in the live list is live: red dot
+    if (pic) { const i = document.createElement('img'); i.src = pic; i.alt = ''; i.referrerPolicy = 'no-referrer'; i.className = it.game ? 'sgame' : 'sav'; i.onerror = () => i.remove(); if (it.game) b.append(i); else { const w = el('span', 'sgw'); w.append(i); const d = el('i', 'livedot'); w.append(d); b.append(w); } }  // a channel in the live list is live: red dot
     if (it.game) { b.append(document.createTextNode(it.game + ' '), el('small', null, it.n + ' live')); b.title = 'Show only this category'; b.onclick = () => { browseGame = it.game; $('browseq').value = ''; renderBrowse(); }; }
     else { b.append(document.createTextNode(it.name)); b.onclick = () => { $('browseq').value = it.name; renderBrowse(); }; }
     return b;
@@ -3088,6 +3095,7 @@ function drawSuggestions(wrap, box, list) {  // the live ones, as buttons: one t
   wrap.classList.toggle('hide', !list.length);
   box.replaceChildren(...list.map(f => {
     const site = /twitch\.tv/i.test(f.url) ? 'twitch' : /kick\.com/i.test(f.url) ? 'kick' : '', b = el('button');
+    const av = avatarEl(f.name || f.url, f.url, 'sugav', true); b.append(av);  // their picture, with the live dot (these are the ones on now)
     if (site) { const i = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); i.setAttribute('viewBox', '0 0 24 24'); i.setAttribute('class', 'pico ' + site); i.innerHTML = '<use href="#i-' + site + '"/>'; b.append(i); }
     b.append(document.createTextNode(f.name || f.url));
     b.onclick = () => busy(b, () => wallPut(f.url));

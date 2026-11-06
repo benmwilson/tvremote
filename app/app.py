@@ -1955,7 +1955,8 @@ def api_qr():
     if not u.startswith(("http://", "https://", "shortcuts://")):
         return jsonify(ok=False, error="Not a link."), 400
     import segno
-    return jsonify(ok=True, svg=segno.make(u, error="m").svg_inline(scale=8, border=3, dark="#000", light="#fff"))
+    q = segno.make(u, error="m")
+    return jsonify(ok=True, svg=q.svg_inline(scale=1, border=3, dark="#000", light="#fff").replace("<svg ", '<svg viewBox="0 0 %d %d" ' % ((q.symbol_size(border=3)[0],) * 2), 1))
 
 
 @app.get("/api/config")
@@ -3580,6 +3581,15 @@ def invite_create():
         token = access.create_invite(int(data.get("hours") or 24), data.get("label"), int(data.get("devices") or 1))
     except (TypeError, ValueError):
         return jsonify(ok=False, error="Pick how long access lasts."), 400
+    return jsonify(ok=True, url=request.host_url + "join/" + token)
+
+
+@app.get("/api/invites/<iid>/link")
+def invite_link(iid):
+    admin_only()
+    token = access.invite_token(iid)
+    if not token:
+        return jsonify(ok=False, error="That link can't be shown again."), 404
     return jsonify(ok=True, url=request.host_url + "join/" + token)
 
 

@@ -92,7 +92,7 @@ def create_invite(hours, label, max_uses=1, now=None):
     with _lock:
         d = {k: v for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now}
         d[_h(token)] = {"created": now, "redeem_by": now + REDEEM_WINDOW, "hours": hours, "label": (label or "").strip()[:30],
-                        "max_uses": max_uses, "uses": 0}
+                        "max_uses": max_uses, "uses": 0, "token": token}  # kept so an admin can show its QR code again (an unopened link only; gone once used up or expired)
         _write("invites.json", d)
     return token
 
@@ -150,3 +150,13 @@ def revoke_invite(iid):
         if gone:
             _write("invites.json", d)
         return bool(gone)
+
+
+def invite_token(iid):
+    """The token of an unopened invite (by the id the list shows), for showing its QR code again. None when it is gone."""
+    if len(iid or "") < 8:
+        return None
+    for k, v in _read("invites.json", {}).items():
+        if k.startswith(iid) and v.get("token") and v["redeem_by"] > time.time():
+            return v["token"]
+    return None
