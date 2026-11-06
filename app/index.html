@@ -371,6 +371,7 @@ body.touring{padding-bottom:260px}
 
 #view-setup{padding-bottom:24px}
 .wz-head{text-align:center;margin:18px 0 4px}.wz-head h1{margin:0;font-size:26px}.wz-head p{margin:6px 0 0;color:var(--dim);font-size:15px}
+.wz-how ol{margin:8px 0 12px;padding-left:20px;line-height:1.5;font-size:15px}.wz-how li{margin-bottom:10px}.wz-how p{margin:8px 0;text-align:center}
 .wz-steps{display:flex;list-style:none;margin:20px 8px 18px;padding:0}
 .wz-steps li{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;color:var(--dim);font-size:13px;font-weight:600}
 .wz-steps li::after{content:"";position:absolute;top:15px;left:calc(50% + 20px);right:calc(-50% + 20px);height:2px;background:var(--line)}
@@ -574,7 +575,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <section id="view-setup" class="hide">
   <div class="wz-head"><h1>Set up TV Remote</h1><p>It only takes a minute, and you only do it once.</p></div>
   <ol class="wz-steps" id="setupdots" aria-label="Setup progress">
-    <li><i>1</i><span>Account</span></li><li><i>2</i><span>TVs</span></li><li><i>3</i><span>Done</span></li></ol>
+    <li><i>1</i><span>Account</span></li><li><i>2</i><span>TVs</span></li><li><i>3</i><span>Phone</span></li><li><i>4</i><span>Done</span></li></ol>
 
   <div id="setup0" class="card wz-card hide">
     <h2>Who owns this install?</h2>
@@ -612,12 +613,43 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <div class="wz-bar"><button id="tvcancel" type="button" class="hide">Cancel</button><button id="tvrescan" type="button">Scan again</button><button id="tvsave" class="go">Save</button></div>
   </div>
 
-  <div id="setup3" class="card wz-card wz-done hide">
+  <div id="setup3" class="hide">
+    <div class="wz-card card">
+      <h2>Put it on your phone</h2>
+      <p class="wz-lead">Optional, and worth a minute: it makes sending a link to a TV one tap. You can skip this and do it later from the help in Settings.</p>
+      <div data-os-only="ios" class="wz-how">
+        <ol>
+          <li><b>Make it an app.</b> In Safari tap Share, then Add to Home Screen.</li>
+          <li><b>Make the Play on Pi shortcut.</b> In the Shortcuts app tap +, then add these actions in order: <i>Receive Any input from Share Sheet</i> (if there is no input: <i>Get Clipboard</i>), <i>URL Encode</i>, <i>Text</i> with the address below followed by the URL Encoded text, then <i>Open URLs</i>. In its settings turn on Show in Share Sheet.</li>
+        </ol>
+      </div>
+      <div data-os-only="android" class="wz-how">
+        <ol>
+          <li><b>Install it.</b> In Chrome tap the three dots, then Install app (or Add to Home screen).</li>
+          <li><b>Share to it.</b> From Kick, Twitch, YouTube or Chrome tap Share and pick <b>TV Remote</b>. You choose a TV and it plays.</li>
+        </ol>
+      </div>
+      <div data-os-only="other" class="wz-how">
+        <p>Open this address on your phone, or scan the code, then follow the steps there.</p>
+        <div id="phoneqr" style="width:200px;margin:8px auto;border-radius:12px;overflow:hidden;background:#fff"></div>
+      </div>
+      <label class="wz-f"><span>The address for the shortcut's Text action</span>
+        <div class="s-out"><input id="wzaddr" readonly aria-label="The address to put in the shortcut"><button id="wzaddrcopy" type="button">Copy</button></div></label>
+      <div data-os-only="ios">
+        <label class="wz-f"><span>The shortcut's name (optional)</span><input id="wzscname" placeholder="Play on Pi" autocapitalize="none" autocorrect="off">
+          <small>Type it exactly as the Shortcuts app shows it. The QR code on the TV's idle screen can then run it when scanned on an iPhone, with no link to find. You can change this in Settings.</small></label>
+      </div>
+    </div>
+    <div class="wz-bar"><button id="suphoneskip" type="button">Skip</button><button id="suphonenext" class="go" type="button">Continue</button></div>
+  </div>
+
+  <div id="setup4" class="card wz-card wz-done hide">
     <div class="wz-check" aria-hidden="true">&#10003;</div>
     <h2>You're all set</h2>
     <p class="wz-lead" id="setupdone"></p>
     <div id="setupsummary"></div>
-    <button id="sufinish" class="go">Open the remote</button>
+    <button id="sutour" class="go" type="button">Take a quick tour</button>
+    <button id="sufinish" type="button" style="margin-top:8px">Skip the tour, open the remote</button>
   </div>
 </section>
 
@@ -2289,7 +2321,7 @@ loadAccounts();
 let setupStep = 1, setupInfo = {}, setupNeeded = false;  // while the wizard is unfinished it is the only page (no Settings, no TVs)
 function renderSetup() {
   const claim = setupStep === 1 && setupInfo.has_admin && setupInfo.needs_owner;
-  [1, 2, 3].forEach(n => $('setup' + n).classList.toggle('hide', n !== setupStep || (n === 1 && claim)));
+  [1, 2, 3, 4].forEach(n => $('setup' + n).classList.toggle('hide', n !== setupStep || (n === 1 && claim)));
   $('setup0').classList.toggle('hide', !claim);
   if (claim) $('claimwho').textContent = setupInfo.user || '';
   [...$('setupdots').children].forEach((li, i) => {
@@ -2304,6 +2336,10 @@ function renderSetup() {
   $('tvcancel').classList.toggle('hide', !setupInfo.done);  // a first-time setup has to finish; a re-run can be abandoned
   if (setupStep === 2 && !tvLoading && !tvDisc) discoverTvs();
   if (setupStep === 3) {
+    $('wzaddr').value = location.origin + '/share?u=';
+    if (document.documentElement.dataset.os === 'other' && !$('phoneqr').firstChild) api('/api/qr', 'POST', {url: location.origin + '/'}).then(r => { if (r && r.ok) { $('phoneqr').innerHTML = r.svg; $('phoneqr').firstElementChild.style.cssText = 'display:block;width:100%;height:auto'; } });
+  }
+  if (setupStep === 4) {
     $('setupdone').textContent = (setupInfo.created ? 'Your admin account \u201c' + setupInfo.created + '\u201d is ready. ' : '') + 'Add people and guest links from Settings, behind the gear.';
     $('setupsummary').replaceChildren(...tvList.map(t => mk('div', {class: 'wz-sum'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, (t.name || '?').slice(0, 1)),
       mk('div', {}, mk('b', {}, t.name), mk('small', {}, plugSummary(t))))));
@@ -2446,11 +2482,22 @@ $('tvsave').onclick = async () => {
   const r = await busy($('tvsave'), () => fetch('/api/tvs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).then(x => x.json()));
   if (!r) { $('tverr').textContent = 'Couldn\u2019t reach the Pi.'; return; }
   if (r.ok === false) { $('tverr').textContent = r.error || 'That didn\u2019t save.'; return; }
-  tvList = r.tvs; loadTargets(); setupStep = 3; renderSetup();
+  tvList = r.tvs; loadTargets(); setupStep = 3; renderSetup();  // then the phone step (optional)
 };
-$('sufinish').onclick = async () => {
-  const r = await busy($('sufinish'), () => api('/api/setup/finish', 'POST', {}));
-  if (r && r.ok) { setupNeeded = false; location.hash = '#/'; }
+async function finishSetup(btn, tour) {
+  const r = await busy(btn, () => api('/api/setup/finish', 'POST', {}));
+  if (!(r && r.ok)) return;
+  setupNeeded = false; location.hash = '#/';
+  if (tour) setTimeout(() => $('tourgo').onclick(), 700);  // the remote draws first, then the tour starts on it
+}
+$('sufinish').onclick = () => finishSetup($('sufinish'), false);
+$('sutour').onclick = () => finishSetup($('sutour'), true);
+$('wzaddrcopy').onclick = () => { copyText($('wzaddr')); $('wzaddrcopy').textContent = 'Copied'; setTimeout(() => { $('wzaddrcopy').textContent = 'Copy'; }, 1500); };
+$('suphoneskip').onclick = () => { setupStep = 4; renderSetup(); };
+$('suphonenext').onclick = async () => {
+  const n = $('wzscname').value.trim();
+  if (n && document.documentElement.dataset.os === 'ios') await qrSet({shortcut_url: 'shortcuts://run-shortcut?name=' + encodeURIComponent(n), qr_mode: 'shortcut'});  // the TV's QR code runs it
+  setupStep = 4; renderSetup();
 };
 $('rerun').onclick = () => { location.hash = '#/setup'; };
 // One tap after plugging into a new TV: look for TVs and save what was found, but only when every guess is clear. When it is not sure
