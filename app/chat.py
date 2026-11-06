@@ -118,7 +118,7 @@ def ass(msgs):
     return "{\\an1\\fs34\\bord3\\shad0\\q2}" + "\\N".join(rows)
 
 
-COL_REDRAW_S = 4      # the chat window is its own surface, so a redraw never touches the stream
+COL_REDRAW_S = 2      # the chat window is its own surface, so a redraw never touches the stream
 COL_W, COL_H = 480, 1080  # the strip the picture makes room for (the picture is 1440 wide), drawn as a window of its own
 COL_CHARS, COL_LINES = 24, 30
 
@@ -129,14 +129,6 @@ def _plain(s):
 
 
 SITE_BGR = {"Kick": "18FC53", "Twitch": "FF70A9"}  # the sites' colours, as ASS wants them (BGR)
-
-
-def background(ox=0, oy=0):
-    """The look behind the stream, the same for every site: two soft colour glows laid out over the whole 1920x1080 screen, drawn here offset by
-    this window's own position (ox, oy), so the chat window and the bar under the picture join up as one background."""
-    def glow(x, y, w, h, colour, alpha):
-        return r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&\1a&H%s&\blur120}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x - ox, y - oy, colour, alpha, w, w, h, h)
-    return [glow(900, -300, 1300, 900, "9A5A2E", "50"), glow(300, 620, 1500, 900, "8A2E6A", "58")]
 
 
 def ass_column(channel, msgs, source="Twitch"):
@@ -155,7 +147,7 @@ def ass_column(channel, msgs, source="Twitch"):
     head = "{\\an7\\pos(28,44)\\fs28\\b1\\bord0\\shad0\\1c&H" + accent + "&}\u25cf  {\\1c&HA9978C&\\fsp3}CHAT  {\\1c&HF6F1EE&\\fsp0}" + _esc(channel).upper()
     body = "{\\an1\\pos(28,1050)\\fs26\\bord2\\shad0\\q2}" + "\\N".join(lines[-COL_LINES:])
     rule = r"{\an7\pos(28,100)\p1\bord0\shad0\1c&H%s&\1a&H60&}m 0 0 l 424 0 424 2 0 2{\p0}" % accent
-    return "\n".join([*background(1440, 0), rule, head, body])
+    return "\n".join([rule, head, body])  # the glows are in the window's background picture (tools/make_chat_bg.py)
 
 
 BAR_X = 48
@@ -164,7 +156,7 @@ BAR_X = 48
 def ass_bar(name, title, source="Twitch"):
     """The 'now playing' bar under the picture (a 1440x270 window): the site's dot, the channel, and the stream's title, on the same background."""
     accent = SITE_BGR.get(source, "FFB062")
-    out = [*background(0, 810)]
+    out = []  # the glows are in the window's background picture (tools/make_chat_bg.py)
     out.append((r"{\an7\pos(%d,38)\fs22\b1\fsp5\bord0\shad0\1c&H%s&}" % (BAR_X, accent)) + "\u25cf" + r"  {\1c&HA9978C&}NOW PLAYING")
     out.append(r"{\an7\pos(%d,78)\fs60\b1\bord0\shad0\1c&HF6F1EE&}%s" % (BAR_X, _esc(_plain(name))[:28]))
     if title:
@@ -205,7 +197,7 @@ class TwitchChat:
 
 
 KICK_API = "https://kick.com/api/v2/channels/"
-KICK_POLL_S = 5
+KICK_POLL_S = 2
 
 
 def _kick_get(path):
@@ -241,7 +233,7 @@ class KickChat(TwitchChat):
             try:
                 if room is None:
                     room = self._get(self.channel)["id"]
-                msgs = (self._get(f"{room}/messages").get("data") or {}).get("messages") or []
+                msgs = (self._get(f"{room}/messages?_={int(time.time() * 1000)}").get("data") or {}).get("messages") or []  # the changing value keeps Kick's cache from answering with old messages
                 for m in sorted(msgs, key=lambda x: x.get("created_at", "")):  # oldest first, so the newest ends up at the bottom
                     if m.get("id") not in seen:
                         seen.add(m.get("id"))

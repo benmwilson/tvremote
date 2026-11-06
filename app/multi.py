@@ -23,23 +23,30 @@ LAYOUTS = ("grid", "focus")
 STAGGER = float(os.environ.get("TVREMOTE_WALL_STAGGER", "0"))  # seconds between windows starting: 0 = all together (so the streams join in step)
 
 
-def _row(n, w, h, y):
-    x0 = (W - (n * w + (n - 1) * G)) // 2
+CHAT_W = 480  # the strip on the right that the chat window takes while chat is on (the streams share the rest)
+
+
+def _row(n, w, h, y, area=W):
+    x0 = (area - (n * w + (n - 1) * G)) // 2
     return [(x0 + i * (w + G), y, w, h) for i in range(n)]
 
 
 def tiles(layout, n):
-    """One (x, y, w, h) per tile, tile 0 first (the big one in focus). n is 2..MAX_TILES."""
+    """One (x, y, w, h) per tile, tile 0 first (the big one in focus). n is 2..MAX_TILES. A layout name with a 'c' in front (cgrid, cfocus)
+    is the same layout in the screen without the chat strip on the right."""
+    chat = layout.startswith("c")
+    layout, area = layout.lstrip("c"), (W - CHAT_W if layout.startswith("c") else W)
     if layout == "grid":
         if n == 2:
-            w = (W - 2 * M - G) // 2
+            w = (area - 2 * M - G) // 2
             h = w * 9 // 16
-            return _row(2, w, h, (H - (h + S)) // 2)
-        w, h = 840, 472  # the size that was tested with four at once
-        return _row(2, w, h, M) + _row(n - 2, w, h, M + h + S + G)
-    hs = 270
+            return _row(2, w, h, (H - (h + S)) // 2, area)
+        w, h = (688, 387) if chat else (840, 472)  # 840x472 is the size that was tested with four at once; two of them do not fit beside the chat
+        top = (H - (2 * h + S + G + S)) // 2 if chat else M
+        return _row(2, w, h, top, area) + _row(n - 2, w, h, top + h + S + G, area)
+    hs = 234 if chat else 270
     hb = H - 2 * M - G - 2 * S - hs
-    return _row(1, hb * 16 // 9, hb, M) + _row(n - 1, hs * 16 // 9, hs, M + hb + S + G)
+    return _row(1, hb * 16 // 9, hb, M, area) + _row(n - 1, hs * 16 // 9, hs, M + hb + S + G, area)
 
 
 def window_id(layout, n, i):
@@ -86,7 +93,7 @@ def friendly(raw):
 def rules_xml():
     """The desktop (labwc) window rules for every layout, count and tile."""
     rules = []
-    for layout in LAYOUTS:
+    for layout in [*LAYOUTS, *("c" + l for l in LAYOUTS)]:
         for n in range(2, MAX_TILES + 1):
             for i, (x, y, w, h) in enumerate(tiles(layout, n)):
                 rules.append(f'    <windowRule identifier={quoteattr(window_id(layout, n, i))}><serverDecoration>no</serverDecoration>'
@@ -110,6 +117,7 @@ class Wall:
         self.build, self.resolve, self.name, self.log_dir, self.volume = build, resolve, name, log_dir, volume
         self.on_change = lambda: None  # called when a window ends by itself (a stream went offline), so the screen can say so
         self.layout = None
+        self.chat = False  # the chat strip is on the right: the windows use the 'c' layouts
         self.extras = []  # tiles 1..: {"url", "source", "proc", "error"}
         self.main_url = None  # the stream the main window should play: what the wall says. The window catches up (a swap is changed in place)
         self.selected = 0  # the stream the remote's card controls (title, pause, favourite, quality): not tied to any window's place
@@ -125,16 +133,21 @@ class Wall:
     def active(self):
         return self.layout is not None and bool(self.extras)
 
+    @property
+    def geo(self):
+        """The layout name the windows are placed by: the layout, with a 'c' in front while the chat strip is up."""
+        return ("c" if self.chat else "") + (self.layout or "")
+
     def main_args(self):
         """(mpv args, width) for the main player's window while the wall is up, else ([], None)."""
         if not self.active():
             return [], None
-        args, width = window_args(self.layout, self.count(), 0)
+        args, width = window_args(self.geo, self.count(), 0)
         return args + ([] if 0 in self.sound else ["--mute=yes"]), width  # a new window starts with sound: not when it is switched off
 
     def main_wid(self):
         """The window name the main player should have right now (None when it is full screen)."""
-        return window_id(self.layout, self.count(), 0) if self.active() else None
+        return window_id(self.geo, self.count(), 0) if self.active() else None
 
     def sock(self, i, main_sock):
         return main_sock if i == 0 else _sock(i)
@@ -161,16 +174,17 @@ class Wall:
     def clear(self):
         with self.lock:
             self.stop_windows()
+            self.chat = False
             self.extras, self.layout, self.sound, self.main_quality, self.selected, self.main_url = [], None, {0}, None, 0, None
 
     def _current(self, i, t):
         p = t.get("proc")
-        return bool(p and p.poll() is None and t.get("started") == t["url"] and t.get("q_started") == t.get("quality") and t.get("wid") == window_id(self.layout, self.count(), i))
+        return bool(p and p.poll() is None and t.get("started") == t["url"] and t.get("q_started") == t.get("quality") and t.get("wid") == window_id(self.geo, self.count(), i))
 
     def _command(self, i, t):
         """(command, source, player) for tile i's window. Slow (asking streamlink for the stream's address): never call it under the lock."""
         source, player = self.resolve(t["url"])
-        args, width = window_args(self.layout, self.count(), i)
+        args, width = window_args(self.geo, self.count(), i)
         extra = args + ([] if i in self.sound else ["--mute=yes"]) + ["--no-terminal"]
         if self.volume() is not None:
             extra.append(f"--volume={float(self.volume()):g}")  # the level the main stream has, so switching a tile on is not a jump
@@ -185,7 +199,7 @@ class Wall:
         log = open(os.path.join(self.log_dir, f"tvremote-tile{i}.log"), "w")
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         # hot: mpv plays the stream's own address, so the window can change stream in place (loadfile) instead of being restarted
-        t.update(source=source, proc=proc, error=None, wid=window_id(self.layout, self.count(), i), started=t["url"], q_started=t.get("quality"),
+        t.update(source=source, proc=proc, error=None, wid=window_id(self.geo, self.count(), i), started=t["url"], q_started=t.get("quality"),
                  hot=cmd[0] == "mpv" and player == "streamlink")
         threading.Thread(target=self._watch, args=(i, t, proc), daemon=True).start()
 
@@ -325,4 +339,4 @@ class Wall:
                        "running": bool(t.get("proc") and t["proc"].poll() is None), "error": t.get("error"),
                        "quality": t.get("quality")}
                       for i, t in enumerate(self.extras, start=1)]
-            return {"layout": self.layout, "sound": sorted(self.sound), "selected": self.selected, "tiles": tiles_, "max": MAX_TILES, "main_quality": self.main_quality}
+            return {"layout": self.layout, "chat": self.chat, "sound": sorted(self.sound), "selected": self.selected, "tiles": tiles_, "max": MAX_TILES, "main_quality": self.main_quality}

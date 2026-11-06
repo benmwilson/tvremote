@@ -165,4 +165,5 @@ class KickFeedTests(unittest.TestCase):
         k.stopped.wait = lambda t=None: k.stopped.set()  # one pass, then stop
         k._read()
         self.assertEqual([m for _, m in k.msgs], [("Al", "#FF0000", "first"), ("Bo", "#00FF00", "KEKW second")])
-        self.assertEqual(calls, ["omie", "89448/messages"])
+        self.assertEqual(calls[0], "omie")
+        self.assertTrue(calls[1].startswith("89448/messages?_="))

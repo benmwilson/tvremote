@@ -397,7 +397,7 @@ def screen(kind, detail="", source=None):
     if HOME and settings.get("shell"):
         if kind == "playing" and wall.active():  # several streams: the background behind them, not a hidden window
             labels = [(fav_name(state["url"] or ""), state["source"], bool(state.get("ended")))] + [(wall.name(t["url"]), t.get("source"), bool(t.get("error"))) for t in wall.extras]
-            HOME.show_wall(wall.layout, labels)
+            HOME.show_wall(wall.geo, labels)
             return
         accent = shell.SRC_BGR.get(source)
         if accent:
@@ -468,7 +468,7 @@ def stop_player():
     chat_stop()
 
 
-_chat = {"obj": None, "pref": False, "col": False, "win": None, "bar": None}  # off by default
+_chat = {"obj": None, "pref": False, "col": False, "win": None, "bar": None, "key": None}  # off by default
 
 
 def chat_send(text):
@@ -503,20 +503,61 @@ def chat_column_send(text):
     return (win.running() or win.open()) and win.update(text)
 
 
+def chat_strip_send(text):
+    """Several streams: the chat of the stream the remote controls shows in the strip on the right (the windows have made room for it). The window
+    stays up while the feed changes; chat_strip_close() takes it away. True when it was drawn."""
+    if text is None:
+        return True
+    win = _chat["win"] = _chat["win"] or chatwin.chat_panel()
+    return bool((win.running() or win.open()) and win.update(text))
+
+
+def chat_strip_close():
+    if _chat["win"]:
+        _chat["win"].close()
+
+
 def chat_stop():
     c, _chat["obj"] = _chat["obj"], None
     if c:
         c.stop()
 
 
+def chat_channel():
+    """(channel, source) of the stream whose chat the TV would show, or (None, None): the one the remote controls."""
+    url, source = sel_info()[:2]
+    return (chat.channel_of(url or ""), source) if source in ("Twitch", "Kick") and (state["proc"] or wall.active()) else (None, None)
+
+
 def chat_sync():
-    """Match the chat to what is playing: a live Twitch or Kick channel with chat switched on."""
+    """Match the chat to what is playing: a live Twitch or Kick channel with chat switched on. One stream: the picture moves over and the chat and a
+    now-playing bar fill the space. Several: the windows make room (the chat layouts) and the strip shows the controlled stream's chat."""
     chat_stop()
-    ch = chat.channel_of(state["url"] or "") if state["source"] in ("Twitch", "Kick") and state["proc"] else None
+    ch, source = chat_channel()
+    _chat["key"] = (ch, source, wall.active(), bool(_chat["pref"]))
+    if wall.active():
+        want = bool(_chat["pref"])
+        if want != wall.chat:
+            wall.chat = want
+            wall_later(wall_relayout)  # every window moves to its place beside (or without) the strip
+        if not want:
+            chat_strip_close()
+        elif ch:
+            _chat["obj"] = (chat.KickChat if source == "Kick" else chat.TwitchChat)(ch, chat_strip_send, column=True)
+        return
+    if wall.chat:
+        wall.chat = False
+    chat_strip_close() if not _chat["col"] else None
     if ch and _chat["pref"]:
-        col = not wall.active()  # a column only for one stream; with several there is no room
-        cls = chat.KickChat if state["source"] == "Kick" else chat.TwitchChat
-        _chat["obj"] = cls(ch, chat_column_send if col else chat_send, column=col)
+        _chat["obj"] = (chat.KickChat if source == "Kick" else chat.TwitchChat)(ch, chat_column_send, column=True)
+
+
+def chat_refresh():
+    """Another stream became the controlled one (or a window was swapped): show its chat. Cheap enough to call often."""
+    if _chat["pref"] and wall.active():
+        ch, source = chat_channel()
+        if _chat.get("key") != (ch, source, True, True):
+            chat_sync()
 
 
 def _watch(proc):
@@ -702,7 +743,7 @@ def wall_sync():
     {note, spread, aligned}: what it found, in words."""
     n = wall.count()
     names = [(wall.main_url or state["url"] or ""), *[t["url"] for t in wall.extras]]
-    rects = multi.tiles(wall.layout, n) if wall.active() else None
+    rects = multi.tiles(wall.geo, n) if wall.active() else None
     found = {}
 
     def measure(i):
@@ -754,7 +795,7 @@ def warm_addresses():
     ready and takes effect at once."""
     if not (HOT and wall.active()):
         return
-    rects = multi.tiles(wall.layout, wall.count())
+    rects = multi.tiles(wall.geo, wall.count())
     urls = [wall.main_url] + [t["url"] for t in wall.extras]
     wants = {cap("streamlink", r[2]) for r in rects}
     wants.add(sl_quality(wall.saved_quality, None))  # and the full-screen quality: removing a stream (or ending the multi-view) leaves one stream
@@ -1300,7 +1341,7 @@ def reconcile_job():
     try:
         if not wall.active():
             return
-        rects, todo = multi.tiles(wall.layout, wall.count()), {}
+        rects, todo = multi.tiles(wall.geo, wall.count()), {}
         if wall.main_url and wall.main_url != state["url"]:
             todo[0] = (wall.main_url, multi.quality_for("streamlink", wall.main_quality) or cap("streamlink", rects[0][2]))
         for i, t in enumerate(wall.extras, start=1):
@@ -1315,7 +1356,7 @@ def reconcile_job():
                 p = state["proc"]
                 return bool(p and p.poll() is None and state.get("hot") and state.get("wid") == wall.main_wid())
             t = wall.extras[i - 1]
-            return bool(t.get("proc") and t["proc"].poll() is None and t.get("hot") and t.get("wid") == multi.window_id(wall.layout, wall.count(), i))
+            return bool(t.get("proc") and t["proc"].poll() is None and t.get("hot") and t.get("wid") == multi.window_id(wall.geo, wall.count(), i))
 
         addrs, hot = {}, [i for i, (u, q) in todo.items() if can(i, u)]
 
@@ -2462,6 +2503,7 @@ def wall_status():
     w = wall.status()
     if w:
         w["busy"] = _wall_pending[0] > 0
+        chat_refresh()
         w["heat"] = heat["on"]
         snap = livewatch.snapshot()
         for t in w["tiles"]:
@@ -2485,7 +2527,7 @@ def wall_debug():
         return None
     out = []
     for i in range(wall.count()):
-        t = {"i": i, "window": multi.window_id(wall.layout, wall.count(), i)}
+        t = {"i": i, "window": multi.window_id(wall.geo, wall.count(), i)}
         if i == 0:
             p = state["proc"]
             t.update(url=state["url"], source=state["source"], quality=wall.main_quality or "auto", pid=p.pid if p else None,

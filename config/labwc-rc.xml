@@ -19,6 +19,24 @@
     <windowRule identifier="tvr-focus4-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="224" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
     <windowRule identifier="tvr-focus4-3"><serverDecoration>no</serverDecoration><action name="MoveTo" x="720" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
     <windowRule identifier="tvr-focus4-4"><serverDecoration>no</serverDecoration><action name="MoveTo" x="1216" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
+    <windowRule identifier="tvr-cgrid2-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="24" y="328"/><action name="ResizeTo" width="688" height="387"/></windowRule>
+    <windowRule identifier="tvr-cgrid2-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="728" y="328"/><action name="ResizeTo" width="688" height="387"/></windowRule>
+    <windowRule identifier="tvr-cgrid3-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="24" y="109"/><action name="ResizeTo" width="688" height="387"/></windowRule>
+    <windowRule identifier="tvr-cgrid3-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="728" y="109"/><action name="ResizeTo" width="688" height="387"/></windowRule>
+    <windowRule identifier="tvr-cgrid3-3"><serverDecoration>no</serverDecoration><action name="MoveTo" x="376" y="548"/><action name="ResizeTo" width="688" height="387"/></windowRule>
+    <windowRule identifier="tvr-cgrid4-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="24" y="109"/><action name="ResizeTo" width="688" height="387"/></windowRule>
+    <windowRule identifier="tvr-cgrid4-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="728" y="109"/><action name="ResizeTo" width="688" height="387"/></windowRule>
+    <windowRule identifier="tvr-cgrid4-3"><serverDecoration>no</serverDecoration><action name="MoveTo" x="24" y="548"/><action name="ResizeTo" width="688" height="387"/></windowRule>
+    <windowRule identifier="tvr-cgrid4-4"><serverDecoration>no</serverDecoration><action name="MoveTo" x="728" y="548"/><action name="ResizeTo" width="688" height="387"/></windowRule>
+    <windowRule identifier="tvr-cfocus2-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="89" y="24"/><action name="ResizeTo" width="1262" height="710"/></windowRule>
+    <windowRule identifier="tvr-cfocus2-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="512" y="786"/><action name="ResizeTo" width="416" height="234"/></windowRule>
+    <windowRule identifier="tvr-cfocus3-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="89" y="24"/><action name="ResizeTo" width="1262" height="710"/></windowRule>
+    <windowRule identifier="tvr-cfocus3-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="296" y="786"/><action name="ResizeTo" width="416" height="234"/></windowRule>
+    <windowRule identifier="tvr-cfocus3-3"><serverDecoration>no</serverDecoration><action name="MoveTo" x="728" y="786"/><action name="ResizeTo" width="416" height="234"/></windowRule>
+    <windowRule identifier="tvr-cfocus4-1"><serverDecoration>no</serverDecoration><action name="MoveTo" x="89" y="24"/><action name="ResizeTo" width="1262" height="710"/></windowRule>
+    <windowRule identifier="tvr-cfocus4-2"><serverDecoration>no</serverDecoration><action name="MoveTo" x="80" y="786"/><action name="ResizeTo" width="416" height="234"/></windowRule>
+    <windowRule identifier="tvr-cfocus4-3"><serverDecoration>no</serverDecoration><action name="MoveTo" x="512" y="786"/><action name="ResizeTo" width="416" height="234"/></windowRule>
+    <windowRule identifier="tvr-cfocus4-4"><serverDecoration>no</serverDecoration><action name="MoveTo" x="944" y="786"/><action name="ResizeTo" width="416" height="234"/></windowRule>
     <windowRule identifier="tvr-chat"><serverDecoration>no</serverDecoration><action name="MoveTo" x="1440" y="0"/><action name="ResizeTo" width="480" height="1080"/><action name="ToggleAlwaysOnTop"/></windowRule>
     <windowRule identifier="tvr-chatbar"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="810"/><action name="ResizeTo" width="1440" height="270"/><action name="ToggleAlwaysOnTop"/></windowRule>
   </windowRules>

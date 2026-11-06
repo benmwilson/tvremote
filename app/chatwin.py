@@ -10,6 +10,7 @@ import time
 import mpvipc
 
 BG = "0b0e14"
+ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
 
 def ass_file(text, w, h):
@@ -25,8 +26,9 @@ def ass_file(text, w, h):
 class Panel:
     """One small window: app_id places it, (w, h) is its size, name keeps its socket and files apart from the others."""
 
-    def __init__(self, name, app_id, w, h, spawn=subprocess.Popen, ipc=mpvipc.send, write=None, ready=None, sleep=time.sleep):
+    def __init__(self, name, app_id, w, h, bg=None, spawn=subprocess.Popen, ipc=mpvipc.send, write=None, ready=None, sleep=time.sleep):
         self.app_id, self.w, self.h = app_id, w, h
+        self.bg = bg  # a picture to show behind the text (drawn once; a moving source re-renders the text on every frame)
         self.sock, self.log = f"/tmp/tvremote-{name}.sock", f"/tmp/tvremote-{name}.log"
         self.files = (f"/tmp/tvremote-{name}-a.ass", f"/tmp/tvremote-{name}-b.ass")  # alternate, so the new one loads before the old goes
         self._spawn, self._ipc, self._sleep = spawn, ipc, sleep
@@ -46,7 +48,8 @@ class Panel:
         return ["mpv", "--no-config", "--vo=wlshm", "--hwdec=no", "--fs=no", "--no-border", f"--geometry={self.w}x{self.h}", "--force-window=yes",
                 "--keep-open=yes", "--pause=no", "--no-audio", "--no-terminal", "--osc=no", "--osd-level=0", "--cursor-autohide=always",
                 "--input-default-bindings=no", "--input-vo-keyboard=no", f"--wayland-app-id={self.app_id}", "--title=TV Remote",
-                f"--input-ipc-server={self.sock}", f"--background-color=#{BG}", f"av://lavfi:color=c=0x{BG}:s={self.w}x{self.h}:r=2"]
+                f"--input-ipc-server={self.sock}", f"--background-color=#{BG}",
+                *(["--image-display-duration=inf", self.bg] if self.bg and os.path.exists(self.bg) else [f"av://lavfi:color=c=0x{BG}:s={self.w}x{self.h}:r=1"])]
 
     def open(self):
         """Start the window. True when it is up and answering."""
@@ -100,8 +103,8 @@ class Panel:
 
 
 def chat_panel(**kw):
-    return Panel("chat", "tvr-chat", 480, 1080, **kw)
+    return Panel("chat", "tvr-chat", 480, 1080, bg=os.path.join(ASSETS, "chat-bg-strip.png"), **kw)
 
 
 def bar_panel(**kw):
-    return Panel("chatbar", "tvr-chatbar", 1440, 270, **kw)
+    return Panel("chatbar", "tvr-chatbar", 1440, 270, bg=os.path.join(ASSETS, "chat-bg-bar.png"), **kw)
