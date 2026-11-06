@@ -91,6 +91,61 @@ class Guessing(unittest.TestCase):
         self.assertIn("error", out[1])
 
 
+class Suggesting(unittest.TestCase):
+    def tv(self, id, name, roku, pi=None, cc=None):
+        return {"id": id, "name": name, "roku": roku, "pi": pi, "chromecast": cc}
+
+    def test_the_pi_is_ticked_on_the_roku_whose_model_matches_the_cec_name(self):
+        out = discover.suggest([BEDROOM, LIVING], [CAST], True, "55C803", "HDMI1", [])
+        by = {t["roku"]: t for t in out}
+        self.assertEqual(by[LIVING["ip"]]["pi"], {"input": "HDMI1"})
+        self.assertIsNone(by[BEDROOM["ip"]]["pi"])
+        self.assertEqual(by[BEDROOM["ip"]]["chromecast"], {"device": "Bedroom TV", "input": "HDMI2"})  # the one leftover Roku, showing HDMI 2
+        self.assertTrue(all(t["why"] for t in out))
+        self.assertTrue(all(t["found"] and t["id"] == "" for t in out))  # new TVs get ids when saved
+
+    def test_saved_values_win_and_a_changed_hdmi_port_is_reported(self):
+        saved = [self.tv("tv1", "Bedroom", BEDROOM["ip"], {"input": "HDMI1"}, {"device": "Bedroom TV", "input": "HDMI1"})]
+        out = discover.suggest([LIVING, BEDROOM], [CAST], True, None, "HDMI3", saved)
+        bed = next(t for t in out if t["roku"] == BEDROOM["ip"])
+        self.assertEqual((bed["id"], bed["name"], bed["pi"]), ("tv1", "Bedroom", {"input": "HDMI1"}))
+        self.assertEqual(bed["pi_detected"], "HDMI3")  # differs from the saved HDMI1: the screen offers "Use HDMI 3"
+        liv = next(t for t in out if t["roku"] == LIVING["ip"])
+        self.assertEqual((liv["pi"], liv["chromecast"], liv["pi_detected"]), (None, None, ""))  # nothing is guessed once things are saved
+
+    def test_a_saved_tv_the_scan_missed_is_kept_and_marked(self):
+        saved = [self.tv("tv1", "Den", "192.168.1.77", {"input": "HDMI1"}), self.tv("tv2", "Cast only", "", None, {"device": "X", "input": ""})]
+        out = discover.suggest([], [], True, None, "HDMI1", saved)
+        self.assertEqual([(t["name"], t["found"]) for t in out], [("Den", False), ("Cast only", True)])  # no Roku set is not "didn't answer"
+
+    def test_no_screen_on_the_pi_means_no_pi_is_suggested(self):
+        out = discover.suggest([LIVING], [], False, None, "", [])
+        self.assertIsNone(out[0]["pi"])
+        self.assertIn("screen", " ".join(out[0]["why"]).lower())
+
+    def test_two_rokus_and_no_hdmi_name_guess_nothing_and_say_why(self):
+        out = discover.suggest([LIVING, BEDROOM], [CAST], True, None, "HDMI1", [])
+        self.assertTrue(all(t["pi"] is None and t["chromecast"] is None for t in out))
+        self.assertIn("Scan again", " ".join(out[0]["why"] + out[1]["why"]))
+
+    def test_a_roku_that_came_back_at_a_new_address_says_how_to_move_the_old_settings(self):
+        saved = [self.tv("tv1", "Bedroom", "192.168.1.200", {"input": "HDMI1"})]  # the TV is now at .142: the saved address is gone
+        out = discover.suggest([BEDROOM], [], True, None, "HDMI1", saved)
+        new, old = out[0], out[1]
+        self.assertEqual((new["roku"], new["id"], old["found"]), (BEDROOM["ip"], "", False))
+        self.assertIn("new address", " ".join(new["why"]))
+
+    def test_a_saved_pi_with_no_screen_attached_warns(self):
+        saved = [self.tv("tv1", "Den", LIVING["ip"], {"input": "HDMI1"})]
+        out = discover.suggest([LIVING], [], False, None, "", saved)
+        self.assertIn("No screen", " ".join(out[0]["why"]))
+        self.assertEqual(out[0]["pi_detected"], "")
+
+    def test_one_roku_gets_the_pi_and_the_chromecast(self):
+        out = discover.suggest([BEDROOM], [CAST], True, None, "HDMI3", [])
+        self.assertEqual((out[0]["pi"], out[0]["chromecast"]["device"]), ({"input": "HDMI3"}, "Bedroom TV"))
+
+
 class Config(unittest.TestCase):
     def test_validation(self):
         ok = tvconfig.clean({"living": {"name": "  Living   room ", "roku": "192.168.1.141", "input": "HDMI1"},
