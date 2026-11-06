@@ -276,6 +276,17 @@ class Wall:
             if 0 <= i < self.count():
                 self.selected = i
 
+    def replace(self, i, url):
+        """Put a different stream in window i (0 is the first). False when it is already on the screen. The windows catch up afterwards."""
+        with self.lock:
+            if not 0 <= i < self.count() or url in [self.main_url] + [t["url"] for t in self.extras]:
+                return False
+            if i == 0:
+                self.main_url, self.main_quality = url, None
+            else:
+                self.extras[i - 1].update(url=url, source=self.resolve(url)[0], quality=None, error=None)
+            return True
+
     def retry(self, i):
         """Try an extra window again (its stream may be back): forget the failure, then start_windows() restarts it."""
         with self.lock:

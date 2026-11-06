@@ -335,6 +335,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 .wtile .top button{flex:none;width:44px;min-height:44px;padding:0}.wtile .ctl .ib{flex:none;width:44px;padding:0}@keyframes wspin{to{transform:rotate(360deg)}}
 #wallcard.updating #wallttl::after{content:'';display:inline-block;width:14px;height:14px;margin-left:10px;border:2px solid var(--dim);border-top-color:var(--tv,#6bb2ff);border-radius:50%;animation:wspin .8s linear infinite;vertical-align:-2px}
 #wallcard.updating .acts,#wallcard.updating .wtile .top button,#wallcard.updating .wtile select,#wallcard.updating #walllayout{opacity:.45;pointer-events:none}
+.syncrow{display:flex;align-items:center;gap:12px;margin-top:14px}.syncrow button{flex:none;min-height:48px;padding:0 18px;display:flex;align-items:center;gap:8px}.syncrow .sub{font-size:13px;line-height:1.35}
 .pill{flex:none;padding:2px 9px;border-radius:99px;background:var(--tv,#6bb2ff);color:#0b0e14;font-size:11px;font-weight:700}.wtile .top{cursor:pointer}.wtile .acts button[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
 .wtile .wt{margin:6px 2px 0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wtile .err{color:#ff8a8a;font-size:14px;margin-top:10px;display:flex;align-items:center;gap:10px}.wtile .err button{margin-left:auto;min-height:36px;padding:0 14px;background:var(--card);color:var(--fg);font-size:14px}
@@ -612,6 +613,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button class="sclose" data-close aria-label="Close" autofocus><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
     <div id="walltiles"></div>
+    <div id="wallsyncrow" class="syncrow hide"><button id="wallsync" type="button"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg><span>Sync streams</span></button><span class="sub" id="syncnote">Lines them up in time</span></div>
     <div id="walladdbox">
       <div class="wlabel" id="walladdlabel">Add a stream</div>
       <form id="walladd" class="row"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
@@ -1792,6 +1794,7 @@ function renderWall() {
   const w = st.wall, rows = w ? wallStreams(w) : [];
   $('wallopensub').textContent = w ? rows.length + ' of ' + w.max + ' on screen. Tap to manage' : 'Watch more than one at once';
   $('walllayout').classList.toggle('hide', !w);
+  $('wallsyncrow').classList.toggle('hide', !w);
   if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
   $('wallsub').textContent = w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') : 'Watch more than one at once';
   $('wallcard').classList.toggle('updating', !!(w && w.busy));  // the Pi is changing the windows: a spinner, and the buttons that change them wait
@@ -1893,6 +1896,12 @@ $('wallnote').onclick = () => $('wallopen').click();
 $('remove').onclick = () => st.wall && busy($('remove'), () => wallApi({action: 'remove', i: st.wall.selected}));
 $('enlarge').onclick = () => st.wall && wallApi({action: 'swap', i: st.wall.selected});  // swap windows with the big one; the control choice stays with the stream
 $('wallopen').onclick = () => { wallSig = ''; renderWall(); $('wallcard').showModal(); Promise.all([loadFavs(), loadRecents()]).then(renderWall); };
+$('wallsync').onclick = () => busy($('wallsync'), async () => {  // read each stream's timing and wind the leading ones back
+  $('syncnote').textContent = 'Reading the streams\u2026';
+  const r = await api('/api/wall', 'POST', {action: 'sync'});
+  $('syncnote').textContent = r && r.sync ? r.sync.note : 'Couldn\u2019t sync them. Try again.';
+  return r;
+});
 $('walllayout').onclick = e => { const b = e.target.closest('button[data-l]'); if (b) wallApi({action: 'layout', layout: b.dataset.l}); };
 
 // ---- stats on the TV (Pi TV only) ----

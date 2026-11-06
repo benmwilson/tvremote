@@ -1,5 +1,6 @@
 import sys
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -293,6 +294,91 @@ class RemoveFirstTest(unittest.TestCase):
         self.assertFalse(w.active())
         self.assertEqual(w.sound, {0})
         self.assertIsNone(w.drop_main())  # nothing left to promote
+
+
+PLAYLIST = "#EXTM3U\n#EXT-X-PROGRAM-DATE-TIME:{pdt}\n#EXTINF:2.0,\nseg1.ts\n#EXTINF:2.0,\nseg2.ts\n"
+BARE = b"#EXTM3U\n#EXTINF:2.0,\nseg.ts\n"
+
+
+class ReplaceAndSyncTest(unittest.TestCase):
+    def setUp(self):
+        import app as server
+        self.server = server
+        server.wall.clear()
+        server.wall.layout, server.wall.main_url = "grid", "https://kick.com/a"
+        server.wall.extras = [{"url": "https://kick.com/b", "proc": None}]
+
+    def tearDown(self):
+        self.server.wall.clear()
+
+    def test_replace_puts_a_new_stream_in_a_window_and_refuses_one_already_there(self):
+        w = self.server.wall
+        self.assertFalse(w.replace(1, "https://kick.com/a"))
+        self.assertTrue(w.replace(1, "https://kick.com/c"))
+        self.assertEqual(w.extras[0]["url"], "https://kick.com/c")
+        self.assertTrue(w.replace(0, "https://kick.com/d"))
+        self.assertEqual(w.main_url, "https://kick.com/d")
+        self.assertFalse(w.replace(5, "https://kick.com/e"))
+
+    def test_the_live_edge_comes_from_the_playlists_time_tags(self):
+        edge = self.server.hls_edge(PLAYLIST.format(pdt="2026-01-01T00:00:00.000Z"))
+        self.assertEqual(edge, datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp() + 4.0)
+        self.assertIsNone(self.server.hls_edge(BARE.decode()))  # no tags: no answer
+
+    def test_sync_winds_back_only_the_leading_window_by_how_far_ahead_it_is(self):
+        server = self.server
+        pdt = {"https://kick.com/a": "2026-01-01T00:00:00.000Z", "https://kick.com/b": "2026-01-01T00:00:03.000Z"}  # b is 3 s ahead
+        sent = []
+        with mock.patch.object(server, "stream_url", lambda url, q: url), \
+                mock.patch.object(server.hlsproxy, "_get", lambda url: PLAYLIST.format(pdt=pdt[url]).encode()), \
+                mock.patch.object(server, "sprop", lambda sock, name: {"time-pos": 100.0, "demuxer-cache-time": 104.0}[name]), \
+                mock.patch.object(server.mpvipc, "send", lambda sock, cmd, timeout=1.0: sent.append((sock, cmd)) or {"error": "success"}):
+            r = server.wall_sync()
+        self.assertEqual(sent, [(multi._sock(1), ["seek", -3.0, "relative+exact"])])
+        self.assertEqual((r["aligned"], r["spread"]), (2, 3.0))
+        self.assertIn("3.0 s apart", r["note"])
+
+    def test_sync_says_so_when_the_streams_carry_no_timing(self):
+        server = self.server
+        with mock.patch.object(server, "stream_url", lambda url, q: url), \
+                mock.patch.object(server.hlsproxy, "_get", lambda url: BARE), \
+                mock.patch.object(server, "sprop", lambda sock, name: {"time-pos": 100.0, "demuxer-cache-time": 104.0}[name]), \
+                mock.patch.object(server.mpvipc, "send", lambda sock, cmd, timeout=1.0: {"error": "success"}):
+            r = server.wall_sync()
+        self.assertEqual(r["aligned"], 0)
+        self.assertIn("no timing", r["note"])
+
+
+class HotLoadTest(unittest.TestCase):
+    def setUp(self):
+        import app as server
+        self.server = server
+        server.wall.clear()
+        live = mock.MagicMock()
+        live.poll.return_value = None
+        self.state = mock.patch.dict(server.state, {"url": "https://kick.com/a", "proc": live, "hot": True, "wid": None})
+        self.state.start()
+
+    def tearDown(self):
+        self.state.stop()
+
+    def test_a_new_stream_loads_into_the_running_window(self):
+        server, sent = self.server, []
+        with mock.patch.object(server, "stream_url", lambda url, q: "addr:" + url), mock.patch.object(server, "is_channel", return_value=False), \
+                mock.patch.object(server.threading, "Thread"), \
+                mock.patch.object(server.mpvipc, "send", lambda sock, cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
+            done = server.hot_load("https://kick.com/b", None)
+        self.assertTrue(done)
+        self.assertEqual(sent, [["loadfile", "addr:https://kick.com/b", "replace"]])
+        self.assertEqual(server.state["url"], "https://kick.com/b")
+
+    def test_twitch_or_a_window_that_cannot_do_it_is_started_the_usual_way(self):
+        server = self.server
+        with mock.patch.object(server.mpvipc, "send") as send:
+            self.assertFalse(server.hot_load("https://www.twitch.tv/x", None))  # Twitch's ad filter lives in streamlink's own pipe
+            server.state["hot"] = False
+            self.assertFalse(server.hot_load("https://kick.com/b", None))
+        send.assert_not_called()
 
 
 class AddressCacheTest(unittest.TestCase):

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """TV Remote: web controller for mpv / streamlink on the Pi."""
 import functools
+from datetime import datetime
 import hmac
 import html
 import ipaddress
@@ -561,6 +562,111 @@ def stream_url(url, q, low=False):
     return out[0]
 
 
+def sl_quality(quality, default_q=None):
+    """A streamlink quality that is safe to pass on (stream names only, never a leading dash), else the default."""
+    ok = lambda q: bool(q and re.fullmatch(r"[a-z0-9_]+(,[a-z0-9_]+)*", q) and not q.isdigit())
+    return quality if ok(quality) else (default_q if ok(default_q) else SL_DEFAULT)
+
+
+def hot_load(url, quality=None):
+    """Change what the running player plays, in place: no window closes or opens, so nothing on the TV redraws. True when done; False when it
+    can't be done this way (nothing running, a Twitch stream, a window that is the wrong shape), and the caller starts a player as usual."""
+    p = state["proc"]
+    if not (HOT and p and p.poll() is None and state.get("hot") and state.get("wid") == wall.main_wid()):
+        return False
+    source, player = resolve(url)
+    if player != "streamlink" or source == "Twitch":
+        return False
+    width = wall.main_args()[1]
+    q = sl_quality(quality, cap(player, width) if width else None)
+    if url == state["url"]:
+        _addr_cache.pop((url, q), None)  # Refresh: a fresh address, not the remembered one
+    r = mpvipc.send(SOCK, ["loadfile", stream_url(url, q), "replace"], 5)  # raises when it is offline: the caller then starts it the usual way
+    if not (r and r.get("error") == "success"):
+        return False
+    state.update(url=url, quality=q, source=source, player=player, started=time.time(), stalls=0, stall_s=0, ended=False)
+    if is_channel(url):
+        threading.Thread(target=livewatch.refresh_one, args=(url,), daemon=True).start()
+    threading.Thread(target=sl_info, args=(url,), daemon=True).start()  # the title and details
+    threading.Thread(target=switch_tv_to_pi, daemon=True).start()
+    if wall.active():
+        screen("playing")
+    return True
+
+
+def hls_edge(text):
+    """When the live edge of an HLS media playlist happened (seconds since 1970), from its program-date-time tags; None without them."""
+    t = None
+    for line in text.splitlines():
+        if line.startswith("#EXT-X-PROGRAM-DATE-TIME:"):
+            try:
+                t = datetime.fromisoformat(line.split(":", 1)[1].strip().replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                t = None
+        elif line.startswith("#EXTINF:") and t is not None:
+            try:
+                t += float(line[8:].split(",")[0])
+            except ValueError:
+                pass
+    return t
+
+
+SYNC_MAX = 30  # seconds: how far back a window can be wound (it plays from what it has buffered)
+
+
+def wall_sync():
+    """Line the streams up in time. Each stream's playlist says when its live edge happened; the player says how far behind that edge the picture
+    is. The picture's real time is the difference. The leading windows are wound back to the most delayed one, and play on from their buffer.
+    {note, spread, aligned}: what it found, in words."""
+    n = wall.count()
+    names = [(wall.main_url or state["url"] or ""), *[t["url"] for t in wall.extras]]
+    rects = multi.tiles(wall.layout, n) if wall.active() else None
+    found = {}
+
+    def measure(i):
+        try:
+            url = names[i]
+            q = (multi.quality_for("streamlink", wall.main_quality if i == 0 else wall.extras[i - 1].get("quality")) or cap("streamlink", rects[i][2]))
+            edge = hls_edge(hlsproxy._get(stream_url(url, q)).decode(errors="replace"))
+            sock = wall.sock(i, SOCK)
+            pos, cached = sprop(sock, "time-pos"), sprop(sock, "demuxer-cache-time")
+            behind = max(0.0, cached - pos) if pos is not None and cached is not None else None
+            found[i] = {"shown": edge - behind if edge is not None and behind is not None else None, "behind": behind}
+        except Exception as e:
+            app.logger.info("Sync: couldn't read window %d (%s)", i, e)
+            found[i] = {"shown": None, "behind": None}
+    ts = [threading.Thread(target=measure, args=(i,)) for i in range(n)]
+    for x in ts:
+        x.start()
+    for x in ts:
+        x.join()
+    timed = {i: r["shown"] for i, r in found.items() if r["shown"] is not None}
+    label = lambda i: chanName_py(names[i])
+    untimed = [label(i) for i in range(n) if i not in timed]
+    if len(timed) < 2:  # no stream has timing to compare: each is moved to its own live edge, which at least removes buffering lag
+        for i, r in found.items():
+            if r["behind"] and r["behind"] > 2:
+                mpvipc.send(wall.sock(i, SOCK), ["seek", r["behind"] - 0.5, "relative"])
+        return {"note": "These streams carry no timing to compare, so each was moved to its live edge.", "spread": None, "aligned": 0}
+    target = min(timed.values())
+    spread = max(timed.values()) - target
+    if spread > SYNC_MAX:
+        return {"note": f"They are {spread:.0f} s apart: too far to line up.", "spread": round(spread, 1), "aligned": 0}
+    for i, shown in timed.items():
+        d = shown - target
+        if d > 0.4:
+            mpvipc.send(wall.sock(i, SOCK), ["seek", -d, "relative+exact"])  # wind the leading picture back: it plays on from its buffer
+    note = f"Lined up {len(timed)} streams. They were {spread:.1f} s apart." if spread > 0.4 else "Already in step."
+    if untimed:
+        note += " No timing for " + ", ".join(untimed) + "."
+    return {"note": note, "spread": round(spread, 1), "aligned": len(timed)}
+
+
+def chanName_py(url):
+    p = [x for x in urlparse(url or "").path.split("/") if x]
+    return p[0] if p else (url or "a stream")
+
+
 def warm_addresses():
     """After the wall changes: work out, quietly, every stream's address at every window size in this layout. A swap then finds each one
     ready and takes effect at once."""
@@ -608,6 +714,11 @@ def player_cmd(url, quality, sock, extra=(), default_q=None, direct=False):
 
 
 def start_player(url, quality=None, screen_kind="loading"):
+    try:
+        if hot_load(url, quality):
+            return
+    except Exception as e:  # offline, or no address: start it the usual way (which shows the usual "not live" message)
+        app.logger.info("Not changed in place (%s): starting a new player", e)
     # before the old stream stops, so a swap never shows the desktop
     if wall.active():
         screen("playing")  # the wall's background: every slot says which stream it is waiting for
@@ -619,7 +730,7 @@ def start_player(url, quality=None, screen_kind="loading"):
     except FileNotFoundError:
         pass
     win, width = wall.main_args()  # while several streams share the screen, this one is a window of its own
-    cmd, q, source, player = player_cmd(url, quality, SOCK, win, cap(resolve(url)[1], width) if width else None, direct=bool(width))
+    cmd, q, source, player = player_cmd(url, quality, SOCK, win, cap(resolve(url)[1], width) if width else None, direct=HOT)
     log = open(LOG_FILE, "w")
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log,
                             stderr=subprocess.STDOUT, start_new_session=True)
@@ -1003,6 +1114,16 @@ def wall_relayout(main_url=None):
         wall.start_windows()  # they work out their stream addresses while the main one does
     with lock:
         p = state["proc"]
+        if HOT and not wall.active() and p and p.poll() is None and state.get("hot") and state.get("wid"):
+            mpvipc.send(SOCK, ["set_property", "fullscreen", True])  # a window can make itself full screen: nothing closes
+            mpvipc.send(SOCK, ["set_property", "mute", False])
+            state["wid"] = None
+            try:
+                if hot_load(url, wall.saved_quality):
+                    return
+            except Exception as e:
+                app.logger.info("Not changed in place (%s): restarting full screen", e)
+            state["wid"] = "restart"  # makes the normal path below restart it
         if url != state["url"] or state.get("wid") != wall.main_wid() or not (p and p.poll() is None):
             start_player(url, multi.quality_for(resolve(url)[1], wall.main_quality) if wall.active() else wall.saved_quality, "refresh")
     if wall.active():
@@ -1136,7 +1257,7 @@ def _restart_main_quality(label):
 
 @app.post("/api/wall")
 def api_wall():
-    """Several streams on the living-room TV: {action: add|remove|layout|sound|select|swap|only|quality|clear, url, site, i, layout, quality}."""
+    """Several streams on the living-room TV: {action: add|remove|layout|sound|select|swap|only|quality|replace|sync|clear, url, site, i, layout, quality}."""
     if tgt():
         return jsonify(ok=False, error="Only the living-room TV can show several streams at once."), 400
     d = request.get_json(silent=True) or {}
@@ -1176,6 +1297,18 @@ def api_wall():
         if not wall.swap(i, state["url"]):
             return jsonify(ok=False, error="Nothing to swap"), 400
         wall_later(reconcile_job)
+    elif act == "replace":  # a different stream in this window: loaded in place where the window can, else that window alone restarts
+        url = normalise(d.get("url"), d.get("site", "kick"))
+        if not url:
+            return jsonify(ok=False, error="No link found"), 400
+        if not wall.replace(i, url):
+            return jsonify(ok=False, error="That one is already on the screen."), 400
+        remember(url)
+        wall_later(reconcile_job)
+    elif act == "sync":  # line the streams up in time; answers with what it found
+        with _wall_job:  # not while the windows are still changing
+            result = wall_sync()
+        return jsonify(ok=True, wall=wall_status(), sync=result)
     elif act == "select":  # which stream the card controls: nothing on the screen changes
         wall.select(i)
     elif act == "retry":  # a stream that went offline may be back
