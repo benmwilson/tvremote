@@ -3549,7 +3549,7 @@ const shorten = u => u.length > 70 ? u.slice(0, 67) + '…' : u;
 const lastTv = () => { try { return localStorage.getItem('lastTv') || ''; } catch (e) { return ''; } };
 
 function renderPicker() {
-  if (!picker.started) { const qs = new URLSearchParams(location.search); picker.url = extractUrl(qs.get('u')) || extractUrl(qs.get('text')) || extractUrl(qs.get('title'));  // Android's Share sends the link in text picker.started = true; }
+  if (!picker.started) { const qs = new URLSearchParams(location.search); picker.url = extractUrl(qs.get('u')) || extractUrl(qs.get('text')) || extractUrl(qs.get('title'));   picker.started = true; }
   $('sharedlink').textContent = picker.url ? shorten(picker.url) : '';
   $('sharedlink').classList.toggle('hide', !picker.url);
   $('pastebox').classList.toggle('hide', !!picker.url);
