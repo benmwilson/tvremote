@@ -55,7 +55,7 @@ def layout(text):
 QR_MODULE, QR_MARGIN = 8, 56  # px per dot; gap from the screen's right and bottom edges
 
 
-def qr_pieces(url, caption="Scan for the remote"):
+def qr_pieces(url, caption="Scan to open the remote"):
     """The remote's QR code as ASS drawings for the Ready screen's lower right: a light card, one drawing of rounded dark dots, a caption.
     [] when there is no address or the QR library isn't installed (the written address is still on screen)."""
     try:
@@ -224,7 +224,7 @@ class Shell:
     renew = IDLE_SPAN - 30  # seconds after which the Ready screen's file is written again
 
     def __init__(self, hint="", spawn=subprocess.Popen, ipc=mpvipc.send, ready=None, sleep=time.sleep,
-                 clock=datetime.now, favs=lambda: [], write=write_file, qr=lambda: "", qr_caption=lambda: "Scan for the remote"):
+                 clock=datetime.now, favs=lambda: [], write=write_file, qr=lambda: "", qr_caption=lambda: "Scan to open the remote"):
         self.hint, self._spawn, self._ipc, self._sleep = hint, spawn, ipc, sleep
         self._clock, self._favs, self._write = clock, favs, write
         self._qr_caption = qr_caption

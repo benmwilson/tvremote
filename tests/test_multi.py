@@ -229,7 +229,8 @@ class QualityOsdTest(unittest.TestCase):
         import app as server
         with mock.patch.object(server.mpvipc, "send", return_value=None) as send:
             server.osd_swap("720p", sock="/tmp/tile.sock").join(5)
-        self.assertEqual(send.call_count, 1)  # tried once, then gave up: no "Quality" message to nowhere
+        mine = [c for c in send.call_args_list if c.args and c.args[0] == "/tmp/tile.sock"]  # (leaked threads of other tests may call it too)
+        self.assertEqual(len(mine), 1)  # tried once, then gave up: no "Quality" message to nowhere
 
 
 class WarmAddressesTest(unittest.TestCase):

@@ -100,6 +100,17 @@ def players():
     return out
 
 
+def wifi_dbm():
+    """Wi-Fi signal in dBm for the first wireless interface (None on a wired Pi)."""
+    for line in (_read("/proc/net/wireless") or "").splitlines()[2:]:
+        parts = line.replace(":", " ").split()
+        try:
+            return int(float(parts[3]))
+        except (IndexError, ValueError):
+            continue
+    return None
+
+
 def snapshot():
     t = temperature()
     times, mem = _cpu_times(), meminfo()
@@ -110,4 +121,4 @@ def snapshot():
             "load": (_read("/proc/loadavg") or "").split()[:3] or None,
             "mem_total_mb": mem.get("MemTotal"), "mem_available_mb": mem.get("MemAvailable"),
             "swap_used_mb": mem.get("SwapTotal", 0) - mem.get("SwapFree", 0) if "SwapTotal" in mem else None,
-            "uptime_s": int(float(up.split()[0])) if up else None, "players": players()}
+            "uptime_s": int(float(up.split()[0])) if up else None, "wifi_dbm": wifi_dbm(), "players": players()}

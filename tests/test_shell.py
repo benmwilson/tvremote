@@ -51,7 +51,7 @@ class QrCode(unittest.TestCase):
         card, dots, cap = shell.qr_pieces(self.URL)
         self.assertIn(r"\p1", card)
         self.assertGreater(dots.count("m "), 100)  # a drawing with one shape per dark dot
-        self.assertIn("Scan for the remote", cap)
+        self.assertIn("Scan to open the remote", cap)
         x = int(re.search(r"\\pos\((\d+),", card).group(1))
         self.assertGreater(x, shell.W // 2)  # right half of the screen
 
@@ -68,9 +68,9 @@ class QrCode(unittest.TestCase):
             written.clear()
             s.show(kind)
             return written["data"]
-        self.assertIn("Scan for the remote", file_for("idle", self.URL))
-        self.assertNotIn("Scan for the remote", file_for("idle", ""))
-        self.assertNotIn("Scan for the remote", file_for("loading", self.URL))
+        self.assertIn("Scan to open the remote", file_for("idle", self.URL))
+        self.assertNotIn("Scan to open the remote", file_for("idle", ""))
+        self.assertNotIn("Scan to open the remote", file_for("loading", self.URL))
 
 
 class Screens(unittest.TestCase):

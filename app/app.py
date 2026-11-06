@@ -2315,14 +2315,14 @@ def qr_info():
     if settings.get("qr", True) is False:
         return "", ""
     if qr_guest["url"] and ("/join/" not in qr_guest["url"] or access.invite_id_for_url(qr_guest["url"])):  # a guest link that was used up, revoked or expired is not shown
-        return qr_guest["url"], "Scan to join as a guest"
+        return qr_guest["url"], "Scan to open as a guest"
     if settings.get("qr_mode") == "install" and settings.get("install_url"):  # an iCloud share link: scanning offers to add the shortcut to the phone
         return settings["install_url"], "Scan to add the shortcut"
     if settings.get("qr_mode") == "shortcut" and settings.get("shortcut_url"):
         if settings["shortcut_url"].startswith("shortcuts://"):  # runs a shortcut already on the phone
-            return settings["shortcut_url"], "Scan to run the shortcut"
-        return settings["shortcut_url"], "Scan to get the Play on Pi shortcut"
-    return f"http://{shell.lan_ip()}:{PORT}", "Scan for the remote"
+            return settings["shortcut_url"], "Scan to open the remote"
+        return settings["shortcut_url"], "Scan to get the shortcut"
+    return f"http://{shell.lan_ip()}:{PORT}", "Scan to open the remote"
 
 
 SHELL_SHOT = "/tmp/tvremote-shell.png"
@@ -2899,6 +2899,13 @@ def heat_loop():
             app.logger.warning("Heat check failed: %s", e)
 
 
+@app.get("/api/health")
+def api_health():
+    """The Pi's temperature, throttling, load and memory for the Pi health card in Settings (admin only; the numbers are plain /sys and /proc reads)."""
+    admin_only()
+    return jsonify(pi=pihealth.snapshot(), lowered=heat["on"], warm=pihealth.WARM, hot=pihealth.HOT)
+
+
 @app.get("/api/debug")
 def api_debug():
     admin_only()
@@ -3393,9 +3400,28 @@ def api_browse():
     """Who is live now on Kick and Twitch (?site=kick|twitch, ?n=), each with the picture, title, game and viewers, ready to play or add to a multistream."""
     site = request.args.get("site", "")
     try:
-        n = max(1, min(int(request.args.get("n", 24)), 50))
+        n = max(1, min(int(request.args.get("n", 24)), 100))
     except ValueError:
         n = 24
+    q = (request.args.get("q") or "").strip().lower()
+    if q:  # a name typed in the search: the list above only holds the biggest streams, so look this one up directly (a small streamer is still found)
+        if not re.fullmatch(r"[a-z0-9_\-]{2,25}", q):
+            return jsonify(streams=[], kick=kick.enabled(), twitch=twitch.enabled())
+        hit = _browse_cache.get(("q", q))
+        if hit and time.time() - hit[0] < 45:
+            return jsonify(hit[1])
+        kick_rows = kick.live_among([q.replace("_", "-"), q.replace("-", "_")])
+        tw_rows = twitch.live_among([q.replace("-", "_")]) + twitch.search_live(q)
+        seen, out = set(), []
+        for name, rs in (("Kick", kick_rows), ("Twitch", tw_rows)):
+            for r in rs:
+                k = (name, r["login"].lower().replace("-", "_"))
+                if k not in seen:
+                    seen.add(k)
+                    out.append({**r, "source": name, "url": ("https://kick.com/" if name == "Kick" else "https://www.twitch.tv/") + r["login"]})
+        body = {"streams": out, "kick": kick.enabled(), "twitch": twitch.enabled()}
+        _browse_cache[("q", q)] = (time.time(), body)
+        return jsonify(body)
     key = (site.lower(), n)
     hit = _browse_cache.get(key)
     if hit and time.time() - hit[0] < 45:

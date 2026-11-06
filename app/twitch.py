@@ -138,6 +138,19 @@ def live_now(first=24, game=None):
             for r in rows if r.get("type") == "live"]
 
 
+def search_live(query, first=10):
+    """Live channels whose name matches `query` (Twitch's own channel search, live ones only), in live_now's shape. [] on any failure.
+    The browse list only holds the biggest streams; this is how a small streamer you type the name of is found."""
+    if not enabled() or not query:
+        return []
+    try:
+        found = _helix("search/channels", [("query", query), ("live_only", "true"), ("first", max(1, min(int(first), 25)))]).get("data") or []
+    except Exception as e:
+        print("Twitch search:", describe(e), flush=True)
+        return []
+    return live_among([r["broadcaster_login"] for r in found if r.get("is_live") and r.get("broadcaster_login")])
+
+
 def live_among(logins):
     """The ones of these channel names that are live right now, in live_now's shape ([] on any failure). One request for up to 100 names:
     this is how the browse list finds out whether a streamer from the other site is live here too."""

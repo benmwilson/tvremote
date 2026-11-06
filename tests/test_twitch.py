@@ -90,3 +90,16 @@ class TwitchTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SearchLiveTests(unittest.TestCase):
+    def test_only_live_channels_of_the_search_are_looked_up(self):
+        found = {"data": [{"broadcaster_login": "burn", "is_live": True}, {"broadcaster_login": "burnout", "is_live": False}]}
+        with mock.patch.object(twitch, "enabled", return_value=True), mock.patch.object(twitch, "_helix", return_value=found), \
+                mock.patch.object(twitch, "live_among", return_value=["row"]) as among:
+            self.assertEqual(twitch.search_live("bur"), ["row"])
+        among.assert_called_once_with(["burn"])
+
+    def test_a_failed_search_is_an_empty_list(self):
+        with mock.patch.object(twitch, "enabled", return_value=True), mock.patch.object(twitch, "_helix", side_effect=OSError("down")):
+            self.assertEqual(twitch.search_live("bur"), [])

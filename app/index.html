@@ -317,6 +317,8 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appeara
 .qrpick{display:grid;gap:6px}.qrpick button{display:flex;align-items:center;gap:12px;justify-content:flex-start;text-align:left;min-height:52px;padding:8px 14px}.qrpick button.on{outline:2px solid var(--tv,#6bb2ff);outline-offset:-2px}.qrpick .qi .ic{width:22px;height:22px}.qrpick .qc{color:#7be29a}.qrpick b{display:block}.qrpick .sub{display:block;margin:2px 0 0}
 #site button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding-left:6px;padding-right:6px}#site .ic{width:16px;height:16px;flex:none}
 #site .bi{width:16px;height:16px;flex:none;fill:currentColor;stroke:none}#site .bi.kick{color:#53fc18}#site .bi.twitch{color:#9146ff}#site .bi.youtube{color:#ff3b3b}#site button.on .bi{color:inherit}
+.hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0}.hrow+.hrow{border-top:1px solid var(--line)}.hrow:first-child{padding-top:2px}.hrow:last-child{padding-bottom:2px}
+.hrow .hv{text-align:right;font-variant-numeric:tabular-nums}.hrow .hv .sub{display:block;margin:2px 0 0}.hrow .pill.ok{background:rgba(123,226,154,.15);color:#7be29a}.hrow .pill.warm{background:rgba(255,176,98,.18);color:#ffb062}.hrow .pill.hot{background:rgba(255,107,107,.18);color:#ff6b6b}
 .scat+.shead{margin-top:0}.namechips:not(.hide){margin:10px 0 2px}[data-url]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.scat{margin:34px 4px 8px;padding-top:16px;border-top:1px solid var(--line);font-size:20px;font-weight:700;letter-spacing:.2px}#view-settings>.scat:first-child{border-top:0}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}.iconbtn.on{color:#7be29a}.iconbtn .ic{margin:0}
 #tvsadmin{margin-bottom:12px}
@@ -803,6 +805,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <p class="sub">"Watch on phone" shows the TV's stream on the phone, at home only. A bigger picture uses more of the home Wi-Fi.</p>
     </div>
     <h2 class="scat">System</h2>
+    <h3 class="shead">Pi health</h3>
+    <div class="card" id="healthcard"><div id="healthbody"><p class="sub">Reading the Pi&hellip;</p></div></div>
     <h3 class="shead">The app</h3>
     <div class="card s-form">
       <button id="restartapp" type="button">Restart the app</button>
@@ -2359,6 +2363,7 @@ async function loadSettings() {
   if (me.ui) uiCfg = me.ui;
   renderProfile();
   if (me.admin) await Promise.all([loadPeople(), loadAccess(), loadConfig(), loadTvsAdmin(), loadDocker()]);
+  healthWatch();
 }
 async function loadConfig() {  // app settings an admin can change; more (and per-role permissions) can be added here
   const c = await fetch('/api/config').then(r => r.json()).catch(() => null);
@@ -3052,10 +3057,29 @@ function suggestBrowse(q, games, base) {  // while typing: matching categories (
     return b;
   }));
 }
+// The list holds the biggest streams only. A name typed in the search that is not in it is looked up directly on both sites (a small streamer is found too).
+const browseExtra = new Map(), chipRedraw = new Map(); let extraTimer = 0;
+function extraLookup(q) {
+  clearTimeout(extraTimer);
+  if (q.length < 2 || !/^[\w-]+$/.test(q) || browseExtra.has(q)) return;
+  extraTimer = setTimeout(async () => {
+    browseExtra.set(q, []);  // (asked once)
+    const r = await fetch('/api/browse?q=' + encodeURIComponent(q)).then(x => x.json()).catch(() => null);
+    if (!r || !r.streams || !r.streams.length || !browseData) return;
+    const have = new Set(browseData.streams.map(x => x.source + ':' + x.login.toLowerCase().replace(/-/g, '_')));
+    const add = r.streams.filter(x => !have.has(x.source + ':' + x.login.toLowerCase().replace(/-/g, '_')));
+    if (!add.length) return;
+    browseData.streams = browseData.streams.concat(add);
+    browseExtra.set(q, add);
+    if ($('browse').open && $('browseq').value.trim().toLowerCase() === q) renderBrowse();
+    chipRedraw.forEach(f => f());  // the Play and Add boxes' chips too
+  }, 350);
+}
 function renderBrowse() {
   const grid = $('browsegrid');
   if (!browseData) { grid.replaceChildren(el('p', 'bnote', 'Loading\u2026')); return; }
   const q = $('browseq').value.trim().toLowerCase(), canAdd = browseCanAdd();
+  extraLookup(q);
   const base = browseTiles(browseData.streams.filter(r => !browseSite || r.source.toLowerCase() === browseSite));  // the site filter also hides the other site's button
   const games = new Map(), langs = new Map();
   base.forEach(t => { if (t.game) games.set(t.game, (games.get(t.game) || 0) + 1); if (t.lang) langs.set(t.lang, (langs.get(t.lang) || 0) + 1); });
@@ -3100,9 +3124,9 @@ function renderBrowse() {
 async function loadBrowse(force) {  // both sites at once: the site buttons, filters and sorting then work on what is already here
   if (!force && browseData && Date.now() - browseAt < 30000) return renderBrowse();
   browseData = null; renderBrowse();
-  const r = await fetch('/api/browse?n=50').then(x => x.json()).catch(() => null);
+  const r = await fetch('/api/browse?n=100').then(x => x.json()).catch(() => null);
   if (!$('browse').open) return;
-  browseData = r || {streams: [], kick: true, twitch: true}; browseAt = Date.now();
+  browseData = r || {streams: [], kick: true, twitch: true}; browseAt = Date.now(); browseExtra.clear();
   renderBrowse();
 }
 $('browseq').oninput = renderBrowse;
@@ -3233,7 +3257,7 @@ $('wallsavegroup').onclick = () => busy($('wallsavegroup'), async () => { const 
 let liveFetch = null;
 function ensureLive() {
   if (browseData && Date.now() - browseAt < 60000) return Promise.resolve();
-  if (!liveFetch) liveFetch = fetch('/api/browse?n=50').then(x => x.json()).catch(() => null).then(r => { if (r) { browseData = r; browseAt = Date.now(); } liveFetch = null; });
+  if (!liveFetch) liveFetch = fetch('/api/browse?n=100').then(x => x.json()).catch(() => null).then(r => { if (r) { browseData = r; browseAt = Date.now(); } liveFetch = null; });
   return liveFetch;
 }
 function showNameChips(box, input) {
@@ -3251,7 +3275,8 @@ function showNameChips(box, input) {
       return b;
     }));
   };
-  if (browseData) draw(); else ensureLive().then(draw);
+  chipRedraw.set(input.id, draw);
+  if (browseData) { draw(); extraLookup(q); } else ensureLive().then(() => { draw(); extraLookup(q); });
 }
 function makeAdder(form, input, pick) {  // a name or a link in a box: look the name up, ask which site if it is on both, then add (or replace with) it
   const add0 = async url => { const r = await wallPut(url); if (r && r.ok) input.value = ''; return r; };
@@ -3649,6 +3674,29 @@ function show() {
   if (v === 'all') loadShell();
   if (v === 'share') renderPicker();
 }
+// Pi health (Settings, admin): the numbers are read every few seconds, only while that page is open.
+let healthTimer = 0;
+const hrow = (label, ...value) => mk('div', {class: 'hrow'}, mk('span', {}, label), mk('span', {class: 'hv'}, ...value));
+async function loadHealth() {
+  const r = await fetch('/api/health').then(x => x.json()).catch(() => null);
+  if (!r || !r.pi) return;
+  const p = r.pi, up = p.uptime_s, mem = p.mem_total_mb ? Math.round(100 * (p.mem_total_mb - p.mem_available_mb) / p.mem_total_mb) : null;
+  const lvl = p.level || 'unknown', temp = mk('span', {class: 'pill ' + lvl}, p.temp_c == null ? 'unknown' : p.temp_c + ' \u00b0C');
+  const flags = p.throttled;
+  $('healthbody').replaceChildren(...[
+    hrow('Temperature', temp, mk('span', {class: 'sub'}, lvl === 'ok' ? 'Fine. Warns from ' + r.warm + ', lowers pictures from ' + r.hot + ' \u00b0C' : lvl === 'warm' ? 'Warm: it may start dropping frames' : lvl === 'hot' ? (r.lowered ? 'Hot: multistream pictures are lowered to 480p' : 'Hot') : '')),
+    hrow('Power and clock', flags == null ? 'Not reported' : flags.length ? mk('span', {class: 'pill hot'}, flags.join(', ')) : mk('span', {class: 'pill ok'}, 'No problems')),
+    hrow('Processor', (p.cpu_pct == null ? '\u2013' : p.cpu_pct + '%') + (p.cpu_mhz ? ' \u00b7 ' + p.cpu_mhz + ' MHz' : ''), mk('span', {class: 'sub'}, p.load ? 'Load ' + p.load.join(' ') : '')),
+    hrow('Memory', mem == null ? '\u2013' : mem + '% used', mk('span', {class: 'sub'}, p.mem_total_mb ? p.mem_available_mb + ' of ' + p.mem_total_mb + ' MB free' + (p.swap_used_mb ? ' \u00b7 swap ' + p.swap_used_mb + ' MB' : '') : '')),
+    p.wifi_dbm == null ? null : hrow('Wi-Fi signal', p.wifi_dbm + ' dBm', mk('span', {class: 'sub'}, p.wifi_dbm > -60 ? 'Strong' : p.wifi_dbm > -70 ? 'Fair' : 'Weak: a cable would be steadier')),
+    up == null ? null : hrow('Up for', up >= 86400 ? Math.floor(up / 86400) + ' d ' + Math.floor(up % 86400 / 3600) + ' h' : up >= 3600 ? Math.floor(up / 3600) + ' h ' + Math.floor(up % 3600 / 60) + ' min' : Math.max(1, Math.floor(up / 60)) + ' min'),
+    ...(p.players || []).map(x => hrow('Player ' + (x.window || x.pid), (x.cpu_pct == null ? '\u2013' : x.cpu_pct + '%') + ' CPU', mk('span', {class: 'sub'}, x.rss_mb + ' MB')))].filter(Boolean));
+}
+function healthWatch() {
+  clearInterval(healthTimer);
+  if (view() === 'settings' && me && me.admin) { loadHealth(); healthTimer = setInterval(() => { if (view() === 'settings' && !document.hidden) loadHealth(); else if (view() !== 'settings') clearInterval(healthTimer); }, 4000); }
+}
+window.addEventListener('hashchange', healthWatch);
 window.addEventListener('hashchange', show);
 window.addEventListener('popstate', show);
 $('back').onclick = () => { location.hash = view() === 'settings' ? beforeSettings : '#/'; };

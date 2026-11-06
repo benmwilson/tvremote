@@ -41,3 +41,17 @@ class HeatGuardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WifiTests(unittest.TestCase):
+    SAMPLE = ("Inter-| sta-|   Quality        |   Discarded packets               | Missed | WE\n"
+              " face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | 22\n"
+              " wlan0: 0000   70.  -55.  -256        0      0      0      0      0        0\n").replace("\\n", "\n")
+
+    def test_the_signal_is_read_from_the_wireless_file(self):
+        with mock.patch.object(pihealth, "_read", return_value=self.SAMPLE):
+            self.assertEqual(pihealth.wifi_dbm(), -55)
+
+    def test_a_wired_pi_has_no_signal(self):
+        with mock.patch.object(pihealth, "_read", return_value=None):
+            self.assertIsNone(pihealth.wifi_dbm())
