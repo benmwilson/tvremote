@@ -105,7 +105,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .tvoff b{display:block}.tvoff .grow{min-width:0}.tvoff button{flex:none;min-height:44px;padding:0 16px;background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
 .now.off .pp,.now.off .vol{opacity:.55}
 #tvctl.off button:not([data-k=PowerOn]){opacity:.4;pointer-events:none}
-select{min-height:52px;padding:0 8px;width:100%;font-size:15px}
+select{-webkit-appearance:none;appearance:none;min-height:52px;padding:0 42px 0 16px;width:100%;font-size:15px;text-overflow:ellipsis;background:var(--card2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238c97a9' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 14px center / 16px}
 .danger{color:var(--bad)}
 input[type=text]{width:100%;padding:0 14px;min-height:52px}
 /* every text-like field gets the same inner padding (a field with no type attribute, or a password field, used to have almost none) */
@@ -162,7 +162,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .seekbar{display:flex;align-items:center;gap:10px;margin-top:14px;font-variant-numeric:tabular-nums;color:var(--dim);font-size:14px}
 .seekbar input{flex:1;min-width:0}
 .extras{margin-top:8px}
-#sleepsel{display:block;width:100%;height:52px;min-height:52px;padding:0 16px;font-size:16px}  /* an explicit height: iPhone Safari ignores min-height on a lone select */
+#sleepsel{display:block;width:100%;height:52px;min-height:52px;padding:0 42px 0 16px;font-size:16px}  /* an explicit height: iPhone Safari ignores min-height on a lone select */
 .fav.off{opacity:.62}
 .badge.chip{min-height:0;height:auto;padding:3px 10px;border:0;border-radius:99px;gap:0;display:inline-flex;align-items:center;font:inherit;font-size:12px;font-weight:700;line-height:1.35;cursor:pointer}
 .badge.chip::before{content:"";position:absolute;inset:-10px -3px}  /* a bigger tap area than the small pill */
@@ -348,8 +348,14 @@ body:has(dialog.sheet[open]){overflow:hidden}
 .wstream[aria-pressed=true]{box-shadow:inset 0 0 0 2px var(--tv,#6bb2ff);background:var(--line)}.wstream{cursor:pointer}.wstream .ws{position:absolute;top:2px;right:2px;display:flex;align-items:center;justify-content:center;width:34px;height:34px;min-height:0;padding:0;background:none;color:var(--dim)}.wstream .ws[aria-pressed=true]{color:var(--tv,#6bb2ff)}.wstream .ws .ic{width:16px;height:16px}
 .wallnote .ni{display:inline-flex;vertical-align:-4px}.wallnote .ni .ic{width:18px;height:18px}
 .wallnote{display:block;width:100%;min-height:44px;margin:12px 0 0;padding:0 14px;border-radius:12px;background:var(--card2,var(--line));font-size:14px;font-weight:600;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.wtile .ctl button,.wtile .ctl select,.wtile .top button{background:var(--card)}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff)}
+.wtile .ctl button,.wtile .top button{background:var(--card)}.wtile .ctl select{background-color:var(--card)}.wtile .ctl .snd[aria-pressed=true]{background:var(--tv,#6bb2ff)}
 .wlabel{margin:18px 2px 8px;color:var(--dim);font-size:13px;font-weight:600;letter-spacing:.02em}.wrow{display:flex;align-items:center;gap:10px;margin-top:10px}.wrow .sub{flex:1}
+.pickrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.pickc{display:flex;flex-direction:column;align-items:flex-start;gap:6px;height:auto;min-height:0;padding:14px;text-align:left;border-radius:16px;background:var(--card2)}
+.pickc .pi{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:var(--c);color:var(--c-ink);margin-bottom:4px}.pickc .pi svg{width:22px;height:22px;fill:currentColor}
+.pickc b{font-size:17px}.pickc .sub{font-size:13px}.pickc .on{color:#ff6b6b;font-weight:700}
+.pickc.kick{--c:#53fc18;--c-ink:#000}.pickc.twitch{--c:#9146ff;--c-ink:#fff}
+.wallfavs button .pico{display:inline-block;width:14px;height:14px;margin-right:7px;vertical-align:-2px;fill:currentColor}.wallfavs button .pico.kick{color:#53fc18}.wallfavs button .pico.twitch{color:#a970ff}
 .wallfavs{display:flex;flex-wrap:wrap;gap:8px}.wallfavs button{min-height:40px;padding:0 14px;font-size:14px;border-radius:99px}
 .dbmute{display:flex;gap:8px;margin:6px 0 12px}.dbmute button{flex:1;min-height:44px}
 </style>
@@ -580,11 +586,11 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="row3" id="ctlrow"><select id="qual" aria-label="Quality"></select>
     <button id="fav"></button>
     <div class="pair"><button id="refresh" aria-label="Refresh the stream" title="Refresh the stream"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
-    <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button></div>
-    <button id="move" class="hide" style="grid-column:1/-1"><svg class="ic" aria-hidden="true"><use href="#i-swap"/></svg><span id="movelabel">Move to the other TV</span></button></div>
-  <div class="extras hide" id="extras">
-    <div class="sleeprow"><select id="sleepsel" aria-label="Sleep timer"><option value="">Sleep timer: off</option><option value="15">Stop in 15 min</option><option value="30">Stop in 30 min</option><option value="60">Stop in 1 hour</option><option value="90">Stop in 90 min</option><option value="0">Cancel timer</option></select></div>
-  </div>
+    <button id="stop" class="danger"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button>
+    <button id="remove" class="danger hide" title="Take the stream you are controlling off the screen"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Remove</button></div>
+    <button id="enlarge" class="hide" style="grid-column:1/-1"><svg class="ic" aria-hidden="true"><use href="#i-enlarge"/></svg><span>Enlarge this stream</span></button>
+    <button id="move" class="hide" style="grid-column:1/-1"><svg class="ic" aria-hidden="true"><use href="#i-swap"/></svg><span id="movelabel">Move to the other TV</span></button>
+    <button id="stopall" class="danger hide" style="grid-column:1/-1"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg>Stop all streams</button></div>
 </div>
 <div class="card hide" id="chatcard">
   <div class="chatrow"><button id="chatTog" class="chathead" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>Chat</b><span class="sub grow" id="chatsub"></span><span class="chev">&#9662;</span></button>
@@ -609,8 +615,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <div id="walladdbox">
       <div class="wlabel" id="walladdlabel">Add a stream</div>
       <form id="walladd" class="row"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
-      <p class="sub" id="wallhint" style="margin:10px 2px 0">A name is looked up on Kick and Twitch together.</p>
-      <div id="wallpick" class="wallfavs hide" style="margin-top:10px"></div>
+        <div id="wallpick" class="pickrow hide"></div>
       <div id="wallfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="wallfavs" class="wallfavs"></div></div>
     </div>
   </div>
@@ -628,6 +633,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="row"><button data-k="InputHDMI1"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>1</button>
     <button data-k="InputHDMI2"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>2</button>
     <button data-k="InputHDMI3"><svg class="ic" aria-hidden="true"><use href="#i-hdmi"/></svg>3</button></div>
+  <div class="sleeprow" style="margin-top:12px"><select id="sleepsel" aria-label="Sleep timer"><option value="">Sleep timer: off</option><option value="15">Stop in 15 min</option><option value="30">Stop in 30 min</option><option value="60">Stop in 1 hour</option><option value="90">Stop in 90 min</option><option value="0">Cancel timer</option></select></div>
   <details id="appsbox" style="margin-top:12px"><summary style="min-height:44px;line-height:44px;color:var(--dim)">TV apps</summary>
     <div id="apps" class="apps" aria-live="polite"></div>
   </details>
@@ -868,6 +874,9 @@ function render() {
   syncQual();
   $('qual').classList.toggle('hide', !up || !$('qual').options.length);  // starting: only Stop
   $('wallnote').classList.toggle('hide', !(st.wall && (up || starting)));
+  const multi = !!(up && st.wall);  // several streams: Remove takes the controlled one off, Stop all ends everything
+  $('stop').classList.toggle('hide', multi); $('remove').classList.toggle('hide', !multi); $('stopall').classList.toggle('hide', !multi);
+  $('enlarge').classList.toggle('hide', !(up && st.wall && st.wall.layout === 'focus' && st.wall.selected !== 0));  // the stream being controlled is not the big one
   if (st.wall && (up || starting)) {
     // a speaker and the name(s) of whatever has sound on (a muted speaker when nothing does)
     const all = wallStreams(st.wall), sn = st.wall.sound, name = i => (all.find(t => t.i === i) || {}).name || 'another stream';
@@ -1117,10 +1126,11 @@ async function loadApps() {
 $('appsbox').addEventListener('toggle', () => { if ($('appsbox').open) loadApps(); });
 const otherTv = () => (targets || []).find(t => t.id !== target && t.reachable);
 // A confirmation sheet for something that stops what is playing: resolves true on the confirm button, false on Cancel, Esc or a tap outside.
-function confirmSheet(title, text, yes) {
+function confirmSheet(title, text, yes, danger) {
   return new Promise(resolve => {
     const d = $('confirm');
     $('confirmttl').textContent = title; $('confirmtext').textContent = text; $('confirmyes').textContent = yes;
+    $('confirmyes').className = danger ? 'danger' : 'go';  // red for something that cannot be undone
     let done = false;
     const finish = v => { if (done) return; done = true; if (d.open) d.close(); resolve(v); };
     $('confirmyes').onclick = () => finish(true);
@@ -1148,7 +1158,8 @@ $('move').onclick = async () => {
     return r;
   }, 800);
 };
-$('stop').onclick = () => { favLoading = null; markFavs(); return busy($('stop'), () => cmd('stop')).then(poll); };  // stopping also ends a favourite's loading spinner
+$('stop').onclick = () => { favLoading = null; markFavs(); return busy($('stop'), () => cmd('stop')).then(poll); };
+$('stopall').onclick = () => { favLoading = null; markFavs(); return busy($('stopall'), () => cmd('stop')).then(poll); };  // stopping also ends a favourite's loading spinner
 $('fav').onclick = async () => {
   if (!st.url) return;
   const had = isSaved(st.url);
@@ -1371,18 +1382,30 @@ function renderAccess() {
       mk('div', {class: 'grow'}, mk('b', {}, g.label || 'Guest'), ' ', mk('span', {class: 'pill guest'}, 'in use'),
         mk('span', {class: 'sub'}, (g.since ? 'Opened ' + ago(g.since) + ' · ' : '') + 'ends in ' + inFuture(g.exp)),
         mk('span', {class: 'sub'}, g.last ? 'Last: ' + g.last.text + ' · ' + ago(g.last.ts) : 'No actions yet')),
-      mk('button', {class: 's-danger', onclick: async () => { await api('/api/guests/' + g.id, 'DELETE'); loadAccess(); }}, 'Revoke'))),
+      mk('button', {class: 's-danger', onclick: async () => {
+        if (!await confirmSheet('Revoke ' + (g.label || 'this guest') + '?', 'They are signed out at once and the link stops working.', 'Revoke', true)) return;
+        await api('/api/guests/' + g.id, 'DELETE'); loadAccess();
+      }}, 'Revoke'))),
     ...access.invites.map(i => mk('div', {class: 's-row'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✉'),
       mk('div', {class: 'grow'}, mk('b', {}, i.label || 'Unopened link'), ' ', mk('span', {class: 'pill'}, i.uses ? 'partly used' : 'not opened'),
         mk('span', {class: 'sub'}, (i.max_uses > 1 ? 'Opened on ' + (i.uses || 0) + ' of ' + i.max_uses + ' devices · ' : '') + hoursText(i.hours) + ' of access each · link expires in ' + inFuture(i.redeem_by))),
-      mk('button', {class: 's-danger', onclick: async () => { await api('/api/invites/' + i.id, 'DELETE'); loadAccess(); }}, 'Revoke'))),
+      mk('button', {class: 's-danger', onclick: async () => {
+        if (!await confirmSheet('Revoke this link?', 'It stops working. Nobody who has not opened it yet will be able to.', 'Revoke', true)) return;
+        await api('/api/invites/' + i.id, 'DELETE'); loadAccess();
+      }}, 'Revoke'))),
     ...used.map(u => mk('div', {class: 's-row', style: 'opacity:.75'}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✓'),
       mk('div', {class: 'grow'}, mk('b', {}, u.label || 'Guest link'), ' ', mk('span', {class: 'pill'}, u.ended ? 'ended' : 'revoked'),
         mk('span', {class: 'sub'}, 'Opened ' + ago(u.opened) + ' · ' + hoursText(u.hours) + ' of access')),
-      mk('button', {'aria-label': 'Remove this from the list', title: 'Remove from the list', onclick: async () => { await api('/api/guest-history/' + u.id, 'DELETE'); loadAccess(); }}, 'Remove')))];
+      mk('button', {'aria-label': 'Remove this from the list', title: 'Remove from the list', onclick: async () => {
+        if (!await confirmSheet('Remove from the list?', 'This only clears it from the list. Nothing else changes.', 'Remove')) return;
+        await api('/api/guest-history/' + u.id, 'DELETE'); loadAccess();
+      }}, 'Remove')))];
   $('guests').classList.toggle('hide', !rows.length);
   $('guests').replaceChildren(mk('div', {class: 's-cap', style: 'display:flex;align-items:center;justify-content:space-between'}, 'Active and recent links',
-    used.length ? mk('button', {style: 'min-height:36px;padding:0 12px;font-size:13px', onclick: async () => { await api('/api/guest-history', 'DELETE'); loadAccess(); }}, 'Clear finished') : null), ...rows);
+    used.length ? mk('button', {style: 'min-height:36px;padding:0 12px;font-size:13px', onclick: async () => {
+      if (!await confirmSheet('Clear finished links?', 'Removes ' + used.length + (used.length === 1 ? ' ended or revoked link' : ' ended or revoked links') + ' from the list.', 'Clear')) return;
+      await api('/api/guest-history', 'DELETE'); loadAccess();
+    }}, 'Clear finished') : null), ...rows);
 }
 async function loadPeople() {
   const r = await fetch('/api/accounts').then(x => x.json()).catch(() => ({}));
@@ -1598,7 +1621,6 @@ function renderExtras() {
     $('seekr').style.setProperty('--p', (100 * p / st.duration) + '%');
     $('pos').textContent = fmt(p); $('dur').textContent = fmt(st.duration);
   }
-  $('extras').classList.toggle('hide', !st.running);
   const left = st.sleep_at ? Math.max(0, Math.round((st.sleep_at * 1000 - Date.now()) / 60000)) : 0;
   $('sleepsel').options[0].text = st.sleep_at ? 'Sleep timer: stops in ' + (left < 1 ? 'under a minute' : left + ' min') : 'Sleep timer: off';
 }
@@ -1824,7 +1846,13 @@ function renderWall() {
   for (const x of recentList) if (x.live === true) offer(x.name, x.url);
   const favs = free || replacing ? sugg.slice(0, 8) : [];
   $('wallfavswrap').classList.toggle('hide', !favs.length);
-  $('wallfavs').replaceChildren(...favs.map(f => { const b = el('button', null, f.name || f.url); b.onclick = () => busy(b, () => wallPut(f.url)); return b; }));
+  $('wallfavs').replaceChildren(...favs.map(f => {
+    const site = /twitch\.tv/i.test(f.url) ? 'twitch' : /kick\.com/i.test(f.url) ? 'kick' : '', b = el('button');
+    if (site) { const i = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); i.setAttribute('viewBox', '0 0 24 24'); i.setAttribute('class', 'pico ' + site); i.innerHTML = '<use href="#i-' + site + '"/>'; b.append(i); }
+    b.append(document.createTextNode(f.name || f.url));
+    b.onclick = () => busy(b, () => wallPut(f.url));
+    return b;
+  }));
 }
 $('walladd').onsubmit = async e => {
   e.preventDefault();
@@ -1838,8 +1866,16 @@ $('walladd').onsubmit = async e => {
     if (!d || !d.ok) { err('Couldn\u2019t look that up. Try again, or paste a link.'); return {ok: false}; }
     if (!d.matches.length) { err('Couldn\u2019t find ' + v + ' on Kick or Twitch. Paste a link if it is somewhere else.'); return {ok: false}; }
     if (d.pick) return add(d.pick);
-    $('wallpick').replaceChildren(...d.matches.map(m => {  // on both: the person chooses
-      const b = el('button', null, v + ' on ' + m.source + (m.live ? ' (live)' : ' (offline)'));
+    const head = el('div', 'wlabel', v + ' is on both. Which one?');
+    head.style.cssText = 'grid-column:1/-1;margin:0';
+    $('wallpick').replaceChildren(head, ...d.matches.map(m => {  // a card per site: its logo, whether they are live there, and how many watch
+      const site = m.source.toLowerCase(), b = el('button', 'pickc ' + site), pi = el('span', 'pi');
+      pi.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-' + site + '"/></svg>';
+      const sub = el('span', 'sub');
+      if (m.live) { sub.append(el('span', 'on', 'LIVE')); if (m.viewers) sub.append(document.createTextNode(' \u00b7 ' + Number(m.viewers).toLocaleString() + ' watching')); }
+      else sub.textContent = 'Offline';
+      b.append(pi, el('b', null, m.source), sub);
+      b.setAttribute('aria-label', 'Add ' + v + ' from ' + m.source + (m.live ? ', live' : ', offline'));
       b.onclick = async () => { await busy(b, () => add(m.url)); $('wallpick').classList.add('hide'); };
       return b;
     }));
@@ -1854,6 +1890,8 @@ document.addEventListener('click', e => {
   else if (e.target.matches('dialog.sheet')) e.target.close();  // the dim area behind it counts as a click on the dialog itself
 });
 $('wallnote').onclick = () => $('wallopen').click();
+$('remove').onclick = () => st.wall && busy($('remove'), () => wallApi({action: 'remove', i: st.wall.selected}));
+$('enlarge').onclick = () => st.wall && wallApi({action: 'swap', i: st.wall.selected});  // swap windows with the big one; the control choice stays with the stream
 $('wallopen').onclick = () => { wallSig = ''; renderWall(); $('wallcard').showModal(); Promise.all([loadFavs(), loadRecents()]).then(renderWall); };
 $('walllayout').onclick = e => { const b = e.target.closest('button[data-l]'); if (b) wallApi({action: 'layout', layout: b.dataset.l}); };
 
