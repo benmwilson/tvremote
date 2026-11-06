@@ -32,5 +32,30 @@ class FullWindow(unittest.TestCase):
         self.assertEqual(p.call_count, 1)
 
 
+class HeatWarning(unittest.TestCase):
+    def setUp(self):
+        server._warned["at"] = 0.0
+
+    def test_off_by_default_and_only_when_warm_and_a_picture_is_playing(self):
+        with mock.patch.object(server, "mpv") as m, mock.patch.object(server, "prop", return_value=123):
+            with mock.patch.dict(server.settings, {"heat_tv": False}):
+                self.assertFalse(server.heat_warn(85.0, 100.0))
+            with mock.patch.dict(server.settings, {"heat_tv": True}):
+                self.assertFalse(server.heat_warn(70.0, 100.0))  # cool
+                self.assertFalse(server.heat_warn(None, 100.0))  # unknown
+                self.assertTrue(server.heat_warn(80.0, 100.0))
+        m.assert_called_once()
+
+    def test_at_most_once_a_minute_and_never_without_a_player(self):
+        with mock.patch.dict(server.settings, {"heat_tv": True}), mock.patch.object(server, "mpv") as m:
+            with mock.patch.object(server, "prop", return_value=None):
+                self.assertFalse(server.heat_warn(85.0, 100.0))  # no player: nothing to put text on
+            with mock.patch.object(server, "prop", return_value=123):
+                self.assertTrue(server.heat_warn(85.0, 200.0))
+                self.assertFalse(server.heat_warn(85.0, 230.0))
+                self.assertTrue(server.heat_warn(85.0, 262.0))
+        self.assertEqual(m.call_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

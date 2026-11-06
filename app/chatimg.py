@@ -8,6 +8,7 @@ import os
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 try:
@@ -37,7 +38,18 @@ def _font(path, size):
         return ImageFont.load_default(size)  # no DejaVu (a dev machine): Pillow's own
 
 
+HOSTS = ("static-cdn.jtvnw.net", "cdn.7tv.app", "cdn.betterttv.net", "cdn.frankerfacez.com")  # where emote pictures come from
+MAX_PIXELS = 1_000_000  # an emote is tiny; a small file can still decode to a huge bitmap, so anything bigger is refused before it is decoded
+
+
+def _allowed(url):
+    p = urlparse(url)
+    return p.scheme == "https" and (p.hostname or "") in HOSTS
+
+
 def _download(url, timeout=4):  # one place to stub in tests
+    if not _allowed(url):
+        raise ValueError("not an emote host")  # the addresses come from third-party lists: only their own CDNs are fetched
     return urlopen(Request(url, headers={"User-Agent": "tvremote/1.0"}), timeout=timeout).read(2_000_000)
 
 
@@ -64,6 +76,8 @@ class Pictures:
         pic = False
         try:
             im = Image.open(io.BytesIO(self.download(url)))
+            if im.width * im.height > MAX_PIXELS:
+                raise ValueError("too big for an emote")
             im.seek(0)  # an animated emote: its first frame
             im = im.convert("RGBA")
             w = min(EMOTE_MAX_W, max(1, round(im.width * EMOTE_H / im.height)))

@@ -426,8 +426,9 @@ body.touring{padding-bottom:260px}
 .btile .bact .bpadd{flex:none;width:auto;padding:0 14px;background:var(--fg);color:#0b0e14;font-weight:800;box-shadow:0 0 0 2px var(--tv,#6bb2ff) inset}.btile .bact .bpadd:disabled{opacity:1;background:var(--tv,#6bb2ff)}
 .bctl{display:flex;gap:8px;align-items:center;margin:0 0 4px}.bctl select{flex:1;min-width:0;min-height:44px;font-size:16px}
 .bfilters summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;color:var(--dim);cursor:pointer}
+.bfilters summary>span:first-child{flex:1}
 .bfilters summary button{min-height:36px;padding:0 12px;font-size:13px;background:none;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line)}
-.bfgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.bfgrid select{min-width:0;min-height:44px;font-size:16px}
+.bfgrid{display:grid;grid-template-columns:1fr;gap:8px}  /* full width: the open list is as wide as its box, so it stays inside the sheet */.bfgrid select{min-width:0;min-height:44px;font-size:16px}
 .bfilters{margin:0 0 8px}
 #browseq{display:block;width:100%;box-sizing:border-box}#browseq:focus-visible{outline-offset:-2px}
 .bnote{grid-column:1/-1;margin:6px 2px;color:var(--dim);font-size:14px}
@@ -710,6 +711,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <p class="sub" id="pistate">Checking&hellip;</p>
       <button id="desktop" class="pibtn"><svg class="ic" aria-hidden="true"><use id="piicon" href="#i-eye-off"/></svg><span id="pilabel">Hide the remote from the TV</span></button>
       <p class="sub" id="pihelp"></p>
+      <label class="s-check" style="justify-content:space-between;margin-top:6px">Warn on the TV when the Pi runs hot<input id="heattv" type="checkbox" class="tg" role="switch"></label>
+      <p class="sub" style="margin:2px 0 0">A short line of text on the picture (from 78 °C, at most once a minute). It costs nothing to speak of.</p>
     </div>
     <h3 class="shead hide" id="qrhead">QR code on the TV</h3>
     <div class="card s-form hide" id="qrbox">
@@ -2125,10 +2128,11 @@ async function loadSettings() {
 async function loadConfig() {  // app settings an admin can change; more (and per-role permissions) can be added here
   const c = await fetch('/api/config').then(r => r.json()).catch(() => null);
   if (!c || c.ok === false) return;
-  $('cfgq').value = String(c.phone_quality); $('cfgguests').checked = !!c.phone_guests;
+  $('cfgq').value = String(c.phone_quality); $('cfgguests').checked = !!c.phone_guests; $('heattv').checked = !!c.heat_tv;
 }
 $('cfgq').onchange = () => api('/api/config', 'POST', {phone_quality: Number($('cfgq').value)}).then(loadConfig);
 $('cfgguests').onchange = () => api('/api/config', 'POST', {phone_guests: $('cfgguests').checked}).then(loadConfig);
+$('heattv').onchange = () => api('/api/config', 'POST', {heat_tv: $('heattv').checked}).then(loadConfig);
 function loadAccounts() { return loadSettings(); }
 
 $('pwopen').onclick = () => { const open = $('pwform').classList.toggle('hide') === false; $('pwopen').setAttribute('aria-expanded', String(open)); };
@@ -2698,7 +2702,7 @@ function browseTiles(rows) {  // one tile per streamer: a name live on both site
 function browseCanAdd() { const cur = targets.find(t => t.id === target) || {}; return cur.kind === 'pi' && (!!st.running || !!st.starting || !!st.wall); }
 function fillFilter(sel, label, counts, keep, nameOf) {  // a select of what is on offer (most common first), keeping the pick if it is still there
   const items = [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]))).slice(0, 40);
-  sel.replaceChildren(new Option(label, ''), ...items.map(([v, n]) => new Option(nameOf(v) + ' (' + n + ')', v)));
+  sel.replaceChildren(new Option(label, ''), ...items.map(([v, n]) => new Option(nameOf(v).slice(0, 30) + (nameOf(v).length > 30 ? '…' : '') + ' (' + n + ')', v)));
   sel.value = items.some(([v]) => v === keep) ? keep : '';
   return sel.value;
 }

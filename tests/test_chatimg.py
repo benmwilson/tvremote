@@ -74,6 +74,21 @@ class Render(unittest.TestCase):
         self.assertTrue(any(data[i + 3] for i in range(0, len(data), 4)))
 
 
+@unittest.skipUnless(HAVE, "Pillow is not installed here (it is in the container)")
+class Safety(unittest.TestCase):
+    def test_a_huge_image_is_refused_before_it_is_decoded_and_other_hosts_are_not_fetched(self):
+        pics = chatimg.Pictures(download=lambda url: png((0, 0, 0, 255), (3000, 3000)))  # a few KB as a file, 36 MB as a bitmap
+        pics.get("https://cdn.7tv.app/big.png")
+        for _ in range(100):
+            if pics.version:
+                break
+            time.sleep(0.02)
+        self.assertIsNone(pics.get("https://cdn.7tv.app/big.png"))  # failed: stays text
+        self.assertTrue(chatimg._allowed("https://cdn.7tv.app/emote/x/2x.webp") and chatimg._allowed("https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0"))
+        for bad in ("http://cdn.7tv.app/x", "https://evil.example/x", "https://192.168.1.1/x", "https://cdn.7tv.app.evil.example/x", "file:///etc/passwd"):
+            self.assertFalse(chatimg._allowed(bad), bad)
+
+
 class Overlay(unittest.TestCase):
     def test_the_picture_is_handed_to_mpv_under_one_id_and_removed_by_none(self):
         sent, files = [], []

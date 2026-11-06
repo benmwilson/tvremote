@@ -1895,7 +1895,7 @@ def phone_settings():
     whether a guest may use it. More of these (and per-role permissions) can join this one place."""
     q = settings.get("phone_quality", 720)
     return {"phone_quality": q if q in PHONE_QUALITIES else 720, "phone_guests": settings.get("phone_guests", True) is not False,
-            "qr": settings.get("qr", True) is not False}
+            "qr": settings.get("qr", True) is not False, "heat_tv": bool(settings.get("heat_tv"))}
 
 
 @app.get("/api/config")
@@ -1912,7 +1912,7 @@ def api_config_set():
         if body["phone_quality"] not in PHONE_QUALITIES:
             return jsonify(ok=False, error="Pick 360, 480, 720 or 1080."), 400
         settings["phone_quality"] = body["phone_quality"]
-    for k in ("phone_guests", "qr"):
+    for k in ("phone_guests", "qr", "heat_tv"):
         if k in body:
             settings[k] = bool(body[k])
     save_settings()
@@ -2793,11 +2793,31 @@ def heat_check(temp):
             wall_later(reconcile_job)
 
 
+_warned = {"at": 0.0}
+WARN_EVERY_S = 60
+
+
+def heat_warn(temp, now=None):
+    """The optional on-TV warning (Settings > TV screen): a few seconds of text on the picture, at most once a minute, while the Pi is warm or hot.
+    Costs nothing to speak of: the temperature is read by the heat guard anyway, and a one-off line of text is not a redraw loop.
+    True when it was shown."""
+    now = time.time() if now is None else now
+    if temp is None or not settings.get("heat_tv") or temp < pihealth.WARM or now - _warned["at"] < WARN_EVERY_S:
+        return False
+    if prop("pid") is None:
+        return False  # nothing is playing: the home screen has no picture to put text on
+    _warned["at"] = now
+    mpv(["show-text", f"Pi is warm: {temp:.0f} C", 4000])
+    return True
+
+
 def heat_loop():
     while True:
         time.sleep(10)
         try:
-            heat_check(pihealth.temperature())
+            t = pihealth.temperature()
+            heat_check(t)
+            heat_warn(t)
         except Exception as e:
             app.logger.warning("Heat check failed: %s", e)
 
