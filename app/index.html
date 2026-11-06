@@ -358,6 +358,8 @@ html[data-layout=desktop] button,html[data-layout=desktop] [role=button],html[da
 html[data-layout=desktop] button:hover:not(:disabled):not(.go){filter:brightness(1.18)}
 html[data-layout=desktop] .kbdhint{display:block}
 .kbdhint{display:none;margin:14px 2px 0;color:var(--dim);font-size:13px}.kbdhint kbd{font:inherit;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--line);color:var(--fg)}.namechips:not(.hide){margin:10px 0 2px}[data-url]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.scat{margin:34px 4px 8px;padding-top:16px;border-top:1px solid var(--line);font-size:20px;font-weight:700;letter-spacing:.2px}#view-settings>.scat:first-child{border-top:0}
+/* the search and filters of a sheet stay in view while its results scroll */
+.stickyc{position:sticky;top:0;z-index:4;background:var(--card);padding:2px 0 8px;margin-bottom:2px;max-height:60vh;overflow:auto}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}.iconbtn.on{color:#7be29a}.iconbtn .ic{margin:0}
 #tvsadmin{margin-bottom:12px}
 .dd{position:relative;flex:1;min-width:0;width:100%}.ddnative{display:none!important}
@@ -983,6 +985,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="sh"><div class="grow"><b id="browsettl">Browse live</b><span class="sub" id="browsesub">Kick and Twitch, biggest first</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
+    <div class="stickyc">
     <input id="browseq" type="search" placeholder="Search live channels, games, titles" aria-label="Search live channels" autocomplete="off" autocapitalize="off" autocorrect="off" enterkeyhint="search" style="font-size:16px;height:46px;min-height:46px;margin-bottom:8px">
     <div id="browsesuggest" class="sugg hide" role="listbox" aria-label="Suggestions"></div>
     <div class="bctl"><div class="wseg" id="browsesite" role="group" aria-label="Site"><button type="button" data-s="" aria-pressed="true">All</button><button type="button" data-s="kick" aria-pressed="false">Kick</button><button type="button" data-s="twitch" aria-pressed="false">Twitch</button></div>
@@ -991,6 +994,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <div class="bfgrid"><select id="browsegame" aria-label="Category"></select><select id="browselang" aria-label="Language"></select></div>
       <label class="s-check" style="justify-content:space-between;margin-top:6px">Only streamers live on both sites<input id="browseboth" type="checkbox" class="tg" role="switch"></label>
     </details>
+    </div>
     <div id="browsegrid" class="bgrid" aria-live="polite"></div>
   </div>
 </dialog>
