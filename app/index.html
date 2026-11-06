@@ -1142,6 +1142,7 @@ function avatarGroup(members, big) {
   return g;
 }
 const groupLive = g => g.members.filter(m => m.live === true).length;
+const groupSites = g => [...new Set(g.members.map(m => m.source || 'Other'))].map(src => el('span', 'badge ' + src, src));  // the sites its streamers are on, like a solo streamer's badge
 const groupWho = g => g.members.map(m => m.name).join(', ');
 async function playGroup(g) {  // replaces what is on the TV, so ask when something is playing
   if ((st.running || st.starting || st.wall) && !(await confirmSheet('Play ' + g.name + '?', 'This replaces what is on the TV now with ' + g.members.length + ' streams in multi-view.', 'Play group'))) return;
@@ -1157,8 +1158,8 @@ function drawGroups() {
     x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Delete group ' + g.name);
     x.onclick = async e => { e.stopPropagation(); if (await confirmSheet('Delete ' + g.name + '?', 'The group goes away. The streams stay in your favourites.', 'Delete', true)) { await api('/api/groups', 'DELETE', {id: g.id}); loadGroups(); } };
     head.append(avatarGroup(g.members, true), el('b', null, g.name));
-    b.append(head, el('span', 'gmembers', groupWho(g)), ...(live ? [el('span', 'badge live', live + ' LIVE')] : []), x);
-    if (live) b.querySelector('.badge').style.marginTop = '8px';
+    b.append(head, el('span', 'gmembers', groupWho(g)), ...groupSites(g), ...(live ? [el('span', 'badge live', live + ' LIVE')] : []), x);
+    b.querySelectorAll('.badge').forEach(e => { e.style.marginTop = '8px'; });
     b.onclick = () => playGroup(g);
     b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
     rows.push(b);
@@ -1170,7 +1171,7 @@ function drawGroups() {
     x.onclick = async e => { e.stopPropagation(); await api('/api/groups/dismiss', 'POST', {key: sg.key}); loadGroups(); };
     save.onclick = async e => { e.stopPropagation(); await busy(save, () => saveGroup(sg.members)); };
     head.append(avatarGroup(sg.members, true), el('b', null, sg.name));
-    b.append(el('span', 'gtag', 'Watched together ' + sg.count + ' times'), head, el('span', 'gmembers', groupWho(sg)), save, x);
+    b.append(el('span', 'gtag', 'Watched together ' + sg.count + ' times'), head, el('span', 'gmembers', groupWho(sg)), ...groupSites(sg), save, x);
     b.onclick = () => playGroup(sg);
     b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
     rows.push(b);
@@ -1283,8 +1284,8 @@ function renderQuick() {
     if (it.group) {  // a saved group: its pictures stacked, its name, how many are live
       const b = el(style === 'cards' ? 'div' : 'div', style === 'cards' ? 'fav' : 'wstream'), n = groupLive(it);
       b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url; b.setAttribute('aria-label', 'Play group ' + it.name);
-      if (style === 'cards') { const head = el('div', 'fhead'); head.append(avatarGroup(it.members, true), el('b', null, it.name)); b.append(head, el('span', 'badge live', n + ' LIVE'), el('span', 'sub livenote', groupWho(it))); }
-      else { const tags = el('span', 'wtags'); tags.append(el('span', 'badge live', n + ' LIVE')); b.append(avatarGroup(it.members), el('span', 'wn', it.name), tags); }
+      if (style === 'cards') { const head = el('div', 'fhead'); head.append(avatarGroup(it.members, true), el('b', null, it.name)); b.append(head, ...groupSites(it), el('span', 'badge live', n + ' LIVE'), el('span', 'sub livenote', groupWho(it))); }
+      else { const tags = el('span', 'wtags'); tags.append(...groupSites(it), el('span', 'badge live', n + ' LIVE')); b.append(avatarGroup(it.members), el('span', 'wn', it.name), tags); }
       b.onclick = () => playGroup(it);
       b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
       return b;
