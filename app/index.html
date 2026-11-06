@@ -112,7 +112,10 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .watch{position:sticky;top:8px;z-index:6;padding:10px;box-shadow:0 10px 28px rgba(0,0,0,.5);margin-top:12px}
 .watchbar{display:flex;align-items:center;gap:8px;margin-bottom:8px}.watchbar b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .watchbar button{flex:none;width:44px;min-height:44px;padding:0;display:grid;place-items:center}.watchbar select{flex:none;max-width:46%;min-height:44px;font-size:15px}
-.quick{margin-top:16px}.quick .wlabel{margin-bottom:8px}.quick .fav{background:var(--card2,rgba(255,255,255,.05))}
+.quick{margin-top:16px}.quick .wlabel{margin-bottom:8px}
+.quickstrip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}  /* the same tiles as the multi-view strip */
+.quickstrip .wstream{cursor:pointer;overflow:hidden;padding:12px 4px}.quickstrip .wstream .av{width:48px;height:48px}
+.wstream.loading{pointer-events:none}.wstream.loading::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:40%;background:var(--tv,var(--fg));animation:slide 1.2s ease-in-out infinite}
 .now.offidle>:not(.tvoff){display:none!important}
 #view-tv.tvonly #now,#view-tv.tvonly #watchcard,#view-tv.tvonly #chatcard,#view-tv.tvonly #wallopencard,#view-tv.tvonly #playsec{display:none!important}
 .now.offidle .tvoff{flex-direction:column;text-align:center;gap:6px;margin:0;padding:26px 18px 22px;background:linear-gradient(160deg,rgba(255,176,98,.16),rgba(255,176,98,.05));border-color:rgba(255,176,98,.28)}
@@ -644,7 +647,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div id="title" class="ttl">Nothing playing</div>
   <div id="game" class="sub hide"></div>
   <div id="meta"></div>
-  <div id="quick" class="quick hide"><div class="wlabel" id="quickhead">Live now</div><div id="quicklist" class="grid list"></div></div>
+  <div id="quick" class="quick hide"><div class="wlabel" id="quickhead">Live now: tap one to play</div><div id="quicklist" class="quickstrip"></div></div>
   <button id="pp" class="pp" data-a="pause" aria-label="Pause or resume"></button>
   <button id="extpp" class="pp hide" data-k="Play" aria-label="Pause or resume the TV's own app"></button>
   <div class="seekbar hide" id="seekbar"><span id="pos">0:00</span><input type="range" id="seekr" min="0" max="100" step="1" value="0" aria-label="Position"><span id="dur">0:00</span></div>
@@ -1160,14 +1163,14 @@ function renderQuick() {
   $('quick').classList.toggle('hide', !shown.length);
   if (sig === quickSig) return;
   quickSig = sig;
-  $('quicklist').replaceChildren(...shown.map(it => {
-    const b = el('div', 'fav'), head = el('div', 'fhead');
-    b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url;
-    head.append(avatarEl(it.name, it.url), el('b', null, it.name), ...titleEl(it));
-    const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
-    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), el('span', 'badge live', 'LIVE'), el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin);
+  $('quicklist').replaceChildren(...shown.map(it => {  // a tile like the ones along the top of a multi-view: picture, name, site and LIVE
+    const b = el('div', 'wstream'), tags = el('span', 'wtags');
+    b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url; b.setAttribute('aria-label', 'Play ' + it.name + (it.title ? ': ' + it.title : ''));
+    if (it.title) b.title = it.title;
+    tags.append(el('span', 'badge ' + (it.source || ''), it.source || 'Other'), el('span', 'badge live', 'LIVE'));
+    b.append(avatarEl(it.name, it.url), el('span', 'wn', it.name), tags);
     b.onclick = () => playFav(it.url);
-    b.onkeydown = e => { if (e.key === 'Enter') playFav(it.url); };
+    b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
     return b;
   }));
   runMarquees();
@@ -1175,7 +1178,8 @@ function renderQuick() {
 function markFavs() {
   renderQuick();
   runMarquees();
-  document.querySelectorAll('#favs .fav, #recents .fav, #quick .fav').forEach(b => {  // recents and the quick cards get the same spinner and error note
+  document.querySelectorAll('#quick .wstream').forEach(b => { const on = !!favLoading && b.dataset.url === favLoading.url; b.classList.toggle('loading', on); b.setAttribute('aria-busy', String(on)); });
+  document.querySelectorAll('#favs .fav, #recents .fav').forEach(b => {  // recents get the same spinner and error note
     const n = b.querySelector('.note');
     if (n) n.textContent = favNote && (b.dataset.urls || b.dataset.url).split(' ').includes(favNote.url) && Date.now() < favNote.until ? favNote.text : '';
     const on = !!favLoading && (b.dataset.urls || b.dataset.url).split(' ').includes(favLoading.url);
