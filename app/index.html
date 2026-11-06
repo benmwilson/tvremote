@@ -925,6 +925,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <button id="chatlink" type="button" class="hide" style="margin:8px 8px 0 0;width:calc(100% - 8px)">Link Twitch to chat as yourself</button>
 </div>
 <div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multistream</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev r"></span></span></button></div>
+<div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multistream</span></span><span class="chatbtn"><span class="chev r"></span></span></button></div>
 <dialog id="tvapps" class="sheet" aria-labelledby="tvappsttl">
   <div class="sh"><div class="grow"><b id="tvappsttl">TV apps</b><span class="sub" id="tvappssub">Tap one to open it on the TV</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -994,7 +995,6 @@ body:has(dialog.sheet[open]){overflow:hidden}
   </details>
 </div>
 
-<div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multistream</span></span><span class="chatbtn"><span class="chev r"></span></span></button></div>
 <div id="playsec">
 <h2>Play something</h2>
 <div class="card">
@@ -1002,6 +1002,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="row seg" id="site">
     <button data-s="auto" class="on">Auto</button><button data-s="kick">Kick</button><button data-s="twitch">Twitch</button><button data-s="youtube">YouTube</button>
   </div>
+  <div id="linksugg" class="sugg hide" role="listbox" aria-label="Live channels that match"></div>
   <div id="playpick" class="pickrow hide"></div>
   <div class="row"><button id="go" class="go">Play</button></div>
 </div>
@@ -1768,6 +1769,7 @@ $('go').onclick = () => {
 };
 $('link').onkeydown = e => { if (e.key === 'Enter') $('go').click(); };
 let linkTimer = 0, linkSeq = 0;
+$('link').addEventListener('input', () => showNameChips($('linksugg'), $('link')));
 $('link').addEventListener('input', () => {  // autofill: a channel name shows where it is and whether it is live; tap one to play it
   clearTimeout(linkTimer); const n = ++linkSeq, v = $('link').value.trim();
   if (!/^[\w-]{2,25}$/.test(v) || site === 'youtube') { $('playpick').classList.add('hide'); return; }
@@ -3208,8 +3210,34 @@ function renderWallGroups(rows) {
   $('wallgroupswrap').classList.toggle('hide', !all.length && !canSave);  // the Groups row also carries the save button
 }
 $('wallsavegroup').onclick = () => busy($('wallsavegroup'), async () => { const r = await api('/api/groups', 'POST', {from_screen: true}); if (r && r.ok) await loadGroups(); return r; });
+// While a name is typed: the live channels whose names match, as chips with their picture and live dot (from the Browse list). Tap one to fill the box.
+let liveFetch = null;
+function ensureLive() {
+  if (browseData && Date.now() - browseAt < 60000) return Promise.resolve();
+  if (!liveFetch) liveFetch = fetch('/api/browse?n=50').then(x => x.json()).catch(() => null).then(r => { if (r) { browseData = r; browseAt = Date.now(); } liveFetch = null; });
+  return liveFetch;
+}
+function showNameChips(box, input) {
+  const q = input.value.trim().toLowerCase();
+  if (q.length < 2 || /[:\/]/.test(q) || (input.id === 'link' && site === 'youtube')) { box.classList.add('hide'); return; }
+  const draw = () => {
+    if (input.value.trim().toLowerCase() !== q || !browseData) return;  // typed on since: a newer call draws
+    const tiles = browseTiles(browseData.streams).filter(t => t.name.toLowerCase().includes(q) && t.name.toLowerCase() !== q).sort((a, b) => b.total - a.total).slice(0, 4);
+    box.classList.toggle('hide', !tiles.length);
+    box.replaceChildren(...tiles.map(t => {
+      const b = el('button'); b.type = 'button';
+      if (t.avatar) { const i = document.createElement('img'); i.src = t.avatar; i.alt = ''; i.referrerPolicy = 'no-referrer'; i.className = 'sav'; i.onerror = () => i.remove(); const w = el('span', 'sgw'); w.append(i, el('i', 'livedot')); b.append(w); }
+      b.append(document.createTextNode(t.name)); b.title = t.plats.map(x => x.source).join(' and ');
+      b.onclick = () => { input.value = t.name; input.dispatchEvent(new Event('input')); input.focus(); };
+      return b;
+    }));
+  };
+  if (browseData) draw(); else ensureLive().then(draw);
+}
 function makeAdder(form, input, pick) {  // a name or a link in a box: look the name up, ask which site if it is on both, then add (or replace with) it
   const add0 = async url => { const r = await wallPut(url); if (r && r.ok) input.value = ''; return r; };
+  const chips = el('div', 'sugg hide'); chips.setAttribute('role', 'listbox'); chips.setAttribute('aria-label', 'Live channels that match'); pick.before(chips);
+  input.addEventListener('input', () => showNameChips(chips, input));
   let timer = 0, seq = 0;
   input.addEventListener('input', () => {  // autofill: while a name is typed, show where that streamer is and whether they are live; tap one to add it
     clearTimeout(timer); const n = ++seq, v = input.value.trim();
