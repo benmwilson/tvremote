@@ -118,6 +118,7 @@ def ass(msgs):
     return "{\\an1\\fs34\\bord3\\shad0\\q2}" + "\\N".join(rows)
 
 
+COL_REDRAW_S = 6
 COL_X, COL_CHARS, COL_LINES = 1456, 30, 24  # the strip the picture makes room for (it shrinks to 1440 wide), and how much text fits in it
 
 
@@ -160,7 +161,7 @@ class TwitchChat:
 
     def _draw(self):
         last = None
-        while not self.stopped.wait(1):
+        while not self.stopped.wait(COL_REDRAW_S if self.column else 1):  # every redraw of the overlay flashes on this video output, so the column redraws rarely
             now = time.time()
             live = [m for t, m in list(self.msgs) if self.column or now - t < SHOW_S]
             text = ass_column(self.channel, live) if self.column else ass(live) if live else None
