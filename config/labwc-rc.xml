@@ -20,5 +20,6 @@
     <windowRule identifier="tvr-focus4-3"><serverDecoration>no</serverDecoration><action name="MoveTo" x="720" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
     <windowRule identifier="tvr-focus4-4"><serverDecoration>no</serverDecoration><action name="MoveTo" x="1216" y="750"/><action name="ResizeTo" width="480" height="270"/></windowRule>
     <windowRule identifier="tvr-chat"><serverDecoration>no</serverDecoration><action name="MoveTo" x="1440" y="0"/><action name="ResizeTo" width="480" height="1080"/><action name="ToggleAlwaysOnTop"/></windowRule>
+    <windowRule identifier="tvr-chatbar"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="810"/><action name="ResizeTo" width="1440" height="270"/><action name="ToggleAlwaysOnTop"/></windowRule>
   </windowRules>
 </labwc_config>

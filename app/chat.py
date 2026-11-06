@@ -131,12 +131,12 @@ def _plain(s):
 SITE_BGR = {"Kick": "18FC53", "Twitch": "FF70A9"}  # the sites' colours, as ASS wants them (BGR)
 
 
-def background(accent):
-    """The window's look, the same as the screen behind several streams: two soft colour glows, a header rule."""
+def background(ox=0, oy=0):
+    """The look behind the stream, the same for every site: two soft colour glows laid out over the whole 1920x1080 screen, drawn here offset by
+    this window's own position (ox, oy), so the chat window and the bar under the picture join up as one background."""
     def glow(x, y, w, h, colour, alpha):
-        return r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&\1a&H%s&\blur90}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x, y, colour, alpha, w, w, h, h)
-    rule = r"{\an7\pos(28,100)\p1\bord0\shad0\1c&H%s&\1a&H60&}m 0 0 l 424 0 424 2 0 2{\p0}" % accent
-    return [glow(-120, -200, 720, 640, "9A5A2E", "50"), glow(-120, 680, 720, 640, "8A2E6A", "58"), rule]
+        return r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&\1a&H%s&\blur120}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x - ox, y - oy, colour, alpha, w, w, h, h)
+    return [glow(900, -300, 1300, 900, "9A5A2E", "50"), glow(300, 620, 1500, 900, "8A2E6A", "58")]
 
 
 def ass_column(channel, msgs, source="Twitch"):
@@ -154,7 +154,22 @@ def ass_column(channel, msgs, source="Twitch"):
         lines.append("{\\fs10} {\\fs26}")  # a little air between messages (and the size back, or the next name stays tiny)
     head = "{\\an7\\pos(28,44)\\fs28\\b1\\bord0\\shad0\\1c&H" + accent + "&}\u25cf  {\\1c&HA9978C&\\fsp3}CHAT  {\\1c&HF6F1EE&\\fsp0}" + _esc(channel).upper()
     body = "{\\an1\\pos(28,1050)\\fs26\\bord2\\shad0\\q2}" + "\\N".join(lines[-COL_LINES:])
-    return "\n".join([*background(accent), head, body])
+    rule = r"{\an7\pos(28,100)\p1\bord0\shad0\1c&H%s&\1a&H60&}m 0 0 l 424 0 424 2 0 2{\p0}" % accent
+    return "\n".join([*background(1440, 0), rule, head, body])
+
+
+BAR_X = 48
+
+
+def ass_bar(name, title, source="Twitch"):
+    """The 'now playing' bar under the picture (a 1440x270 window): the site's dot, the channel, and the stream's title, on the same background."""
+    accent = SITE_BGR.get(source, "FFB062")
+    out = [*background(0, 810)]
+    out.append((r"{\an7\pos(%d,38)\fs22\b1\fsp5\bord0\shad0\1c&H%s&}" % (BAR_X, accent)) + "\u25cf" + r"  {\1c&HA9978C&}NOW PLAYING")
+    out.append(r"{\an7\pos(%d,78)\fs60\b1\bord0\shad0\1c&HF6F1EE&}%s" % (BAR_X, _esc(_plain(name))[:28]))
+    if title:
+        out.append(r"{\an7\pos(%d,160)\fs30\b0\bord0\shad0\1c&HA9978C&}%s" % (BAR_X, _esc(_plain(title))[:70]))
+    return "\n".join(out)
 
 
 class TwitchChat:

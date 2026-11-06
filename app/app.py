@@ -468,7 +468,7 @@ def stop_player():
     chat_stop()
 
 
-_chat = {"obj": None, "pref": False, "col": False, "win": None}  # off by default
+_chat = {"obj": None, "pref": False, "col": False, "win": None, "bar": None}  # off by default
 
 
 def chat_send(text):
@@ -478,20 +478,28 @@ def chat_send(text):
 
 
 def chat_column_send(text):
-    """The chat column: the stream moves over (a quarter of the screen is freed) and the chat shows in a window of its own in that space.
-    text None: close the window and give the screen back to the stream. True when it was done."""
-    win = _chat["win"] = _chat["win"] or chatwin.ChatWindow()
+    """The chat column: the stream moves over (a quarter of the screen is freed on the right, and the picture sits at the top) and two windows fill
+    the space: the chat on the right and a 'now playing' bar under the picture, on one shared background.
+    text None: close them and give the screen back to the stream. True when it was done."""
+    win = _chat["win"] = _chat["win"] or chatwin.chat_panel()
+    bar = _chat["bar"] = _chat["bar"] or chatwin.bar_panel()
     if text is None:
         win.close()
+        bar.close()
         if _chat["col"]:
             mpv(["set_property", "video-margin-ratio-right", 0])
+            mpv(["set_property", "video-align-y", 0])
         _chat["col"] = False
         return True
     if not _chat["col"]:
         r = mpv(["set_property", "video-margin-ratio-right", 0.25])
         if not (r and r.get("error") == "success"):
             return False  # the stream's player is not up yet: the chat tries again in a moment
+        mpv(["set_property", "video-align-y", -1])  # the picture at the top of its space; the bar goes underneath
         _chat["col"] = True
+    url, src = state["url"] or "", state["source"] or "Twitch"
+    if not (bar.running() or bar.open()) or not bar.update(chat.ass_bar(fav_name(url), stream_title(url) or "", src)):
+        return False
     return (win.running() or win.open()) and win.update(text)
 
 
