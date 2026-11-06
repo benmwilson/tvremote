@@ -34,6 +34,8 @@ services:
       - TVREMOTE_SHELL=${HOME_SCREEN:-1}  # 0 = never open the full-screen home screen (the Pi desktop stays usable)
       - TVREMOTE_KICK_CLIENT_ID=${KICK_CLIENT_ID:-}
       - TVREMOTE_KICK_CLIENT_SECRET=${KICK_CLIENT_SECRET:-}
+      - TVREMOTE_TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID:-}
+      - TVREMOTE_TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET:-}
       - TVREMOTE_KICK_REDIRECT=${KICK_REDIRECT:-}
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://127.0.0.1:${PORT:-8765}/api/status"]
