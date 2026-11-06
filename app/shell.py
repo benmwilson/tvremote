@@ -173,6 +173,48 @@ def transition_screen(title, line, source=None):
     return "\n".join(out)
 
 
+LTILE_W, LTILE_H, LGAP, LX0, LY0, LPITCH, LROWS, LCOLS = 300, 200, 24, 80, 190, 290, 3, 4  # tile size, gap, left edge, first row's top, row spacing, how many show
+LAUNCH_COLOURS = ("F5A25B", "7BD97B", "6B8BFF", "C77DFF", "5BD4F5", "FF7BB0", "5BC8A0", "F0C05B")  # avatar discs (BGR), picked by the name
+
+
+def launcher_pieces(rows, row, col):
+    """The launcher as ASS pieces: a title, rows of tiles (a disc with initials, the name, the site and LIVE) and a focus ring on the chosen one.
+    Four tiles across (the QR code has the right side), three rows down; the window scrolls to keep the focus in view."""
+    out = [r"{\an7\pos(%d,64)\fs58\b1\bord0\shad0\1c&H%s&}Home" % (LX0, TEXT),
+           r"{\an1\pos(%d,1040)\fs28\b0\bord0\shad0\1c&H%s&}Move with your phone's pad, press OK to play" % (LX0, DIM)]
+    if not rows:
+        out.append(r"{\an5\pos(900,520)\fs44\b0\bord0\shad0\1c&H%s&}Nothing here yet: favourite a streamer or play something" % DIM)
+        return out
+    row = max(0, min(row, len(rows) - 1))
+    first_row = max(0, min(row - 1, len(rows) - LROWS))
+    for ri in range(first_row, min(len(rows), first_row + LROWS)):
+        y = LY0 + (ri - first_row) * LPITCH
+        tiles = rows[ri]["tiles"]
+        out.append(r"{\an1\pos(%d,%d)\fs34\b1\bord0\shad0\1c&H%s&}%s   {\b0\fs26\1c&H%s&}%d" % (LX0, y + 4, DIM, esc(clean(rows[ri]["title"])), DIM, len(tiles)))
+        first = max(0, col - (LCOLS - 1)) if ri == row else 0
+        for k, t in enumerate(tiles[first:first + LCOLS]):
+            x, ty = LX0 + k * (LTILE_W + LGAP), y + 14
+            focused = ri == row and first + k == col
+            ring = r"\bord7\3c&H%s&" % ACCENT if focused else r"\bord0"
+            out.append(r"{\an7\pos(%d,%d)\p1\shad0%s\1c&H%s&}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x, ty, ring, "4B3A2B" if focused else "31241D", LTILE_W, LTILE_W, LTILE_H, LTILE_H))
+            name = clean(t.get("name") or "")
+            hue = LAUNCH_COLOURS[sum(map(ord, name)) % len(LAUNCH_COLOURS)]
+            initials = "".join(w[:1] for w in re.split(r"[\s,_-]+", name)[:2]).upper() or "?"
+            out.append(r"{\an5\pos(%d,%d)\fs130\bord0\shad0\1c&H%s&}●" % (x + 68, ty + 72, hue))
+            out.append(r"{\an5\pos(%d,%d)\fs38\b1\bord0\shad0\1c&H000000&}%s" % (x + 68, ty + 72, esc(initials)))
+            out.append(r"{\an4\pos(%d,%d)\fs32\b1\bord0\shad0\1c&H%s&}%s" % (x + 134, ty + 50, TEXT, esc(name)[:12]))
+            if t.get("kind") == "group":
+                tag = r"{\an4\pos(%d,%d)\fs24\b1\bord0\shad0\1c&H%s&}GROUP" % (x + 134, ty + 96, ACCENT)
+                out.append(tag)
+                out.append(r"{\an7\pos(%d,%d)\fs26\b0\bord0\shad0\1c&H%s&}%s" % (x + 20, ty + 140, DIM, esc(", ".join(m.get("name") or "" for m in (t.get("members") or [])))[:30]))
+            else:
+                src = (t.get("source") or "").upper()
+                out.append(r"{\an4\pos(%d,%d)\fs24\b1\bord0\shad0\1c&H%s&}%s" % (x + 134, ty + 96, SRC_BGR.get(t.get("source"), DIM), esc(src)))
+                if t.get("live"):
+                    out.append(r"{\an7\pos(%d,%d)\fs28\b1\bord0\shad0\1c&H%s&}● LIVE" % (x + 20, ty + 146, BAD))
+    return out
+
+
 def wall_screen(layout, labels):
     """The background behind several streams: soft colour glows, and each stream's name on the strip under its window.
     labels: [(name, source, ended)] in tile order; an ended stream's slot says so. Returns one ASS event text per piece."""
@@ -225,11 +267,13 @@ class Shell:
     renew = IDLE_SPAN - 30  # seconds after which the Ready screen's file is written again
 
     def __init__(self, hint="", spawn=subprocess.Popen, ipc=mpvipc.send, ready=None, sleep=time.sleep,
-                 clock=datetime.now, favs=lambda: [], write=write_file, qr=lambda: "", qr_caption=lambda: "Scan to open the remote"):
+                 clock=datetime.now, favs=lambda: [], write=write_file, qr=lambda: "", qr_caption=lambda: "Scan to open the remote", launcher=lambda: None):
         self.hint, self._spawn, self._ipc, self._sleep = hint, spawn, ipc, sleep
         self._clock, self._favs, self._write = clock, favs, write
         self._qr_caption = qr_caption
         self._qr = qr  # the address to draw as a QR code on the Ready screen, or "" for none
+        self._launcher = launcher  # () -> (rows, row, col) while the launcher is the home screen, else None
+        self._lau = False  # the file now being written is the launcher's (it draws no logo of its own)
         self._n, self._sid = 0, None  # which file to write next; the subtitle track now showing
         self._ready = ready or (lambda: os.path.exists(SOCK))
         self.proc = self.vo = self.error = None
@@ -318,6 +362,12 @@ class Shell:
     def _events(self, kind):
         """[(start, end, text)] on the window's video clock, starting now."""
         pos = self._pos()
+        self._lau = False
+        if kind == "idle":
+            data = self._launcher()
+            if data is not None:  # the launcher instead of the clock: drawn once, redrawn when a key moves the focus
+                self._lau = True
+                return [(pos, pos + FOREVER, t) for t in launcher_pieces(*data)]
         if kind == "idle":  # one event per wall-clock second, so the colon blinks in step with the real seconds
             now = self._clock()
             frac, base = now.microsecond / 1e6, now.replace(microsecond=0)
@@ -342,7 +392,7 @@ class Shell:
         path = ASS_FILES[self._n % 2]
         self._n += 1
         try:
-            self._write(path, ass_file(events, self.accent, self.kind != "wall", qr_pieces(self._qr(), self._qr_caption()) if self.kind == "idle" else ()))
+            self._write(path, ass_file(events, self.accent, self.kind != "wall" and not self._lau, qr_pieces(self._qr(), self._qr_caption()) if self.kind == "idle" else ()))
         except OSError:
             return
         r = self._ipc(SOCK, ["sub-add", path, "select"])

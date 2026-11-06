@@ -87,3 +87,63 @@ class MoveTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ScreenTests(unittest.TestCase):
+    def test_the_focused_tile_gets_a_ring_and_every_name_is_drawn(self):
+        import shell
+        rows = launcher.build_rows([item("omie", True), item("capped")], [item("old")], [])
+        pieces = shell.launcher_pieces(rows, 0, 0)
+        text = "\n".join(pieces)
+        for name in ("omie", "capped", "old", "Live now", "Favourites", "Recent", "LIVE"):
+            self.assertIn(name, text)
+        self.assertEqual(sum(1 for p in pieces if r"\bord7" in p), 1)  # one ring, on the focused tile
+
+    def test_the_window_scrolls_to_keep_the_focus_in_view(self):
+        import shell
+        rows = launcher.build_rows([item(f"s{i}", True) for i in range(9)], [], [])
+        text = "\n".join(shell.launcher_pieces(rows, 0, 8))
+        self.assertIn("s8", text)
+        self.assertNotIn("s0", text)  # four across: the first ones have scrolled off to the left
+
+    def test_an_empty_launcher_says_so(self):
+        import shell
+        self.assertIn("Nothing here yet", "\n".join(shell.launcher_pieces([], 0, 0)))
+
+    def test_nothing_is_drawn_outside_the_screen(self):
+        import shell
+        rows = launcher.build_rows([item(f"s{i}", True) for i in range(6)], [item(f"r{i}") for i in range(6)], [{"id": "g", "name": "g", "members": []}])
+        seen = []
+        for ri in range(len(rows)):
+            for p in shell.launcher_pieces(rows, ri, 5):
+                k = p.find(chr(92) + "pos(")
+                if k >= 0:
+                    x, y = (int(v) for v in p[k + 5:p.index(")", k)].split(","))
+                    seen.append(1)
+                    self.assertLessEqual(x, 1920)
+                    self.assertLessEqual(y, 1080)
+        self.assertTrue(seen)  # the check really looked at positions
+
+
+class KeyEndpointTests(unittest.TestCase):
+    def test_keys_only_work_while_the_launcher_is_on_the_tv(self):
+        from unittest import mock
+        import app as server
+        with mock.patch.object(server, "launcher_on", return_value=False):
+            r = server.app.test_client().post("/api/launcher/key", json={"key": "down"})
+        self.assertIn(r.status_code, (401, 403, 409))
+
+    def test_a_select_starts_the_focused_stream(self):
+        from unittest import mock
+        import app as server
+        pad = launcher.Launcher(launcher.build_rows([item("omie", True)], [], []))
+        fake_home = mock.Mock(kind="idle")
+        with mock.patch.object(server, "launcher_on", return_value=True), mock.patch.object(server, "LAUNCHER", pad), \
+                mock.patch.object(server, "launcher_state", return_value=None), mock.patch.object(server, "HOME", fake_home), \
+                mock.patch.object(server, "tgt", return_value=None), mock.patch.object(server, "play_async") as play, \
+                mock.patch.object(server, "guest_link_refused", return_value=None):
+            with server.app.test_request_context("/api/launcher/key", method="POST", json={"key": "select"}):
+                server.g.user = "ben"
+                r = server.api_launcher_key()
+        self.assertTrue(r.get_json()["ok"])
+        play.assert_called_once_with(None, "https://kick.com/omie", None)

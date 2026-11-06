@@ -33,6 +33,7 @@ YTDL_HEIGHTS = ("1080", "720", "480")
 import hlsproxy
 from routing import SOURCES, normalise, route  # noqa: F401  (kept importable from here)
 import groups
+import launcher
 import inproc
 import live
 import access
@@ -168,7 +169,7 @@ SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/se
 GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
              "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
              "/api/shell", "/api/stats", "/api/browse", "/api/twitch/avatars", "/api/emotes", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch", "/api/detect"}  # /api/watch checks the guest setting itself
-GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/api/roku/launch", "/logout"}
+GUEST_POST = {"/api/launcher/key", "/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/api/roku/launch", "/logout"}
 
 
 def guest_blocked():
@@ -2347,7 +2348,7 @@ SHELL_SHOT = "/tmp/tvremote-shell.png"
 def shell_state():
     running = bool(HOME and HOME.running())
     return {"enabled": bool(settings.get("shell")), "running": running, "qr": settings.get("qr", True) is not False,
-            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "install_url": settings.get("install_url", ""), "qr_guest": bool(qr_guest["url"]), "qr_guest_id": access.invite_id_for_url(qr_guest["url"]),
+            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "install_url": settings.get("install_url", ""), "launcher": launcher_on(), "qr_guest": bool(qr_guest["url"]), "qr_guest_id": access.invite_id_for_url(qr_guest["url"]),
             "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None,
             "props": HOME.props() if running and hasattr(HOME, "props") else None}  # what the window is doing, for debugging
 
@@ -2474,11 +2475,76 @@ def api_shell_screenshot():
     return send_file(SHELL_SHOT, mimetype="image/png", max_age=0)
 
 
+LAUNCHER = launcher.Launcher()
+_launcher_at = {"t": 0.0}
+
+
+def launcher_on():
+    return bool(settings.get("launcher"))
+
+
+def launcher_rows():
+    """The launcher's rows from the owner's favourites and groups and the shared recents, with who is live right now (the live checks are cached)."""
+    owner = accounts.founder_name() or accounts.OWNER
+    snap = livewatch.snapshot()
+    is_live = lambda url: (snap.get(url) or {}).get("live") is True
+    favs = []
+    for f in load_favs(owner):
+        links = fav_links(f)
+        top = next((l for l in links if is_live(l["url"])), links[0])
+        favs.append({"name": f.get("name") or fav_name(top["url"]), "url": top["url"], "source": top.get("source"), "live": any(is_live(l["url"]) for l in links)})
+    recents = [{"name": r.get("name") or fav_name(r.get("url") or ""), "url": r["url"], "source": r.get("source"), "live": is_live(r["url"])} for r in load_recents() if r.get("url")]
+    try:
+        grp = [{"id": x["id"], "name": x["name"], "members": x["members"]} for x in groups.load(groups_file(owner))["groups"]]
+    except Exception:
+        grp = []
+    return launcher.build_rows(favs, recents, grp)
+
+
+def launcher_state():
+    """(rows, row, col) for the home screen while the launcher is on, else None. The rows are rebuilt at most every 15 s; the focus stays on its tile."""
+    if not launcher_on():
+        return None
+    if time.time() - _launcher_at["t"] > 15:
+        _launcher_at["t"] = time.time()
+        try:
+            LAUNCHER.set_rows(launcher_rows())
+        except Exception as e:
+            app.logger.warning("Launcher contents: %s", e)
+    return (LAUNCHER.rows, LAUNCHER.row, LAUNCHER.col)
+
+
+@app.post("/api/launcher/key")
+def api_launcher_key():
+    """A key for the launcher from the phone's pad (anyone allowed to control the TVs). Only while the launcher is what the TV shows."""
+    if not launcher_on() or tgt() or not HOME or HOME.kind != "idle":
+        return jsonify(ok=False, error="The launcher isn't on the TV right now."), 409
+    key = (request.get_json(silent=True) or {}).get("key")
+    launcher_state()
+    ev = LAUNCHER.key(key)
+    if ev and ev.get("redraw"):
+        HOME.show("idle")
+    elif ev and ev.get("play"):
+        refused = guest_link_refused(ev["play"])
+        if refused:
+            return jsonify(ok=False, error=refused), 403
+        play_async(None, ev["play"], None)
+    elif ev and ev.get("group"):
+        if g.user == accounts.GUEST:
+            return jsonify(ok=False, error="Guests can't start groups."), 403
+        grp = next((x for x in groups.load(groups_file(accounts.founder_name() or accounts.OWNER))["groups"] if x["id"] == ev["group"]), None)
+        urls = [m["url"] for m in grp["members"]] if grp else []
+        if urls:
+            _pending["t"] = time.time()
+            threading.Thread(target=lambda: start_group(urls), daemon=True).start()
+    return jsonify(ok=True, event=ev)
+
+
 @app.get("/api/shell")
 def api_shell():
     s = shell_state()
     if accounts.role(g.user) != "admin":  # the TV screen's settings (shortcut links, which guest code is up) are the admins' business
-        return jsonify({k: s[k] for k in ("enabled", "running", "qr", "error") if k in s})
+        return jsonify({k: s[k] for k in ("enabled", "running", "qr", "error", "launcher") if k in s})
     return jsonify(s)
 
 
@@ -2487,6 +2553,13 @@ def api_shell_set():
     """Turn the TV's home screen on or off (off shows the Pi desktop again). The app and this remote keep running."""
     admin_only()  # the switch lives in the admin part of Settings; it also stops what is playing
     body = request.get_json(silent=True) or {}
+    if "launcher" in body:  # the launcher as the TV's home screen between streams
+        settings["launcher"] = bool(body["launcher"])
+        save_settings()
+        if HOME and HOME.kind == "idle":
+            HOME.show("idle")
+        if len(body) == 1:
+            return jsonify(shell_state())
     if any(k in body for k in ("qr", "qr_mode", "shortcut_url", "install_url", "qr_guest")):  # the QR code on the Ready screen: redraw it now if that screen is showing
         if "qr" in body:
             settings["qr"] = bool(body["qr"])
@@ -3916,7 +3989,7 @@ if __name__ == "__main__":
     settings.update(load_settings())
     qr_guest["url"] = settings.get("qr_guest_url", "")
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
-                       qr=lambda: qr_info()[0], qr_caption=lambda: qr_info()[1],
+                       qr=lambda: qr_info()[0], qr_caption=lambda: qr_info()[1], launcher=launcher_state,
                        favs=lambda: [(f.get("name") or "")[:28] for f in load_favs()][:5])
     if settings["shell"]:
         threading.Thread(target=HOME.start, daemon=True).start()

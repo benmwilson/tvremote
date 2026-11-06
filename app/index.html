@@ -344,6 +344,10 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appeara
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0}.hrow+.hrow{border-top:1px solid var(--line)}.hrow:first-child{padding-top:2px}.hrow:last-child{padding-bottom:2px}
 .hrow .hv{text-align:right;font-variant-numeric:tabular-nums}.hrow .hv .sub{display:block;margin:2px 0 0}.hrow .pill.ok{background:rgba(123,226,154,.15);color:#7be29a}.hrow .pill.warm{background:rgba(255,176,98,.18);color:#ffb062}.hrow .pill.hot{background:rgba(255,107,107,.18);color:#ff6b6b}
 .scat+.shead{margin-top:0}
+.launchhead{display:flex;align-items:baseline;gap:10px;margin:0 2px 10px}.launchhead b{font-size:17px}
+.lpad{display:grid;grid-template-columns:repeat(3,1fr);grid-template-areas:". up ." "left ok right" ". down .";gap:8px}
+.lpad [data-lk=up]{grid-area:up}.lpad [data-lk=left]{grid-area:left}.lpad [data-lk=select]{grid-area:ok}.lpad [data-lk=right]{grid-area:right}.lpad [data-lk=down]{grid-area:down}
+.lpad button{min-height:56px}
 html[data-can-desktop="0"] #layoutbtn{display:none}
 button[data-k=VolumeUp],button[data-k=VolumeDown]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
 body.is-guest #fav{display:none!important}body.is-guest #recents .x{display:none!important}
@@ -828,7 +832,9 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <p class="sub" id="pistate">Checking&hellip;</p>
       <button id="desktop" class="pibtn"><svg class="ic" aria-hidden="true"><use id="piicon" href="#i-eye-off"/></svg><span id="pilabel">Hide the remote from the TV</span></button>
       <p class="sub" id="pihelp"></p>
-      <label class="s-check" style="justify-content:space-between;margin-top:6px">Warn on the TV when the Pi runs hot<input id="heattv" type="checkbox" class="tg" role="switch"></label>
+      <label class="s-check" style="justify-content:space-between;margin-top:6px">Launcher on the TV between streams<input id="launchertoggle" type="checkbox" class="tg" role="switch"></label>
+    <p class="sub" style="margin:2px 0 6px">Who is live, your favourites, groups and recents as tiles on the TV. Move around it with the pad on the remote (an IR receiver can be added later).</p>
+    <label class="s-check" style="justify-content:space-between;margin-top:6px">Warn on the TV when the Pi runs hot<input id="heattv" type="checkbox" class="tg" role="switch"></label>
       <p class="sub" style="margin:2px 0 0">A short line of text on the picture (from 78 °C, at most once a minute). It costs nothing to speak of.</p>
     </div>
     <h3 class="shead hide" id="qrhead">QR code on the TV</h3>
@@ -993,6 +999,16 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <p id="chatcount" class="sub hide"></p>
   </div>
   <button id="chatlink" type="button" class="hide" style="margin:8px 8px 0 0;width:calc(100% - 8px)">Link Twitch to chat as yourself</button>
+</div>
+<div class="card hide" id="launchpad" role="group" aria-label="Launcher pad">
+  <div class="launchhead"><b>Launcher</b><span class="sub">Move around the TV's home screen</span></div>
+  <div class="lpad">
+    <button data-lk="up" aria-label="Up"><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button>
+    <button data-lk="left" aria-label="Left"><svg class="ic" aria-hidden="true"><use href="#i-left"/></svg></button>
+    <button data-lk="select" class="go" aria-label="Play the highlighted one">OK</button>
+    <button data-lk="right" aria-label="Right"><svg class="ic" aria-hidden="true"><use href="#i-right"/></svg></button>
+    <button data-lk="down" aria-label="Down"><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></button>
+  </div>
 </div>
 <div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multistream</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev r"></span></span></button></div>
 <div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multistream</span></span><span class="chatbtn"><span class="chev r"></span></span></button></div>
@@ -2172,6 +2188,7 @@ function renderShell() {
   $('qrmode').value = mode;
   if (document.activeElement !== $('shortcuturl')) $('shortcuturl').value = s.shortcut_url || '';
   $('qrshortcut').classList.toggle('hide', mode !== 'shortcut'); $('scname-wrap').classList.toggle('hide', mode !== 'shortcut'); $('qrinstall').classList.toggle('hide', mode !== 'install'); if (document.activeElement !== $('installurl')) $('installurl').value = s.install_url || '';
+  $('launchertoggle').checked = !!s.launcher;
   $('qropts').classList.toggle('hide', s.qr === false || !!s.qr_guest);  // these only matter while the remote's own code is the one on the TV
   $('qrhelp').textContent = mode === 'install'
     ? (s.install_url ? 'Scanning on an iPhone offers to add the shortcut.' : 'Paste the shortcut iCloud link above. Until then the QR code opens this remote.')
@@ -2196,6 +2213,14 @@ async function loadShell() {
 }
 const qrSet = async body => { const r = await api('/api/shell', 'POST', body); if (r) { shellInfo = r; renderShell(); } return r; };
 $('qrmode').onchange = () => qrSet({qr_mode: $('qrmode').value});
+$('launchertoggle').onchange = () => qrSet({launcher: $('launchertoggle').checked});
+// The launcher's pad: shown on the Pi's remote while the launcher is what the TV shows.
+document.addEventListener('click', e => { const b = e.target.closest('button[data-lk]'); if (b) api('/api/launcher/key', 'POST', {key: b.dataset.lk}); });
+function paintPad() {
+  const cur = targets.find(t => t.id === target) || {};
+  $('launchpad').classList.toggle('hide', !(view() === 'tv' && cur.kind === 'pi' && shellInfo && shellInfo.launcher && shellInfo.running && !st.running && !st.starting && !st.wall));
+}
+setInterval(paintPad, 1000);
 $('scuse').onclick = () => { const n = $('scname').value.trim(); if (n) { $('shortcuturl').value = 'shortcuts://run-shortcut?name=' + encodeURIComponent(n); qrSet({shortcut_url: $('shortcuturl').value}); } };
 $('installurl').onchange = () => qrSet({install_url: $('installurl').value});
 $('installqr').onclick = () => $('installurl').value.trim() ? showQr($('installurl').value.trim(), 'Add the shortcut') : null;
