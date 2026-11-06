@@ -42,6 +42,20 @@ class Parsing(unittest.TestCase):
             self.assertEqual(roku.media("192.168.1.141"), {"state": "close", "duration": None})
 
 
+class PiPort(unittest.TestCase):
+    def test_the_pis_hdmi_port_is_read_from_cec_output(self):
+        out = "Driver Info:\n\tPhysical Address       : 2.0.0.0\n"
+        self.assertEqual(discover.parse_phys(out), "2.0.0.0")
+        self.assertEqual(discover.phys_input("2.0.0.0"), "HDMI2")
+        self.assertIsNone(discover.parse_phys("Physical Address : f.f.f.f"))  # no TV plugged in
+        self.assertIsNone(discover.parse_phys(""))
+        self.assertEqual(discover.phys_input("0.0.0.0"), "")  # not a port on the TV
+
+    def test_a_moved_pi_guesses_its_new_port(self):
+        g = discover.guess([LIVING], [], True, "55C803", "3.0.0.0")
+        self.assertEqual(g["living"]["input"], "HDMI3")
+
+
 class Guessing(unittest.TestCase):
     def test_the_pi_tv_is_found_by_its_hdmi_name_and_the_leftover_roku_goes_with_the_chromecast(self):
         g = discover.guess([BEDROOM, LIVING], [CAST], True, "55C803", "1.0.0.0")

@@ -67,6 +67,18 @@ def display_connected():
     return False
 
 
+def parse_phys(text):
+    """The Pi's HDMI address (like 2.0.0.0) from `cec-ctl` output, or None. The first number is the TV's HDMI port the Pi is plugged into."""
+    m = re.search(r"Physical Address\s*:\s*(\d+(?:\.\d+){3})", text or "")
+    return m.group(1) if m and m.group(1) != "f.f.f.f" else None
+
+
+def phys_input(phys):
+    """'HDMI2' for '2.0.0.0'; '' when the address doesn't name a port (1 to 4)."""
+    port = (phys or "").split(".")[0]
+    return f"HDMI{port}" if port in ("1", "2", "3", "4") else ""
+
+
 def _norm(text):
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())
 
@@ -86,10 +98,10 @@ def guess(rokus, casts, display, cec_name, cec_phys):
             living["why"].append(f"The TV on the Pi's HDMI calls itself “{cec_name}”, which matches none of the Rokus found. Pick its Roku, if it has one.")
         if not match and not cec_name:
             living["why"].append("The TV on the Pi's HDMI didn't tell us its name, so we can't tell which Roku it is. Turn that TV on and tap Look again, or pick its Roku yourself.")
-        port = (cec_phys or "").split(".")[0]
-        if port.isdigit() and 1 <= int(port) <= 4:
-            living["input"] = f"HDMI{port}"
-            living["why"].append(f"The Pi is on HDMI {port} of the TV (from its HDMI address).")
+        hdmi = phys_input(cec_phys)
+        if hdmi:
+            living["input"] = hdmi
+            living["why"].append(f"The Pi is on HDMI {hdmi[-1]} of the TV (from its HDMI address).")
     else:
         living["why"].append("No screen is connected to the Pi, so this slot is off.")
 

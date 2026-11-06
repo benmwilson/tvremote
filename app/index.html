@@ -299,10 +299,14 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .s-form>.sub,.s-form>p{margin:0}.s-form>.sub:last-child{margin:4px 0 0}
 #view-settings .card:has(>.plat){padding:8px}
 #view-settings .s-note{margin:10px 6px 0}
+.help details{border-top:1px solid var(--line,rgba(255,255,255,.08))}.help details:first-child{border-top:0}
+.help summary{cursor:pointer;padding:14px 4px;min-height:44px;font-weight:600;list-style:none;display:flex;align-items:center;justify-content:space-between}
+.help summary::-webkit-details-marker{display:none}.help summary::after{content:"\25BE";color:var(--dim)}.help details[open] summary::after{transform:rotate(180deg)}
+.help p{margin:0 4px 12px;color:var(--dim);line-height:1.5;font-size:15px}.help p b{color:inherit}
 .s-actions{padding-bottom:6px}
 
 .pw{position:relative;display:block;min-width:0;flex:1}
-.pw>input{padding-right:70px!important}
+.pw>input{padding-right:56px!important}
 .pw-t{position:absolute!important;right:4px;top:50%;transform:translateY(-50%);width:auto!important;min-height:40px!important;padding:0 12px!important;background:none!important;color:var(--dim);font-size:14px;font-weight:600;border-radius:10px}
 .pw-t:focus-visible{outline:2px solid var(--tv,#62b0ff)}
 .apps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:6px}
@@ -499,6 +503,25 @@ body:has(dialog.sheet[open]){overflow:hidden}
     </div>
   </div>
 
+  <h3 class="shead">How to use this</h3>
+  <div class="card help" id="help">
+    <details open><summary>Play something</summary>
+      <p>Copy a link, or tap Share in Kick, Twitch, YouTube or Safari, then run the <b>Play on Pi</b> Shortcut. You pick a TV, and it starts playing there.</p>
+      <p>You can also paste a link or type a channel name on the remote. A bare name looks on Kick; use the buttons to switch to Twitch or a YouTube search.</p></details>
+    <details><summary>Pick a TV</summary>
+      <p>All TVs shows a card for each TV and what it is playing. Tap one to open its remote. Controls only ever act on the TV you opened.</p></details>
+    <details><summary>The remote</summary>
+      <p>Pause, volume, mute and skip back or forward. Skipping is hidden on live streams. Quality changes the picture size; Refresh reloads a stream that has stalled. The power button turns the TV on or off. Stop ends playback.</p></details>
+    <details><summary>Favourites and recents</summary>
+      <p>Tap the star on a stream to save it as a favourite. Recents lists what was played lately. Guests can play from both but can't change favourites.</p></details>
+    <details><summary>Several streams at once</summary>
+      <p>The Pi's own screen can show up to four streams together. Open Multi-view on that TV's remote, then add streams. <b>Enlarge</b> makes one big, and <b>Sync</b> lines up the pictures if one is ahead.</p></details>
+    <details><summary>Add it to your Home Screen</summary>
+      <p>In Safari, tap Share, then Add to Home Screen. It then opens like an app.</p></details>
+    <details><summary>Something isn't working</summary>
+      <p><b>Isn't live right now:</b> the channel is offline. <b>Nothing on the TV:</b> check the TV is on and set to the right input, or tap the power button. <b>Stuck or blurry:</b> try Refresh, or pick a lower quality. Still stuck? Tell whoever set this up.</p></details>
+  </div>
+
   <div id="adminarea" class="hide">
     <h3 class="shead">People</h3>
     <div class="card" id="people"></div>
@@ -526,7 +549,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <button class="go" id="invmake">Create a guest link</button>
       <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. It is shown only now, so copy it before you leave this page.</p>
         <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button">Copy</button></div></div>
-      <p class="sub">A guest can play things and control the TVs. They can't change favourites, link accounts or see settings. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
+      <p class="sub">A guest can play things and control the TVs. They can't change favourites, link accounts or manage people and TVs. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
     </div>
     <div class="card hide" id="guests"></div>
 
@@ -540,9 +563,11 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <p class="sub" id="pistate">Checking&hellip;</p>
       <button id="desktop" class="pibtn"><svg class="ic" aria-hidden="true"><use id="piicon" href="#i-eye-off"/></svg><span id="pilabel">Hide the remote from the TV</span></button>
       <p class="sub" id="pihelp"></p>
+      <label class="s-check" style="justify-content:space-between">Show a QR code for the remote on the TV<input id="qrtoggle" type="checkbox" class="tg" role="switch"></label>
     </div>
-    <h3 class="shead">Setup</h3>
-    <button id="rerun" class="s-wide" style="margin:0">Run the setup wizard again</button>
+    <h3 class="shead">TVs</h3>
+    <button id="rerun" class="s-wide" style="margin:0">Change or move a TV</button>
+    <p class="sub s-note">Moved the Pi to another TV, or added a Chromecast or Roku? Plug it in, turn that TV on, then tap this. It looks again, shows what it found (including which HDMI port the Pi is on) and lets you rename, re-pair and test each TV.</p>
   </div>
 </section>
 
@@ -1220,6 +1245,7 @@ function renderShell() {
   $('pistate').textContent = !s.enabled ? 'Hidden: the Pi\u2019s own desktop is showing on the TV.' : s.running ? 'Showing on the TV between streams.'
     : s.error ? 'Couldn\u2019t start: ' + s.error : 'Starting\u2026';
   $('desktop').classList.toggle('show', !s.enabled);
+  $('qrtoggle').checked = s.qr !== false;
   $('piicon').setAttribute('href', s.enabled ? '#i-eye-off' : '#i-eye');
   $('pilabel').textContent = s.enabled ? 'Hide the remote from the TV' : 'Show the remote on the TV';
   $('pihelp').textContent = s.enabled ? 'Stops what is playing and gives you the Pi\u2019s desktop. Streams still open on top when you play something.'
@@ -1233,6 +1259,7 @@ async function loadShell() {
   if (!pi) return;
   try { shellInfo = await (await fetch('/api/shell')).json(); renderShell(); } catch (e) {}
 }
+$('qrtoggle').onchange = async () => { const r = await api('/api/shell', 'POST', {qr: $('qrtoggle').checked}); if (r) { shellInfo = r; renderShell(); } };
 let hideSure = null;
 $('desktop').onclick = () => {
   const hide = !shellInfo || shellInfo.enabled;
@@ -1449,11 +1476,12 @@ function addReveal(inp) {
   inp.dataset.rv = '1';
   const w = document.createElement('span'), b = document.createElement('button');
   w.className = 'pw'; inp.replaceWith(w); w.append(inp);
-  b.type = 'button'; b.className = 'pw-t'; b.textContent = 'Show'; b.setAttribute('aria-label', 'Show password'); b.setAttribute('aria-pressed', 'false');
+  const icon = on => { b.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-eye' + (on ? '-off' : '') + '"/></svg>'; };  // eye = tap to show, slashed eye = tap to hide
+  b.type = 'button'; b.className = 'pw-t'; icon(false); b.setAttribute('aria-label', 'Show password'); b.setAttribute('aria-pressed', 'false');
   b.onclick = () => {
     const show = inp.type === 'password';
     inp.type = show ? 'text' : 'password';
-    b.textContent = show ? 'Hide' : 'Show'; b.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); b.setAttribute('aria-pressed', String(show));
+    icon(show); b.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); b.setAttribute('aria-pressed', String(show));
   };
   w.append(b);
 }
@@ -1557,6 +1585,11 @@ function tvSlot(t) {
   const body = mk('div', {class: 'wz-body'});
   const name = mk('input', {value: f.name, maxlength: '24'}); name.oninput = () => { f.name = name.value; };
   body.append(field('Name', name));
+  if (t === 'living' && tvDisc.pi_input && f.input !== tvDisc.pi_input) {  // the Pi was moved: what the TV says now beats what was saved
+    const use = mk('button', {type: 'button'}, 'Use HDMI ' + tvDisc.pi_input.slice(-1));
+    use.onclick = () => { f.input = tvDisc.pi_input; renderTvSlots(); };
+    body.append(mk('div', {class: 'wz-why'}, mk('b', {}, 'The Pi is now on HDMI ' + tvDisc.pi_input.slice(-1) + ' of its TV'), mk('p', {}, 'That differs from the saved input.'), use));
+  }
   if (t === 'bedroom') {
     const devs = tvDisc.chromecasts.map(d => [d.name, d.name + ' \u00b7 ' + d.host]);
     if (f.device && !devs.some(d => d[0] === f.device)) devs.push([f.device, f.device + ' (saved, not found now)']);

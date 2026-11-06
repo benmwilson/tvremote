@@ -52,6 +52,37 @@ def layout(text):
     return round(top - GLYPH_OFF), round(top + GLYPH_H + GAP)
 
 
+QR_MODULE, QR_MARGIN = 8, 56  # px per dot; gap from the screen's right and bottom edges
+
+
+def qr_pieces(url):
+    """The remote's QR code as ASS drawings for the Ready screen's lower right: a light card, one drawing of rounded dark dots, a caption.
+    [] when there is no address or the QR library isn't installed (the written address is still on screen)."""
+    try:
+        import segno
+        rows = [list(r) for r in segno.make(url, error="m", boost_error=False).matrix] if url else []
+    except Exception:
+        return []
+    if not rows:
+        return []
+    n, m = len(rows), QR_MODULE
+    q = 4 * m  # the quiet zone a scanner needs round the code
+    side = n * m + 2 * q
+    x0, y0 = W - QR_MARGIN - side, H - QR_MARGIN - side - 44
+    card = r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x0, y0, TEXT, side, side, side, side)
+    inset, r = 0.5, 2.6  # each dot is a rounded square a little smaller than its cell
+    c, d = m - 2 * inset, []
+    for j, row in enumerate(rows):
+        for i, on in enumerate(row):
+            if on:
+                a, b = i * m + inset, j * m + inset
+                d.append("m %.1f %.1f l %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f" % (
+                    a + r, b, a + c - r, b, a + c, b + r, a + c, b + c - r, a + c - r, b + c, a + r, b + c, a, b + c - r, a, b + r))
+    dots = r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&}%s{\p0}" % (x0 + q, y0 + q, BG[4:] + BG[2:4] + BG[:2], " ".join(d))  # BG is RGB, ASS wants BGR
+    cap = r"{\an8\pos(%d,%d)\fs28\b1\bord0\shad0\c&H%s&}Scan for the remote" % (x0 + side // 2, y0 + side + 8, DIM)
+    return [card, dots, cap]
+
+
 ASS_FILES = ("/tmp/tvremote-shell-a.ass", "/tmp/tvremote-shell-b.ass")  # alternate, so a new one loads before the old goes
 IDLE_SPAN = 300  # seconds of clock written ahead; the file is renewed a little before it runs out
 FOREVER = 3 * 86400  # a still screen stays up for days of video time
@@ -142,7 +173,7 @@ def stamp(sec):
     return f"{h}:{m:02d}:{sc:02d}.{cs:02d}"
 
 
-def ass_file(events, accent=None, logo=True):
+def ass_file(events, accent=None, logo=True, extra=()):
     """A subtitle file from [(start_seconds, end_seconds, text)], timed to the window's video clock."""
     head = (f"[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: {H}\nWrapStyle: 2\n\n"
             "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
@@ -153,7 +184,7 @@ def ass_file(events, accent=None, logo=True):
     body = "".join(f"Dialogue: 0,{stamp(a)},{stamp(b)},Default,,0,0,0,,{t.replace('@@Y@@', str(ty))}\n" for a, b, t in events)
     if events and logo:  # the logo is its own events spanning the file, so it never flickers when the text changes
         span = f"{stamp(min(e[0] for e in events))},{stamp(max(e[1] for e in events))}"
-        body += "".join(f"Dialogue: 0,{span},Default,,0,0,0,,{piece}\n" for piece in logo_pieces(ly, accent))
+        body += "".join(f"Dialogue: 0,{span},Default,,0,0,0,,{piece}\n" for piece in [*logo_pieces(ly, accent), *extra])
     return head + body
 
 
@@ -167,9 +198,10 @@ class Shell:
     renew = IDLE_SPAN - 30  # seconds after which the Ready screen's file is written again
 
     def __init__(self, hint="", spawn=subprocess.Popen, ipc=mpvipc.send, ready=None, sleep=time.sleep,
-                 clock=datetime.now, favs=lambda: [], write=write_file):
+                 clock=datetime.now, favs=lambda: [], write=write_file, qr=lambda: ""):
         self.hint, self._spawn, self._ipc, self._sleep = hint, spawn, ipc, sleep
         self._clock, self._favs, self._write = clock, favs, write
+        self._qr = qr  # the address to draw as a QR code on the Ready screen, or "" for none
         self._n, self._sid = 0, None  # which file to write next; the subtitle track now showing
         self._ready = ready or (lambda: os.path.exists(SOCK))
         self.proc = self.vo = self.error = None
@@ -282,7 +314,7 @@ class Shell:
         path = ASS_FILES[self._n % 2]
         self._n += 1
         try:
-            self._write(path, ass_file(events, self.accent, self.kind != "wall"))
+            self._write(path, ass_file(events, self.accent, self.kind != "wall", qr_pieces(self._qr()) if self.kind == "idle" else ()))
         except OSError:
             return
         r = self._ipc(SOCK, ["sub-add", path, "select"])

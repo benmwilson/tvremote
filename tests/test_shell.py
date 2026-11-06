@@ -44,6 +44,35 @@ def make_shell(procs, sent=None, ready=True):
     return s, popen, sent
 
 
+class QrCode(unittest.TestCase):
+    URL = "http://192.168.1.149:8765"
+
+    def test_the_code_is_a_card_dots_and_a_caption_in_the_lower_right(self):
+        card, dots, cap = shell.qr_pieces(self.URL)
+        self.assertIn(r"\p1", card)
+        self.assertGreater(dots.count("m "), 100)  # a drawing with one shape per dark dot
+        self.assertIn("Scan for the remote", cap)
+        x = int(re.search(r"\\pos\((\d+),", card).group(1))
+        self.assertGreater(x, shell.W // 2)  # right half of the screen
+
+    def test_no_address_means_no_code(self):
+        self.assertEqual(shell.qr_pieces(""), [])
+
+    def test_only_the_ready_screen_has_it_and_the_switch_turns_it_off(self):
+        def file_for(kind, qr):
+            s, _, _ = make_shell([FakeProc()])
+            written = {}
+            s._write = lambda path, data: written.update(data=data)
+            s._qr = lambda: qr
+            s.start()
+            written.clear()
+            s.show(kind)
+            return written["data"]
+        self.assertIn("Scan for the remote", file_for("idle", self.URL))
+        self.assertNotIn("Scan for the remote", file_for("idle", ""))
+        self.assertNotIn("Scan for the remote", file_for("loading", self.URL))
+
+
 class Screens(unittest.TestCase):
     def test_idle_screen_shows_the_phone_hint(self):
         t = shell.screen("idle", hint="Open http://pi.example:8765 on your phone")

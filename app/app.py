@@ -182,11 +182,11 @@ LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta
 <style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0e14;color:#f6f1ee;font:17px -apple-system,system-ui,sans-serif}
 form{width:min(340px,86vw);display:grid;gap:14px}h1{margin:0 0 6px;font-size:28px}
 input,button{font:inherit;min-height:52px;border-radius:14px;border:0;padding:0 16px;box-sizing:border-box;width:100%}
-input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em;margin:0}.pw{position:relative;display:block}.pw>input{padding-right:72px}.pw-t{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:auto;min-height:40px;padding:0 12px;background:none;color:#8c97a8;font-size:14px}</style></head>
+input{background:#1a2030;color:#f6f1ee}button{background:#62b0ff;color:#0b0e14;font-weight:700}.e{color:#ff6b6b;min-height:1.2em;margin:0}.pw{position:relative;display:block}.pw>input{padding-right:56px}.pw-t{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:auto;min-height:40px;padding:0 12px;background:none;color:#8c97a8;font-size:14px}</style></head>
 <body><form method="post" action="/login"><img src="/logo.svg" width="84" height="84" alt="" style="justify-self:center;border-radius:20px"><h1 style="text-align:center">TV Remote</h1>
-<input name="username" placeholder="Username" autocomplete="username" autocapitalize="none" aria-label="Username">
-<input type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password" autofocus required>
-<input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button><a href="/request" style="text-align:center;color:#8c97a8;padding:10px">Request access</a></form><script>document.querySelectorAll('input[type=password]').forEach(function(i){var w=document.createElement('span'),b=document.createElement('button');w.className='pw';i.replaceWith(w);w.append(i);b.type='button';b.className='pw-t';b.textContent='Show';b.setAttribute('aria-label','Show password');b.onclick=function(){var s=i.type==='password';i.type=s?'text':'password';b.textContent=s?'Hide':'Show';b.setAttribute('aria-label',s?'Hide password':'Show password')};w.append(b)})</script></body></html>"""
+<input name="username" placeholder="Username" autocomplete="username" autocapitalize="none" aria-label="Username" autofocus required>
+<input type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password" required>
+<input type="hidden" name="next" value="__NEXT__"><p class="e" role="alert">__ERR__</p><button>Log in</button><a href="/request" style="text-align:center;color:#8c97a8;padding:10px">Request access</a></form><script>document.querySelectorAll('input[type=password]').forEach(function(i){var w=document.createElement('span'),b=document.createElement('button');w.className='pw';i.replaceWith(w);w.append(i);var E='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">',O=E+'<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>',C=E+'<path d="M4 4l16 16M9.9 5.8A8.6 8.6 0 0112 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 01-3 3.7M6.3 7.6C3.9 9.3 2.5 12 2.5 12s3.5 6.5 9.5 6.5c1.5 0 2.8-.4 4-1M9.9 9.9a3 3 0 004.2 4.2"/></svg>';b.type='button';b.className='pw-t';b.innerHTML=O;b.setAttribute('aria-label','Show password');b.onclick=function(){var s=i.type==='password';i.type=s?'text':'password';b.innerHTML=s?C:O;b.setAttribute('aria-label',s?'Hide password':'Show password')};w.append(b)})</script></body></html>"""
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -340,7 +340,7 @@ def cec(*args):
 
 
 SETTINGS_FILE = os.path.join(DATA, "settings.json")
-settings = {"stats": False, "shell": os.environ.get("TVREMOTE_SHELL", "1") != "0"}  # the TV's home screen; TVREMOTE_SHELL=0 starts with it off
+settings = {"stats": False, "qr": True, "shell": os.environ.get("TVREMOTE_SHELL", "1") != "0"}  # the TV's home screen; TVREMOTE_SHELL=0 starts with it off
 HOME = None  # the home screen (shell.Shell), created at startup
 
 
@@ -396,11 +396,26 @@ def on_input(tv_id):
     return info.get("power") == "PowerOn" and info.get("app_id") == "tvinput." + hdmi.lower()
 
 
+_phys = {"t": 0, "v": None}
+
+
+def cec_phys():
+    """The Pi's HDMI address as the TV sees it now (cached 30 s), so moving the Pi to another TV or port needs no config change.
+    Falls back to TVREMOTE_CEC_PHYS when the adapter doesn't say."""
+    if time.time() - _phys["t"] > 30:
+        try:
+            out = subprocess.run(["cec-ctl", "-d", "/dev/cec0"], capture_output=True, text=True, timeout=5).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            out = ""
+        _phys.update(t=time.time(), v=discover.parse_phys(out))
+    return _phys["v"] or CEC_PHYS
+
+
 def switch_tv_to_pi():
     if on_input("living"):
         return
     cec("--to", "0", "--image-view-on")
-    cec("--active-source", f"phys-addr={CEC_PHYS}")
+    cec("--active-source", f"phys-addr={cec_phys()}")
 
 
 def stop_player():
@@ -1730,7 +1745,7 @@ SHELL_SHOT = "/tmp/tvremote-shell.png"
 
 def shell_state():
     running = bool(HOME and HOME.running())
-    return {"enabled": bool(settings.get("shell")), "running": running,
+    return {"enabled": bool(settings.get("shell")), "running": running, "qr": settings.get("qr", True) is not False,
             "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None,
             "props": HOME.props() if running and hasattr(HOME, "props") else None}  # what the window is doing, for debugging
 
@@ -1809,7 +1824,15 @@ def api_shell():
 @app.post("/api/shell")
 def api_shell_set():
     """Turn the TV's home screen on or off (off shows the Pi desktop again). The app and this remote keep running."""
-    settings["shell"] = bool((request.get_json(silent=True) or {}).get("enabled"))
+    body = request.get_json(silent=True) or {}
+    if "qr" in body:  # the QR code on the Ready screen: redraw it now if that screen is showing
+        settings["qr"] = bool(body["qr"])
+        save_settings()
+        if HOME and HOME.kind == "idle":
+            HOME.show("idle")
+        if "enabled" not in body:
+            return jsonify(shell_state())
+    settings["shell"] = bool(body.get("enabled"))
     save_settings()
     if HOME:
         if settings["shell"]:
@@ -1883,8 +1906,11 @@ def api_discover():
              for d in (list(CAST.devices.values()) if CAST else []) if d.cast_type == "cast"]
     display = discover.display_connected()
     cec = tv_cec() if display else None
+    _phys["t"] = 0  # the Pi may have just been moved: read the address fresh
+    phys = cec_phys()
     return jsonify(rokus=rokus, chromecasts=casts, display=display, cec_name=(cec or {}).get("name"),
-                   guess=discover.guess(rokus, casts, display, (cec or {}).get("name"), CEC_PHYS),
+                   pi_input=discover.phys_input(phys) if display else "",
+                   guess=discover.guess(rokus, casts, display, (cec or {}).get("name"), phys),
                    saved={t: saved.get(t) or {} for t in tvconfig.IDS})
 
 
@@ -2788,6 +2814,7 @@ if __name__ == "__main__":
     threading.Thread(target=sleep_loop, daemon=True).start()
     settings.update(load_settings())
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
+                       qr=lambda: f"http://{shell.lan_ip()}:{PORT}" if settings.get("qr", True) is not False else "",
                        favs=lambda: [(f.get("name") or "")[:28] for f in load_favs()][:5])
     if settings["shell"]:
         threading.Thread(target=HOME.start, daemon=True).start()
