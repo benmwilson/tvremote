@@ -38,6 +38,7 @@ SL_DEFAULT = "1080p60,best"
 YTDL_HEIGHTS = ("1080", "720", "480")
 
 import hlsproxy
+import groups
 import inproc
 import live
 import access
@@ -2722,6 +2723,172 @@ def pi_playing():
 livewatch = live.LiveWatch(os.path.join(DATA, "live.json"), urls=watched_urls, check=check_live, busy=pi_playing)
 
 
+# ---------- multi-stream groups ----------
+
+def groups_file(user=None):
+    """Each account has its own groups file, like favourites. Outside a request (the history recorder) it is the owner's."""
+    user = user or (g.user if has_request_context() else (accounts.founder_name() or accounts.OWNER))
+    return os.path.join(DATA, "groups.json" if user == accounts.OWNER else f"groups.{user}.json")
+
+
+def _describe_link(url):
+    """(name, source) for a link a group may hold (a web link the app can play), else None."""
+    u = normalise(url or "")
+    return (fav_name(u)[:40], route(u)[0]) if u and not guest_link_refused(u) else None
+
+
+def _on_screen():
+    """The links of every stream on the Pi's screen, the main one first."""
+    if wall.active():
+        return [wall.main_url or state["url"], *[t["url"] for t in wall.extras]]
+    return [state["url"]] if state.get("url") and pi_playing() else []
+
+
+def _dress(members):
+    snap = livewatch.snapshot()
+    return [{**m, "live": snap.get(m["url"], {}).get("live")} for m in members]
+
+
+@app.get("/api/groups")
+def groups_get():
+    if g.user == accounts.GUEST:
+        return jsonify(groups=[], suggested=[])
+    d = groups.load(groups_file())
+    livewatch.poke()
+    return jsonify(groups=[{**x, "members": _dress(x["members"])} for x in d["groups"]],
+                   suggested=[{**x, "members": _dress(x["members"])} for x in groups.suggestions(d, _describe_link)])
+
+
+def _refuse_guest():
+    if g.user == accounts.GUEST:
+        abort(Response(json.dumps({"ok": False, "error": "Guests can't save groups."}), 403, mimetype="application/json"))
+
+
+@app.post("/api/groups")
+@under_files_lock
+def groups_add():
+    """Save a group: {urls: [...]} or {from_screen: true}, and an optional name. 2 to 4 different streams."""
+    _refuse_guest()
+    data = request.get_json(silent=True) or {}
+    urls = _on_screen() if data.get("from_screen") else data.get("urls")
+    members = groups.clean_members([normalise(u) for u in urls or [] if normalise(u)], _describe_link)
+    if not members:
+        return jsonify(ok=False, error=f"A group is {groups.MIN_MEMBERS} to {groups.MAX_MEMBERS} different streams."), 400
+    path = groups_file()
+    d = groups.load(path)
+    grp = groups.add(d, members, data.get("name"))
+    groups.save(path, d)
+    return jsonify(ok=True, group=grp)
+
+
+@app.delete("/api/groups")
+@under_files_lock
+def groups_delete():
+    _refuse_guest()
+    path = groups_file()
+    d = groups.load(path)
+    if not groups.remove(d, (request.get_json(silent=True) or {}).get("id")):
+        return jsonify(ok=False, error="No such group"), 404
+    groups.save(path, d)
+    return jsonify(ok=True)
+
+
+@app.post("/api/groups/rename")
+@under_files_lock
+def groups_rename():
+    _refuse_guest()
+    data = request.get_json(silent=True) or {}
+    path = groups_file()
+    d = groups.load(path)
+    if not groups.rename(d, data.get("id"), str(data.get("name") or "")):
+        return jsonify(ok=False, error="No such group"), 404
+    groups.save(path, d)
+    return jsonify(ok=True)
+
+
+@app.post("/api/groups/dismiss")
+@under_files_lock
+def groups_dismiss():
+    """Turn a suggestion down: it is not offered again."""
+    _refuse_guest()
+    path = groups_file()
+    d = groups.load(path)
+    groups.dismiss(d, str((request.get_json(silent=True) or {}).get("key") or ""))
+    groups.save(path, d)
+    return jsonify(ok=True)
+
+
+def start_group(urls):
+    """Put these streams on the Pi's screen together, replacing what is there: the first starts as the main stream, the others are added in one go,
+    so every window opens at the same moment."""
+    play_on(None, urls[0], None)
+    for _ in range(120):  # up to 30 s for the main player to be up
+        p = state["proc"]
+        if state["url"] == urls[0] and p and p.poll() is None and prop("pid") is not None:
+            break
+        time.sleep(0.25)
+    with lock:
+        wall.saved_quality = state["quality"]
+    for u in urls[1:]:
+        if wall.add(u, state["url"]):
+            remember(u)
+    wall_later(wall_relayout)
+
+
+@app.post("/api/groups/play")
+def groups_play():
+    """Start a saved group (or a suggestion): {id} or {urls}. Answers at once; the streams open in the background."""
+    _refuse_guest()
+    data = request.get_json(silent=True) or {}
+    urls = data.get("urls")
+    if data.get("id"):
+        grp = next((x for x in groups.load(groups_file())["groups"] if x["id"] == data["id"]), None)
+        urls = [m["url"] for m in grp["members"]] if grp else None
+    members = groups.clean_members([normalise(u) for u in urls or [] if normalise(u)], _describe_link)
+    if not members:
+        return jsonify(ok=False, error="No such group"), 404
+    if tgt():
+        return jsonify(ok=False, error="Groups play on the Pi's screen."), 400
+    _pending["t"] = time.time()
+    who = g.user
+
+    def run():
+        g.user = who
+        try:
+            start_group([m["url"] for m in members])
+        except Exception as e:
+            app.logger.warning("Starting the group failed: %s", e)
+            screen("error", str(e)[:160])
+        finally:
+            _pending["t"] = 0.0
+    threading.Thread(target=copy_current_request_context(run), daemon=True).start()
+    return jsonify(ok=True, count=len(members))
+
+
+_co = {"key": None, "since": 0.0, "done": False}
+
+
+def _groups_loop():
+    """Every 20 s: when the same streams have been on the screen together for a minute, count that as one session of that set (the owner's history,
+    which is where suggestions come from). A different set, or a single stream, starts the count again."""
+    while True:
+        time.sleep(20)
+        try:
+            urls = _on_screen() if wall.active() else []
+            key = groups.key_of(urls) if len(urls) >= groups.MIN_MEMBERS else None
+            if key != _co["key"]:
+                _co.update(key=key, since=time.time(), done=False)
+            elif key and not _co["done"] and time.time() - _co["since"] >= 60:
+                _co["done"] = True
+                with _files_lock:
+                    path = groups_file(accounts.founder_name() or accounts.OWNER)
+                    d = groups.load(path)
+                    groups.record(d, urls)
+                    groups.save(path, d)
+        except Exception as e:
+            app.logger.warning("Group history failed: %s", e)
+
+
 @app.get("/api/favourites")
 def favs_get():
     livewatch.poke()
@@ -3254,6 +3421,7 @@ if __name__ == "__main__":
     threading.Thread(target=_rewarm_loop, daemon=True).start()
     threading.Thread(target=sleep_loop, daemon=True).start()
     threading.Thread(target=heat_loop, daemon=True).start()
+    threading.Thread(target=_groups_loop, daemon=True).start()
     threading.Thread(target=lambda: (inproc.warm(), versions()), daemon=True).start()  # one-time loads and the tool versions, so no tap pays for them
     settings.update(load_settings())
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",

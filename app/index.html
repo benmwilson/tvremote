@@ -158,6 +158,19 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .av{width:36px;height:36px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;
   font-size:14px;font-weight:700;color:#fff;overflow:hidden}
 .av img{width:100%;height:100%;object-fit:cover;display:block}
+/* a group's pictures, overlapping like an avatar group; each has a ring in the card's colour so the overlap reads as a stack */
+.avgroup{display:inline-flex;align-items:center;flex:none;isolation:isolate}
+.avgroup .av{width:34px;height:34px;font-size:13px;margin-left:-11px;box-shadow:0 0 0 2px var(--card)}
+.avgroup .av:first-child{margin-left:0}
+.avgroup.lg .av{width:44px;height:44px;font-size:15px;margin-left:-14px}
+.avgroup.lg .av:first-child{margin-left:0}
+.quickstrip .wstream .avgroup .av{width:38px;height:38px}
+.avgroup .av:nth-child(1){z-index:4}.avgroup .av:nth-child(2){z-index:3}.avgroup .av:nth-child(3){z-index:2}.avgroup .av:nth-child(4){z-index:1}
+#wallgroups button{display:inline-flex;align-items:center;gap:8px;padding:0 14px 0 10px}
+#wallgroups button .avgroup .av{width:26px;height:26px;font-size:11px;margin-left:-8px;box-shadow:0 0 0 2px var(--card2)}
+#wallgroups button .avgroup .av:first-child{margin-left:0}
+.gsug{border:1px dashed var(--line)}.gsug .gtag{font-size:12px;color:var(--dim);letter-spacing:.04em;text-transform:uppercase}
+.gmembers{font-size:13px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 .iconlink{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .nowhead{display:flex;align-items:center;gap:8px}.nowhead .av{width:40px;height:40px}
 .fav .fhead{display:flex;align-items:center;gap:10px;padding-right:30px;margin-bottom:6px}
@@ -719,6 +732,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button class="sclose" data-close aria-label="Close" autofocus><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
     <div id="walltiles"></div>
+    <div id="wallgroupswrap" class="hide"><div class="wlabel">Groups</div><div id="wallgroups" class="wallfavs"></div></div>
+    <button id="wallsavegroup" class="hide" type="button" style="margin-top:10px"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg>Save these as a group</button>
         <div id="walladdbox">
       <div class="wlabel" id="walladdlabel">Add a stream</div>
       <form id="walladd" class="row"><input id="wallurl" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
@@ -765,6 +780,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 </div>
 <div id="results" style="margin-top:10px"></div>
 
+<div id="groupsbox" class="hide" style="margin-top:26px"><h2>Groups</h2><div class="grid list" id="groups"></div></div>
 <div class="bar" style="margin-top:26px"><h2>Favourites</h2><button id="favSort" class="sortbtn" aria-pressed="false">Reorder</button><div class="viewtog">
   <button id="favList" aria-label="Show favourites as a list" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg></button>
   <button id="favTiles" aria-label="Show favourites as tiles" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg></button></div></div>
@@ -1104,7 +1120,61 @@ async function loadFavs() {
   favList = await api('/api/favourites') || [];
   drawFavs();
   loadRecents();
+  loadGroups();
 }
+// ---- groups: saved sets of streams that start together in multi-view, and suggestions from what was watched together ----
+let groupList = [], groupSug = [];
+async function loadGroups() {
+  try { if (me.guest) return; } catch (e) {}  // guests don't have groups (and `me` may not be set yet on the very first call)
+  const r = await fetch('/api/groups').then(x => x.ok ? x.json() : null).catch(() => null);  // quietly: no error bar if it fails
+  if (!r) return;
+  groupList = r.groups || []; groupSug = r.suggested || [];
+  drawGroups(); quickSig = ''; renderQuick(); if ($('wallcard').open) renderWall();
+}
+// The pictures of a group stacked like an avatar group: overlapping circles, the first on top (up to four, so no "+N" is ever needed).
+function avatarGroup(members, big) {
+  const g = el('span', 'avgroup' + (big ? ' lg' : ''));
+  g.setAttribute('aria-hidden', 'true');
+  members.slice(0, 4).forEach(m => g.append(avatarEl(m.name, m.url)));
+  return g;
+}
+const groupLive = g => g.members.filter(m => m.live === true).length;
+const groupWho = g => g.members.map(m => m.name).join(', ');
+async function playGroup(g) {  // replaces what is on the TV, so ask when something is playing
+  if ((st.running || st.starting || st.wall) && !(await confirmSheet('Play ' + g.name + '?', 'This replaces what is on the TV now with ' + g.members.length + ' streams in multi-view.', 'Play group'))) return;
+  const r = await api('/api/groups/play', 'POST', g.id ? {id: g.id} : {urls: g.members.map(m => m.url)});
+  if (r && r.ok) { favLoading = null; poll(); }
+}
+const saveGroup = async (members, name) => { const r = await api('/api/groups', 'POST', {urls: members.map(m => m.url), name}); if (r && r.ok) await loadGroups(); return r; };
+function drawGroups() {
+  const box = $('groups'), rows = [];
+  groupList.forEach(g => {
+    const b = el('div', 'fav'), head = el('div', 'fhead'), x = el('button', 'x'), live = groupLive(g);
+    b.setAttribute('role', 'button'); b.tabIndex = 0;
+    x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Delete group ' + g.name);
+    x.onclick = async e => { e.stopPropagation(); if (await confirmSheet('Delete ' + g.name + '?', 'The group goes away. The streams stay in your favourites.', 'Delete', true)) { await api('/api/groups', 'DELETE', {id: g.id}); loadGroups(); } };
+    head.append(avatarGroup(g.members, true), el('b', null, g.name));
+    b.append(head, el('span', 'gmembers', groupWho(g)), ...(live ? [el('span', 'badge live', live + ' LIVE')] : []), x);
+    b.onclick = () => playGroup(g);
+    b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
+    rows.push(b);
+  });
+  groupSug.forEach(sg => {  // seen together more than once: offered, never forced
+    const b = el('div', 'fav gsug'), head = el('div', 'fhead'), x = el('button', 'x'), save = el('button', null, 'Save as group');
+    b.setAttribute('role', 'button'); b.tabIndex = 0;
+    x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Not interested in ' + sg.name);
+    x.onclick = async e => { e.stopPropagation(); await api('/api/groups/dismiss', 'POST', {key: sg.key}); loadGroups(); };
+    save.onclick = async e => { e.stopPropagation(); await busy(save, () => saveGroup(sg.members)); };
+    head.append(avatarGroup(sg.members, true), el('b', null, sg.name));
+    b.append(el('span', 'gtag', 'Watched together ' + sg.count + ' times'), head, el('span', 'gmembers', groupWho(sg)), save, x);
+    b.onclick = () => playGroup(sg);
+    b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
+    rows.push(b);
+  });
+  $('groupsbox').classList.toggle('hide', !rows.length);
+  box.replaceChildren(...rows);
+}
+
 // Drag a row by its handle: the row follows the finger, the others slide out of the way, and the order is saved on release.
 function dragFav(e, row, from) {
   e.preventDefault();
@@ -1199,12 +1269,22 @@ function renderQuick() {
     favList.filter(f => f.live === true).forEach(f => offer({name: favHead(f), url: f.play_url || f.url, source: (f.links || []).find(l => l.url === (f.play_url || f.url))?.source || f.source, title: f.title, game: f.game, live_for: f.live_for, live: true}));
     recentList.filter(x => x.live === true).forEach(x => offer({name: x.name, url: x.url, source: x.source, title: x.title, game: x.game, live_for: x.live_for, live: true}));
   }
-  const shown = items.slice(0, 6), sig = style + '|' + target + '|' + shown.map(x => x.url + (x.title || '')).join('|');
+  const groupsLive = idle && cur.kind === 'pi' ? groupList.filter(g => groupLive(g) >= 2).slice(0, 2).map(g => ({...g, group: true, name: g.name, url: 'group:' + g.id})) : [];
+  const shown = [...groupsLive, ...items].slice(0, 6), sig = style + '|' + target + '|' + shown.map(x => x.url + (x.title || '') + (x.group ? x.members.map(m => m.live) : '')).join('|');
   $('quick').classList.toggle('hide', !shown.length);
   if (sig === quickSig) return;
   quickSig = sig;
   $('quicklist').className = style === 'cards' ? 'grid list' : 'quickstrip';
   $('quicklist').replaceChildren(...shown.map(it => {
+    if (it.group) {  // a saved group: its pictures stacked, its name, how many are live
+      const b = el(style === 'cards' ? 'div' : 'div', style === 'cards' ? 'fav' : 'wstream'), n = groupLive(it);
+      b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url; b.setAttribute('aria-label', 'Play group ' + it.name);
+      if (style === 'cards') { const head = el('div', 'fhead'); head.append(avatarGroup(it.members, true), el('b', null, it.name)); b.append(head, el('span', 'badge live', n + ' LIVE'), el('span', 'sub livenote', groupWho(it))); }
+      else { const tags = el('span', 'wtags'); tags.append(el('span', 'badge live', n + ' LIVE')); b.append(avatarGroup(it.members), el('span', 'wn', it.name), tags); }
+      b.onclick = () => playGroup(it);
+      b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
+      return b;
+    }
     if (style === 'cards') {  // the list style: one row per stream, with its title beside the name
       const b = el('div', 'fav'), head = el('div', 'fhead');
       b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url;
@@ -2120,6 +2200,7 @@ function renderWall() {
     }
     return tile;
   }));
+  renderWallGroups(rows);
   const free = !w || rows.length < w.max, replacing = wallReplace !== null;
   $('walladdbox').classList.toggle('hide', !free && !replacing);
   $('walladdlabel').textContent = replacing ? 'Replace ' + ((rows.find(r => r.i === wallReplace) || {}).name || 'it') + ' with' : 'Add a stream';
@@ -2141,6 +2222,19 @@ function renderWall() {
     return b;
   }));
 }
+function renderWallGroups(rows) {
+  const all = [...groupList.map(g => ({...g, sug: false})), ...groupSug.map(g => ({...g, sug: true}))];
+  $('wallgroupswrap').classList.toggle('hide', !all.length);
+  $('wallgroups').replaceChildren(...all.slice(0, 8).map(g => {
+    const b = el('button'); b.title = groupWho(g);
+    b.append(avatarGroup(g.members), document.createTextNode((g.sug ? '\u2728 ' : '') + g.name));
+    b.onclick = () => playGroup(g);
+    return b;
+  }));
+  const on = new Set(rows.map(r => (r.url || '').toLowerCase())), same = g => g.members.length === on.size && g.members.every(m => on.has(m.url.toLowerCase()));
+  $('wallsavegroup').classList.toggle('hide', rows.length < 2 || groupList.some(same));  // two or more on screen, and not saved already
+}
+$('wallsavegroup').onclick = () => busy($('wallsavegroup'), async () => { const r = await api('/api/groups', 'POST', {from_screen: true}); if (r && r.ok) await loadGroups(); return r; });
 $('walladd').onsubmit = async e => {
   e.preventDefault();
   const v = $('wallurl').value.trim();
