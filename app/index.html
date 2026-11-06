@@ -1081,7 +1081,6 @@ body:has(dialog.sheet[open]){overflow:hidden}
 </div>
 <div id="results" style="margin-top:10px"></div>
 
-<div id="groupsbox" class="hide" style="margin-top:26px"><h2>Groups</h2><div class="grid list" id="groups"></div></div>
 <div class="bar" style="margin-top:26px"><h2>Favourites</h2><button id="favSort" class="sortbtn" aria-pressed="false">Reorder</button><div class="viewtog">
   <button id="favList" aria-label="Show favourites and recents as a list" title="List" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg><span class="dlbl">List</span></button>
   <button id="favTiles" aria-label="Show favourites and recents as tiles" title="Tiles" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg><span class="dlbl">Tiles</span></button></div></div>
@@ -1530,8 +1529,9 @@ async function playGroup(g) {  // replaces what is on the TV, so ask when someth
   if (r && r.ok) { favLoading = null; poll(); }
 }
 const saveGroup = async (members, name) => { const r = await api('/api/groups', 'POST', {urls: members.map(m => m.url), name}); if (r && r.ok) await loadGroups(); return r; };
+let groupFavEls = [], groupSugEls = [];  // the cards drawGroups makes: they are drawn inside the favourites and the recents
 function drawGroups() {
-  const box = $('groups'), rows = [];
+  const rows = [], sugRows = [];
   groupList.forEach(g => {
     const b = el('div', 'fav'), head = el('div', 'fhead'), x = el('button', 'x'), live = groupLive(g);
     b.setAttribute('role', 'button'); b.tabIndex = 0;
@@ -1542,6 +1542,7 @@ function drawGroups() {
     b.querySelectorAll('.badge').forEach(e => { e.style.marginTop = '8px'; });
     b.onclick = () => playGroup(g);
     b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
+    b.dataset.live = live ? '1' : '0';
     rows.push(b);
   });
   groupSug.forEach(sg => {  // seen together more than once: offered, never forced
@@ -1554,10 +1555,10 @@ function drawGroups() {
     b.append(el('span', 'gtag', 'Watched together ' + sg.count + ' times'), head, el('span', 'gmembers', groupWho(sg)), ...groupSites(sg), save, x);
     b.onclick = () => playGroup(sg);
     b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
-    rows.push(b);
+    sugRows.push(b);
   });
-  $('groupsbox').classList.toggle('hide', !rows.length);
-  box.replaceChildren(...rows);
+  groupFavEls = rows; groupSugEls = sugRows;
+  drawFavs(); drawRecents();
 }
 
 // Drag a row by its handle: the row follows the finger, the others slide out of the way, and the order is saved on release.
@@ -1591,9 +1592,10 @@ async function moveFav(i, d) {
 function drawFavs() {
   const g = $('favs');
   g.innerHTML = '';
-  if (!favList.length) g.append(Object.assign(el('div', 'sub', 'No favourites yet. Tap the star while something is playing to save it.'), {style: 'grid-column:1/-1;padding:4px'}));
+  if (!favList.length && !groupFavEls.length) g.append(Object.assign(el('div', 'sub', 'No favourites yet. Tap the star while something is playing to save it.'), {style: 'grid-column:1/-1;padding:4px'}));
   // live ones first (keeping your order among them); while reordering, exactly your order
   const shown = reordering ? favList : [...favList].sort((a, b) => (b.live === true) - (a.live === true));
+  if (!reordering) g.append(...groupFavEls.filter(e => e.dataset.live === '1'));  // a group with someone live is up with the live favourites
   shown.forEach(f => {
     const b = el('div', 'fav' + (f.live === false ? ' off' : '')); b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = f.url;
     b.dataset.urls = (f.links || [{url: f.url}]).map(l => l.url).join(' ');  // every site of this streamer, for the loading spinner
@@ -1618,6 +1620,7 @@ function drawFavs() {
     }
     g.appendChild(b);
   });
+  if (!reordering) g.append(...groupFavEls.filter(e => e.dataset.live !== '1'));
   markFavs();
   render();
 }
@@ -2775,8 +2778,11 @@ $('sleepsel').onchange = async () => {
 let recentList = [];
 async function loadRecents() {
   const r = await fetch('/api/recents').then(x => x.json()).catch(() => []);
-  const saved = new Set(favList.flatMap(f => (f.links || [{url: f.url}]).map(l => l.url)));
   recentList = Array.isArray(r) ? r : [];
+  drawRecents();
+}
+function drawRecents() {
+  const saved = new Set(favList.flatMap(f => (f.links || [{url: f.url}]).map(l => l.url)));
   // one entry per streamer, however many sites they were watched on: the live one is kept, and every site gets its badge (a favourite's streamer is not a recent too)
   const nameKey = x => (x.name || chanName(x.url) || '').toLowerCase().replace(/-/g, '_');
   const savedNames = new Set(favList.map(f => nameKey({name: favHead(f), url: f.url})));
@@ -2789,8 +2795,8 @@ async function loadRecents() {
   });
   const items = [...byName.values()].filter(x => !(ui().recents_hide_offline && x.live === false)).slice(0, ui().recents_max);
   const box = $('recents');
-  box.replaceChildren();
-  $('recenthead').classList.toggle('hide', !items.length);
+  box.replaceChildren(...groupSugEls);  // groups seen together lately are suggested first, among the recents
+  $('recenthead').classList.toggle('hide', !items.length && !groupSugEls.length);
   items.forEach(it => {
     const b = el('div', 'fav' + (it.live === false ? ' off' : '')), head = el('div', 'fhead');
     b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url;
