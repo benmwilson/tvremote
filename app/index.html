@@ -2696,7 +2696,17 @@ async function loadRecents() {
   const r = await fetch('/api/recents').then(x => x.json()).catch(() => []);
   const saved = new Set(favList.flatMap(f => (f.links || [{url: f.url}]).map(l => l.url)));
   recentList = Array.isArray(r) ? r : [];
-  const items = recentList.filter(x => !saved.has(x.url) && !(ui().recents_hide_offline && x.live === false)).slice(0, ui().recents_max);
+  // one entry per streamer, however many sites they were watched on: the live one is kept, and every site gets its badge (a favourite's streamer is not a recent too)
+  const nameKey = x => (x.name || chanName(x.url) || '').toLowerCase().replace(/-/g, '_');
+  const savedNames = new Set(favList.map(f => nameKey({name: favHead(f), url: f.url})));
+  const byName = new Map();
+  recentList.forEach(x => {
+    if (saved.has(x.url) || savedNames.has(nameKey(x))) return;
+    const k = nameKey(x), had = byName.get(k);
+    if (!had) byName.set(k, {...x, sites: new Set([x.source || 'Other'])});
+    else { had.sites.add(x.source || 'Other'); if (x.live === true && had.live !== true) Object.assign(had, {...x, sites: had.sites}); }
+  });
+  const items = [...byName.values()].filter(x => !(ui().recents_hide_offline && x.live === false)).slice(0, ui().recents_max);
   const box = $('recents');
   box.replaceChildren();
   $('recenthead').classList.toggle('hide', !items.length);
@@ -2710,7 +2720,7 @@ async function loadRecents() {
     b.onkeydown = e => { if (e.key === 'Enter') playFav(it.url); };
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
     const live = it.live === true ? [el('span', 'badge live', 'LIVE')] : [];  // the same chip and line as a favourite
-    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), ...live, el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, linkEl(it.url, it.source), x);  // the same open-on-the-site icon as a favourite
+    b.append(head, ...[...it.sites].map(site => el('span', 'badge ' + site, site)), ...live, el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, linkEl(it.url, it.source), x);  // the same open-on-the-site icon as a favourite
     box.append(b);
   });
   markFavs();  // a list redrawn while a tap is still loading keeps its spinner
