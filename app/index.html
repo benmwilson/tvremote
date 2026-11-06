@@ -816,8 +816,13 @@ const dur = sec => { const m = Math.round(sec / 60); if (m < 2) return 'just sta
   const h = Math.floor(m / 60); if (h < 48) return h + ' h ' + (m % 60) + ' min'; return Math.floor(h / 24) + ' d ' + (h % 24) + ' h'; };
 const ago = ts => { const m = Math.round((Date.now() / 1000 - ts) / 60); if (m < 2) return 'just now'; if (m < 90) return m + ' min ago';
   const h = Math.round(m / 60); if (h < 48) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; };
-// the stream's own title as the live check last saw it (an offline channel keeps its last one); nothing when the saved name already holds it
-const titleLine = f => f.title && !(f.name || '').includes(f.title) ? (f.live === false ? 'Last stream: ' : '') + f.title : '';
+// A favourite saved from a stream may carry "channel: title" as its name. The heading is always the channel; the stream's own title goes on its own line
+// (as the live check last saw it: an offline channel keeps its last one, and an old saved title is the fallback).
+const favHead = f => { const i = (f.name || '').indexOf(': '); return i > 0 ? f.name.slice(0, i) : f.name; };
+const titleLine = f => {
+  const i = (f.name || '').indexOf(': '), t = f.title || (i > 0 ? f.name.slice(i + 2) : '');
+  return t ? (f.live === false ? 'Last stream: ' : '') + t : '';
+};
 const liveLine = f => f.live === true ? ['live for ' + dur(f.live_for || 0), f.game].filter(Boolean).join(' \u00b7 ')
   : f.live === false ? ['Offline', f.last_live ? 'last live ' + ago(f.last_live) : 'not seen live yet', f.game ? 'was playing ' + f.game : null].filter(Boolean).join(' \u00b7 ')
   : '';
@@ -1092,7 +1097,7 @@ function drawFavs() {
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
     const live = f.live === true ? el('span', 'badge live', 'LIVE') : null;
     const lnote = el('span', 'sub livenote', liveLine(f));
-    const head = el('div', 'fhead'); head.append(avatarEl(f.name, f.url), el('b', null, f.name));
+    const head = el('div', 'fhead'); head.append(avatarEl(favHead(f), f.url), el('b', null, favHead(f)));
     b.append(head, ...siteChips(f), ...(live ? [live] : []), ...(titleLine(f) ? [el('span', 'ftitle', titleLine(f))] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
     if (reordering) {
       const i = favList.indexOf(f), mv = el('span', 'mv');
