@@ -20,8 +20,16 @@ Nothing draws it or feeds it keys yet.
 | Roku ECP | Commands only (the Pi sends keys to the Roku); no stream of the remote's own key presses is known. |
 | USB / Bluetooth keyboard or air mouse | Works through the same input events. |
 
+## Decision (2026-11-06): the TV has the plain IR remote
+The TV's remote talks to the TV only, so the Pi has to hear it itself: **an IR receiver on the Pi**. Two ways, both end up as `/dev/input/event*` key events that `app/launcherinput.py` already reads:
+- **USB IR dongle that acts as a keyboard (FLIRC):** plug in, teach it the TV remote's buttons once from a computer, done. Nothing to change on the Pi.
+- **GPIO IR receiver module (VS1838B / TSOP4838, a few dollars):** needs `dtoverlay=gpio-ir,gpio_pin=<pin>` in the Pi's `config.txt` (a system setting: ask first) and `ir-keytable` to map the remote's scancodes to keys.
+
+The TV also reacts to its own remote: on an HDMI input it ignores the arrows and OK but Home, Back and the input keys still act on the TV. So the launcher uses arrows, OK, play/pause and Info; Home leaves the launcher the way it leaves anything.
+
 ## Next steps
-1. **Test CEC passthrough**: with the Pi's input selected on the TV, press the TV remote's arrows/OK/Back while reading `/dev/input/event0`. If keys appear, build `launcherinput.py` (evdev reader, `KEYMAP`) and pass `/dev/input` through in `compose.yaml`.
+0. Built: `app/launcherinput.py` reads any input device (receiver, dongle, keyboard) into the launcher's key names; `tests/test_launcherinput.py`.
+1. (Optional now) **Test CEC passthrough**: with the Pi's input selected on the TV, press the TV remote's arrows/OK/Back while reading `/dev/input/event0`. If keys appear, build `launcherinput.py` (evdev reader, `KEYMAP`) and pass `/dev/input` through in `compose.yaml`.
 2. If not: choose the IR receiver (or accept the phone as the remote and add the pad).
 3. **Draw the launcher** in `shell.py` as one more screen of the home window (ASS: a row of tiles with the focus ring), redrawn on `redraw`.
 4. **Wire the actions**: `play` -> the normal play path, `group` -> `playGroup`; `back`/`home` from a playing stream stops it and returns to the launcher.
