@@ -52,7 +52,7 @@ def layout(text):
     return round(top - GLYPH_OFF), round(top + GLYPH_H + GAP)
 
 
-QR_MODULE, QR_MARGIN = 8, 56  # px per dot; gap from the screen's right and bottom edges
+QR_SIDE, QR_MARGIN = 360, 56  # px: the card is always this size (a longer link just gets smaller dots); gap from the screen's right and bottom edges
 
 
 def qr_pieces(url, caption="Scan to open the remote"):
@@ -65,12 +65,13 @@ def qr_pieces(url, caption="Scan to open the remote"):
         return []
     if not rows:
         return []
-    n, m = len(rows), QR_MODULE
-    q = 4 * m  # the quiet zone a scanner needs round the code
-    side = n * m + 2 * q
+    side = QR_SIDE
+    n = len(rows)
+    m = side / (n + 8)  # a dot's size: the code plus a 4-dot quiet zone each side fills the card, whatever the link's length
+    q = 4 * m
     x0, y0 = W - QR_MARGIN - side, H - QR_MARGIN - side - 44
     card = r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&}m 0 0 l %d 0 %d %d 0 %d{\p0}" % (x0, y0, TEXT, side, side, side, side)
-    inset, r = 0.5, 2.6  # each dot is a rounded square a little smaller than its cell
+    inset, r = m * 0.06, m * 0.32  # each dot is a rounded square a little smaller than its cell
     c, d = m - 2 * inset, []
     for j, row in enumerate(rows):
         for i, on in enumerate(row):
@@ -78,8 +79,8 @@ def qr_pieces(url, caption="Scan to open the remote"):
                 a, b = i * m + inset, j * m + inset
                 d.append("m %.1f %.1f l %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f" % (
                     a + r, b, a + c - r, b, a + c, b + r, a + c, b + c - r, a + c - r, b + c, a + r, b + c, a, b + c - r, a, b + r))
-    dots = r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&}%s{\p0}" % (x0 + q, y0 + q, BG[4:] + BG[2:4] + BG[:2], " ".join(d))  # BG is RGB, ASS wants BGR
-    cap = r"{\an9\pos(%d,%d)\fs28\b1\bord0\shad0\c&H%s&}%s" % (x0 + side, y0 + side + 8, DIM, caption)  # right-aligned to the card's edge: a long caption grows leftwards, never off the screen
+    dots = r"{\an7\pos(%.1f,%.1f)\p1\bord0\shad0\1c&H%s&}%s{\p0}" % (x0 + q, y0 + q, BG[4:] + BG[2:4] + BG[:2], " ".join(d))  # BG is RGB, ASS wants BGR
+    cap = r"{\an8\pos(%d,%d)\fs28\b1\bord0\shad0\c&H%s&}%s" % (x0 + side // 2, y0 + side + 8, DIM, caption)  # centred under the card
     return [card, dots, cap]
 
 

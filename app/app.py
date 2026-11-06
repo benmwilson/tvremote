@@ -663,16 +663,24 @@ def chat_lower_quality():
     q = state.get("quality")
     if state["url"] and state["proc"] and not wall.active() and _quality_height(q) > 720 and chat.channel_of(state["url"]):
         _chat["restore_q"] = q
-        with lock:
-            start_player(state["url"], CHAT_QUALITY, "quality")
+        _swapping.set()  # a quiet change: no "Refreshing the stream" text over the picture while the chat comes up
+        try:
+            with lock:
+                start_player(state["url"], CHAT_QUALITY, "quality")
+        finally:
+            _swapping.clear()
 
 
 def chat_restore_quality():
     """Chat going off: give the stream the quality it had before the chat lowered it (only if it is still the lowered one)."""
     q, _chat["restore_q"] = _chat.get("restore_q"), None
     if q and state["url"] and state["proc"] and not wall.active() and _quality_height(state.get("quality")) == 720:
-        with lock:
-            start_player(state["url"], q, "quality")
+        _swapping.set()
+        try:
+            with lock:
+                start_player(state["url"], q, "quality")
+        finally:
+            _swapping.clear()
 
 
 def chat_refresh():
