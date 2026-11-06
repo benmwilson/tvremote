@@ -90,7 +90,7 @@ def _source():
     """The window's video: the shared background picture, looped at 2 frames a second (the 2 fps clock times the subtitles), or a plain colour
     if the picture is missing. The chat strip and the bar under the picture are cut from the same picture, so the two join with no seam."""
     if os.path.exists(BG_IMAGE):
-        return f"movie=filename={BG_IMAGE}:loop=0,fps=2,format=yuv420p"
+        return f"movie=filename={BG_IMAGE},loop=loop=-1:size=1,fps=2,format=yuv420p"  # (the movie filter's own loop option hangs on a single picture)
     return f"color=c=0x{BG}:s={W}x{H}:r=2"
 
 
