@@ -51,6 +51,14 @@ class TvsApi(unittest.TestCase):
         self.assertEqual(server.ORDER, ["living", "bedroom", "tv2"])
         self.assertEqual(sorted(server.cards.providers), ["bedroom", "living", "tv2"])
 
+    def test_cards_say_which_tv_they_are_on_so_the_phone_can_group_them(self):
+        self.admin.post("/api/tvs", json=TVS)
+        with mock.patch.object(server, "roku_details", return_value={}), mock.patch.object(server, "external_now", return_value=None):
+            pi, cast = server.make_card("living", {}), server.make_card("bedroom", {})
+        self.assertEqual((pi["tv"], cast["tv"]), ("tv1", "tv1"))
+        self.assertEqual((pi["tv_label"], cast["tv_label"]), ("Bedroom", "Bedroom"))  # the TV's own name, not "Bedroom \u00b7 Pi"
+        self.assertEqual((pi["hdmi"], cast["hdmi"]), ("HDMI3", "HDMI1"))  # the input each source is on, to tell which the TV is showing
+
     def test_removing_a_tv_removes_its_card_and_settings(self):
         self.admin.post("/api/tvs", json=TVS)
         self.admin.post("/api/tvs", json={"tvs": TVS["tvs"][:1]})

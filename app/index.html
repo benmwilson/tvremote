@@ -61,6 +61,10 @@ button:disabled{opacity:.45;cursor:default}
   position:relative;overflow:hidden;min-height:44px}
 .tvcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--tv)}
 .tvcard .ch{display:flex;align-items:center;gap:8px}.tvcard .ch b{font-size:21px;flex:1;font-weight:700}
+.srcsw{display:flex;gap:6px;margin-top:12px;background:rgba(255,255,255,.05);border-radius:12px;padding:4px}
+.srcsw button{flex:1;min-height:44px;border-radius:9px;background:none;color:var(--dim);font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px}
+.srcsw button[aria-pressed=true]{background:var(--tv,#62b0ff);color:#0b0e14}.srcsw .hd{width:8px;height:8px}
+.srcx .sub{margin-top:8px}
 .cstreams{margin-top:12px;display:flex;flex-direction:column;gap:10px}.csr{display:flex;align-items:center;gap:10px;text-align:left}.csr .av{width:38px;height:38px;flex:none}.csr.off{opacity:.55}
 .cst{min-width:0;display:flex;flex-direction:column;gap:3px}.cstop{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.cstop b{font-size:15px}.csr .sub{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .csr .snd{margin-left:auto;flex:none;display:flex;color:var(--tv,#6bb2ff)}.csr .snd .ic{width:18px;height:18px}
@@ -80,6 +84,7 @@ button:disabled{opacity:.45;cursor:default}
 /* One TV */
 .tvid{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin:2px 4px 14px}
 .tvid b{font-size:22px;font-weight:700;display:flex;align-items:center;gap:10px}
+.tvid .srcsw{flex:1 0 100%;margin-top:8px}
 .tvid b::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--tv)}
 .now.card{padding:18px}
 .ttl{font-size:22px;font-weight:700;line-height:1.2;margin:12px 0 6px;overflow-wrap:anywhere;letter-spacing:-.01em;
@@ -109,6 +114,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .watchbar button{flex:none;width:44px;min-height:44px;padding:0;display:grid;place-items:center}.watchbar select{flex:none;max-width:46%;min-height:44px;font-size:15px}
 .watch.min #watchbody{display:none}
 .now.offidle>:not(.tvoff){display:none!important}
+#view-tv.tvonly #now,#view-tv.tvonly #watchcard,#view-tv.tvonly #chatcard,#view-tv.tvonly #wallopencard,#view-tv.tvonly #playsec{display:none!important}
 .now.offidle .tvoff{flex-direction:column;text-align:center;gap:6px;margin:0;padding:26px 18px 22px;background:linear-gradient(160deg,rgba(255,176,98,.16),rgba(255,176,98,.05));border-color:rgba(255,176,98,.28)}
 .now.offidle .tvoff>.ic{width:46px;height:46px;padding:12px;border-radius:50%;background:rgba(255,176,98,.16);color:#ffb062;box-sizing:content-box;margin-bottom:6px}
 .now.offidle .tvoff b{font-size:22px}.now.offidle .tvoff .sub{display:block;margin:2px auto 14px;max-width:30ch;line-height:1.45}
@@ -616,6 +622,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 
 <section id="view-tv" class="hide">
 <div id="tvid" class="tvid"></div>
+<p class="sub hide" id="tvonlynote" style="margin:8px 4px 0">Nothing is plugged in to this TV, so there is nothing to play here. Use its TV controls below. You can change what is plugged in under Settings, TVs.</p>
 <div class="card now" id="now">
   <div class="tvoff hide" id="tvoff" role="status"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg>
     <div class="grow"><b>The TV is off</b><span class="sub" id="tvoffsub"></span></div>
@@ -715,6 +722,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   </details>
 </div>
 
+<div id="playsec">
 <h2>Play something</h2>
 <div class="card">
   <input type="text" id="link" placeholder="Paste a link, a channel name or a search" autocapitalize="off" autocorrect="off" enterkeyhint="go" aria-label="Link, channel or search">
@@ -731,6 +739,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <div class="grid list" id="favs"></div>
 <h2 id="recenthead" class="hide">Recent</h2>
 <div class="grid list" id="recents"></div>
+</div>
 
 <p id="dbgrow" class="hide" style="text-align:center;margin-top:26px"><button id="dbgOpen" style="min-height:44px;background:none;color:var(--dim);font-size:14px"><svg class="ic" aria-hidden="true"><use href="#i-terminal"/></svg>Debug</button></p>
 </section>
@@ -1007,6 +1016,7 @@ async function loadQualities() {
 
 async function poll() {
   if (view() !== 'tv') return;
+  if ((targets.find(t => t.id === target) || {}).kind === 'tv') return;  // nothing plays here
   const s = await api('/api/status');
   if (s) {
     // The same stream reloading (a quality switch, Refresh) briefly reports "starting": keep showing the controls meanwhile,
@@ -2166,7 +2176,7 @@ function cardEl(c, onTap, extra) {
   const sub = [[c.brand, size].filter(Boolean).join(' '), c.model].filter(Boolean).join(' · ');
   const n = c.now;
   const ms = !!(n && n.streams && n.streams.length > 1);  // several streams on the screen
-  const line = !c.reachable ? "Can't reach this TV" : ms ? 'Multi-view \u00b7 ' + n.streams.length + ' streams' : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.external ? (c.external.paused ? 'Paused on the TV: ' : 'On the TV: ') + c.external.app : c.error ? "Couldn't play: " + c.error : 'Nothing playing';
+  const line = !c.reachable ? "Can't reach this TV" : ms ? 'Multi-view \u00b7 ' + n.streams.length + ' streams' : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.external ? (c.external.paused ? 'Paused on the TV: ' : 'On the TV: ') + c.external.app : c.error ? "Couldn't play: " + c.error : c.kind === 'tv' ? 'TV controls only' : 'Nothing playing';
   b.append(head, el('div', 'sub', [sub, c.connection].filter(Boolean).join(' · ')), el('div', 'now', line));
   if (c.reachable && ms) {  // one row per stream: who, which site, live or not, what they are playing, and whether it has sound
     const list = el('div', 'cstreams');
@@ -2224,7 +2234,38 @@ function renderCards() {
   if (editing) { box.replaceChildren(...targets.map(tvRow)); return; }
   const vis = visibleTvs();
   if (!vis.length) { box.replaceChildren(el('p', 'sub', 'All your TVs are hidden. Tap Edit to show some.')); return; }
-  box.replaceChildren(...vis.map(c => cardEl(c, t => { location.hash = '#/tv/' + encodeURIComponent(t.id); })));
+  const open = t => { location.hash = '#/tv/' + encodeURIComponent(t.id); };
+  box.replaceChildren(...groupTvs(vis).map(g => g.length === 1 ? cardEl(g[0], open) : sourceCard(g, open)));
+}
+// The Pi and a Chromecast on one TV are two ways to play on it: one card, with a switch for which one. Cards stay in their order.
+function groupTvs(list) {
+  const out = [], by = {};
+  list.forEach(c => { const k = c.kind !== 'tv' && c.tv; if (k && by[k]) by[k].push(c); else { const g = [c]; out.push(g); if (k) by[k] = g; } });
+  return out;
+}
+const srcName = c => c.kind === 'chromecast' ? 'Chromecast' : 'Pi';
+// Which source the card shows: one you picked a moment ago, else the one playing, else the one the TV's input is on, else the first.
+function activeSrc(g) {
+  let pick = null;
+  try { const v = JSON.parse(localStorage.getItem('src:' + g[0].tv) || 'null'); if (v && Date.now() - v.t < 10 * 60e3) pick = g.find(c => c.id === v.id); } catch (e) {}
+  const playing = g.find(c => c.now), onInput = g.find(c => c.hdmi && c.input_id === 'tvinput.' + c.hdmi.toLowerCase());
+  return pick || playing || onInput || g[0];
+}
+function sourceCard(g, open) {
+  const a = activeSrc(g);
+  const sw = el('div', 'srcsw'); sw.setAttribute('role', 'group'); sw.setAttribute('aria-label', 'Play on');
+  g.forEach(c => {
+    const b = el('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(c.id === a.id));
+    b.append(el('span', null, srcName(c)));
+    if (c.now) b.append(el('i', 'hd smooth'));  // something is playing through this source
+    b.onclick = e => { e.stopPropagation(); try { localStorage.setItem('src:' + c.tv, JSON.stringify({id: c.id, t: Date.now()})); } catch (x) {} renderCards(); };
+    sw.append(b);
+  });
+  const others = g.filter(c => c.id !== a.id && c.now).map(c => srcName(c) + ': ' + c.now.title);
+  const extra = el('div', 'srcx'); extra.append(sw);
+  if (others.length) extra.append(el('div', 'sub', 'Also playing \u00b7 ' + others.join(' \u00b7 ')));
+  const card = cardEl({...a, name: a.tv_label || a.name, connection: srcName(a)}, () => open(a), extra);
+  return card;
 }
 $('editTvs').onclick = () => { editing = !editing; renderCards(); };
 $('refreshTvs').onclick = async () => {
@@ -2238,6 +2279,8 @@ const shownOff = c => { const o = pwOver[c.id]; if (o && o.base !== tvOff(c)) de
 const tvOff = c => !!c.roku && (c.reachable === false || (!!c.power && c.power !== 'PowerOn'));
 function tvInfo() {  // the TV details in the One TV view come from the same cached card
   const cur = targets.find(t => t.id === target) || {};
+  const tvOnly = cur.kind === 'tv';  // nothing plugged in: just the TV's own controls
+  $('view-tv').classList.toggle('tvonly', tvOnly); $('tvonlynote').classList.toggle('hide', !tvOnly);
   const off = tvOff(cur) && !st.starting;  // a start wakes the TV: don't call it off while that is happening
   $('tvoff').classList.toggle('hide', !off);
   $('now').classList.toggle('off', off);
@@ -2269,6 +2312,17 @@ function tvInfo() {  // the TV details in the One TV view come from the same cac
     id.append(el('b', null, cur.name),
       el('span', 'sub', [[cur.brand, size].filter(Boolean).join(' '), cur.model, cur.connection].filter(Boolean).join(' · ')));
     if (healthWord(cur)) id.append(el('span', 'hw ' + cur.health.state, healthWord(cur)));
+    const sibs = cur.kind === 'tv' ? [] : targets.filter(t => t.tv && t.tv === cur.tv && t.kind !== 'tv');
+    if (sibs.length > 1) {
+      const sw = el('div', 'srcsw'); sw.setAttribute('role', 'group'); sw.setAttribute('aria-label', 'Play on');
+      sibs.forEach(c => {
+        const b = el('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(c.id === cur.id));
+        b.append(el('span', null, srcName(c))); if (c.now) b.append(el('i', 'hd smooth'));
+        b.onclick = () => { try { localStorage.setItem('src:' + c.tv, JSON.stringify({id: c.id, t: Date.now()})); } catch (x) {} location.hash = '#/tv/' + encodeURIComponent(c.id); };
+        sw.append(b);
+      });
+      id.append(sw);
+    }
   }
 }
 

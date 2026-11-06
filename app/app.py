@@ -1679,6 +1679,7 @@ def cast_segment(token):
 ORDER = ["living", "bedroom"]
 LABELS = {"living": "Living room", "bedroom": "Bedroom"}
 KINDS = {"living": ("pi", "Pi on HDMI"), "bedroom": ("chromecast", "Chromecast")}  # TVs with nothing plugged in are added here as ("tv", ...)
+TV_LABEL = {}  # playback endpoint (or TV-only id) -> the name of its TV, without the " · Pi" / " · Chromecast" suffix
 TV_OF = {}  # playback endpoint (or TV-only id) -> the id of the TV it is on, so two endpoints on one TV can tell
 TV_ONLY = {}  # id -> name of each TV that has neither the Pi nor a Chromecast: Roku controls only, nothing to play on
 
@@ -1800,7 +1801,7 @@ def make_card(tv_id, status):
            "streams": [{"name": t["name"], "url": t["url"], "source": t["source"], "live": t.get("live"), "off": bool(t.get("error")),
                         "game": t.get("game"), "live_for": t.get("live_for"), "sound": t["i"] in status["wall"]["sound"]}
                        for t in [status["wall"]["main"], *status["wall"]["tiles"]]] if status.get("wall") else None} if busy else None
-    return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection, "tv": TV_OF.get(tv_id),
+    return {"id": tv_id, "name": LABELS[tv_id], "kind": kind, "connection": connection, "tv": TV_OF.get(tv_id), "tv_label": TV_LABEL.get(tv_id), "hdmi": INPUTS.get(tv_id) or None,
             "external": None if busy or status.get("error") else external_now(tv_id),  # playing on the TV itself, not through this remote
             "brand": r.get("brand"), "model": r.get("model"), "size": r.get("size"), "tv_name": r.get("name"),
             "power": r.get("power"), "input": r.get("app"), "input_id": r.get("app_id"), "now": now, "error": status.get("error"),
@@ -1966,8 +1967,11 @@ def apply_tv_config(tvs):
     which endpoints show. Takes effect at once, no restart."""
     ep = tvconfig.endpoints(tvs)
     TV_OF.clear()
+    TV_LABEL.clear()
     TV_OF.update({"living": next((t["id"] for t in tvs if t.get("pi")), None), "bedroom": next((t["id"] for t in tvs if t.get("chromecast")), None),
                   **{t["id"]: t["id"] for t in tvs}})
+    TV_LABEL.update({t["id"]: t["name"] for t in tvs})
+    TV_LABEL.update({e: TV_LABEL.get(TV_OF.get(e)) for e in tvconfig.IDS})
     for tid in tvconfig.IDS:
         ROKU_IPS[tid], INPUTS[tid] = ep[tid]["roku"], ep[tid]["input"]
         TV_ENABLED[tid], LABELS[tid] = ep[tid]["enabled"], ep[tid]["label"]
