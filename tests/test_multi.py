@@ -151,6 +151,39 @@ class AddIsRecentTest(unittest.TestCase):
         remember.assert_called_once_with("https://kick.com/b")
 
 
+class QuickSecondAddTest(unittest.TestCase):
+    def test_a_second_stream_added_while_the_first_one_is_still_loading_is_not_refused(self):
+        import app as server
+        def add(url):
+            with server.app.test_request_context("/api/wall", method="POST", json={"action": "add", "url": url}):
+                return server.api_wall()
+        try:
+            with mock.patch.object(server, "remember"), mock.patch.object(server, "wall_later"), mock.patch.object(server, "tgt", return_value=None),                     mock.patch.dict(server.state, {"url": "https://kick.com/a"}):
+                with mock.patch.object(server, "pi_status", return_value={"running": True}):
+                    first = add("https://kick.com/b")
+                # the first add restarts the main window: for a few seconds the player says it is not running
+                with mock.patch.object(server, "pi_status", return_value={"running": False}):
+                    second = add("https://kick.com/c")
+                    refused = add("https://kick.com/b")  # a stream already on the screen is still refused
+                urls = [t["url"] for t in server.wall.extras]
+        finally:
+            server.wall.clear()
+        self.assertTrue(first.get_json()["ok"])
+        self.assertTrue(second.get_json()["ok"])
+        self.assertEqual(urls, ["https://kick.com/b", "https://kick.com/c"])
+        self.assertEqual(refused[1], 400)
+
+    def test_nothing_is_added_when_nothing_is_playing_and_there_is_no_wall(self):
+        import app as server
+        try:
+            with mock.patch.object(server, "tgt", return_value=None), mock.patch.object(server, "pi_status", return_value={"running": False}),                     mock.patch.dict(server.state, {"url": None}):
+                with server.app.test_request_context("/api/wall", method="POST", json={"action": "add", "url": "https://kick.com/b"}):
+                    r = server.api_wall()
+        finally:
+            server.wall.clear()
+        self.assertEqual(r[1], 400)
+
+
 class OnlyThisTest(unittest.TestCase):
     def test_keeping_only_an_added_stream_ends_the_wall_and_starts_that_stream_alone(self):
         import app as server

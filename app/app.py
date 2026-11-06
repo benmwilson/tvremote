@@ -1286,7 +1286,9 @@ def api_wall():
         url = normalise(d.get("url"), d.get("site", "kick"))
         if not url:
             return jsonify(ok=False, error="No link found"), 400
-        if not (state["url"] and pi_status()["running"]):
+        # Once a wall exists, a quick second add must not be refused because the first add is still restarting the main window (for those
+        # seconds the player reports "not running"): the wall itself knows what the main stream is.
+        if not wall.active() and not (state["url"] and pi_status()["running"]):
             return jsonify(ok=False, error="Start a stream first, then add the others."), 400
         with lock:
             if not wall.active():

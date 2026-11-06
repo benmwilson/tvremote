@@ -156,7 +156,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .iconlink{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .nowhead{display:flex;align-items:center;gap:8px}.nowhead .av{width:40px;height:40px}
 .fav .fhead{display:flex;align-items:center;gap:10px;padding-right:30px;margin-bottom:6px}
-.fav .fhead b{margin:0;padding:0;min-width:0;flex:1}
+.fav .fhead b{margin:0;padding:0;min-width:0;flex:0 1 auto;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fav>.iconlink{position:absolute;right:0;bottom:0}
 .fav .badge{margin-right:8px}
 #gear{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px;transition:background .15s,color .15s}
@@ -199,7 +199,11 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .fav.drag{position:relative;z-index:2;box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .fav:not(.drag){transition:transform .15s}
 .fav .livenote{display:block;margin-top:4px;font-size:13px}
-.fav .ftitle{display:block;margin-top:6px;font-size:14px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.fav .ftitle.mq{text-overflow:clip}
+.fav .ftitle.mq>span{display:inline-block;animation:mq var(--mqd,8s) ease-in-out infinite alternate}
+@keyframes mq{0%,18%{transform:translateX(0)}82%,100%{transform:translateX(var(--mq,0))}}
+@media (prefers-reduced-motion:reduce){.fav .ftitle.mq>span{animation:none}.fav .ftitle.mq{text-overflow:ellipsis}}
+.fav .ftitle{flex:1 1 0;min-width:0;font-size:14px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fav .note{display:block;color:var(--warn);font-size:13px;margin-top:4px}
 .fav .note:empty{display:none}
 .fav .starting{display:none;font-size:13px;color:var(--dim)}
@@ -819,9 +823,22 @@ const ago = ts => { const m = Math.round((Date.now() / 1000 - ts) / 60); if (m <
 // A favourite saved from a stream may carry "channel: title" as its name. The heading is always the channel; the stream's own title goes on its own line
 // (as the live check last saw it: an offline channel keeps its last one, and an old saved title is the fallback).
 const favHead = f => { const i = (f.name || '').indexOf(': '); return i > 0 ? f.name.slice(0, i) : f.name; };
+// One line beside the name. A title too long for it scrolls to its end and back (like a video's title on YouTube or Netflix), cut with an ellipsis until then.
+const titleEl = f => { const t = titleLine(f); if (!t) return []; const e = el('span', 'ftitle'); e.title = t; e.append(el('span', null, t)); return [e]; };
+let marqueeQ = 0;
+function runMarquees() {
+  cancelAnimationFrame(marqueeQ);
+  marqueeQ = requestAnimationFrame(() => document.querySelectorAll('.ftitle').forEach(e => {
+    const inner = e.firstElementChild; if (!inner) return;
+    const over = inner.getBoundingClientRect().width - e.clientWidth;  // an inline span has no scrollWidth
+    e.classList.toggle('mq', over > 2);
+    if (over > 2) { e.style.setProperty('--mq', -over + 'px'); e.style.setProperty('--mqd', Math.max(6, over / 25 + 3) + 's'); }
+  }));
+}
+addEventListener('resize', runMarquees);
 const titleLine = f => {
   const i = (f.name || '').indexOf(': '), t = f.title || (i > 0 ? f.name.slice(i + 2) : '');
-  return t ? (f.live === false ? 'Last stream: ' : '') + t : '';
+  return t ? (f.live === false ? 'Last: ' : '') + t : '';
 };
 const liveLine = f => f.live === true ? ['live for ' + dur(f.live_for || 0), f.game].filter(Boolean).join(' \u00b7 ')
   : f.live === false ? ['Offline', f.last_live ? 'last live ' + ago(f.last_live) : 'not seen live yet', f.game ? 'was playing ' + f.game : null].filter(Boolean).join(' \u00b7 ')
@@ -1097,8 +1114,8 @@ function drawFavs() {
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
     const live = f.live === true ? el('span', 'badge live', 'LIVE') : null;
     const lnote = el('span', 'sub livenote', liveLine(f));
-    const head = el('div', 'fhead'); head.append(avatarEl(favHead(f), f.url), el('b', null, favHead(f)));
-    b.append(head, ...siteChips(f), ...(live ? [live] : []), ...(titleLine(f) ? [el('span', 'ftitle', titleLine(f))] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
+    const head = el('div', 'fhead'); head.append(avatarEl(favHead(f), f.url), el('b', null, favHead(f)), ...titleEl(f));
+    b.append(head, ...siteChips(f), ...(live ? [live] : []), lnote, el('span', 'note'), el('span', 'starting', 'Starting\u2026'), spin, linkEl(f.url, f.source), x);
     if (reordering) {
       const i = favList.indexOf(f), mv = el('span', 'mv');
       const grip = el('button', 'grip', '☰');  // drag this to move the row; arrow keys also work
@@ -1118,6 +1135,7 @@ function drawFavs() {
 let favLoading = null;  // {url, t0}
 let favNote = null;  // {url, text, until}: why the last tapped favourite didn't start
 function markFavs() {
+  runMarquees();
   document.querySelectorAll('#favs .fav, #recents .fav').forEach(b => {  // recents get the same spinner and error note
     const n = b.querySelector('.note');
     if (n) n.textContent = favNote && (b.dataset.urls || b.dataset.url).split(' ').includes(favNote.url) && Date.now() < favNote.until ? favNote.text : '';
@@ -1786,14 +1804,14 @@ async function loadRecents() {
   items.forEach(it => {
     const b = el('div', 'fav'), head = el('div', 'fhead');
     b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url;
-    head.append(avatarEl(it.name, it.url), el('b', null, it.name));
+    head.append(avatarEl(it.name, it.url), el('b', null, it.name), ...titleEl(it));
     const x = el('button', 'x'); x.innerHTML = ic('star'); x.setAttribute('aria-label', 'Save ' + it.name + ' to favourites');
     x.onclick = async e => { e.stopPropagation(); await api('/api/favourites', 'POST', {url: it.url, name: it.name}); await loadFavs(); };
     b.onclick = () => playFav(it.url);
     b.onkeydown = e => { if (e.key === 'Enter') playFav(it.url); };
     const spin = el('i', 'spin'); spin.setAttribute('aria-hidden', 'true');
     const live = it.live === true ? [el('span', 'badge live', 'LIVE')] : [];  // the same chip and line as a favourite
-    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), ...live, ...(titleLine(it) ? [el('span', 'ftitle', titleLine(it))] : []), el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, linkEl(it.url, it.source), x);  // the same open-on-the-site icon as a favourite
+    b.append(head, el('span', 'badge ' + (it.source || ''), it.source || 'Other'), ...live, el('span', 'sub livenote', liveLine(it)), el('span', 'note'), el('span', 'starting', 'Starting…'), spin, linkEl(it.url, it.source), x);  // the same open-on-the-site icon as a favourite
     box.append(b);
   });
   markFavs();  // a list redrawn while a tap is still loading keeps its spinner
