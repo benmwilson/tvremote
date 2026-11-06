@@ -163,6 +163,8 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .avgroup{display:inline-flex;align-items:center;flex:none;isolation:isolate}
 .avgroup .av{width:34px;height:34px;font-size:13px;margin-left:-11px;box-shadow:0 0 0 2px var(--card)}
 .avgroup .av:first-child{margin-left:0}
+.avgroup .avl{position:relative;display:inline-flex;flex:none;margin-left:-11px}.avgroup .avl:first-child{margin-left:0}.avgroup .avl .av{margin-left:0}.avgroup.lg .avl{margin-left:-12px}.avgroup.lg .avl:first-child{margin-left:0}
+.livedot{position:absolute;right:-1px;bottom:-1px;z-index:2;width:11px;height:11px;border-radius:50%;background:#e5334d;box-shadow:0 0 0 2px var(--card)}
 .avgroup.lg .av{width:36px;height:36px;font-size:14px;margin-left:-12px}  /* the list cards' own picture size */
 .avgroup.lg .av:first-child{margin-left:0}
 .quickstrip .wstream .avgroup .av{width:48px;height:48px;font-size:16px;margin-left:-18px}.quickstrip .wstream .avgroup .av:first-child{margin-left:0}  /* the same size as a solo streamer's picture, so names and badges line up across the tiles */
@@ -850,7 +852,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <div id="emotesuggest" class="hide" role="listbox" aria-label="Emote suggestions"></div>
     <div id="emotepick" class="hide">
       <input id="emoteq" type="search" placeholder="Search emotes" aria-label="Search emotes" autocomplete="off" autocapitalize="off" autocorrect="off">
-      <div class="wseg" id="emotetabs" role="group" aria-label="Emote source"><button type="button" data-p="all" aria-pressed="true">All</button><button type="button" data-p="twitch" aria-pressed="false">Twitch</button><button type="button" data-p="7tv" aria-pressed="false">7TV</button><button type="button" data-p="bttv" aria-pressed="false">BTTV</button><button type="button" data-p="ffz" aria-pressed="false">FFZ</button></div>
+      <div class="wseg" id="emotetabs" role="group" aria-label="Emote source"><button type="button" data-p="all" aria-pressed="true">All</button><button type="button" data-p="kick" aria-pressed="false">Kick</button><button type="button" data-p="twitch" aria-pressed="false">Twitch</button><button type="button" data-p="7tv" aria-pressed="false">7TV</button><button type="button" data-p="bttv" aria-pressed="false">BTTV</button><button type="button" data-p="ffz" aria-pressed="false">FFZ</button></div>
       <div id="emotegrid"></div>
     </div>
     <form id="kicksend" class="row hide" style="margin:0"><div class="cin"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" placeholder="Send a message"><button id="kickfull" type="button" class="emobtn" aria-label="Emotes" title="Emotes" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-emote"/></svg></button></div><button class="go" id="chatsendbtn" style="flex:0 0 auto;padding:0 20px;min-height:52px">Chat</button></form>
@@ -1360,7 +1362,13 @@ async function loadGroups() {
 function avatarGroup(members, big) {
   const g = el('span', 'avgroup' + (big ? ' lg' : ''));
   g.setAttribute('aria-hidden', 'true');
-  members.slice(0, 4).forEach(m => g.append(avatarEl(m.name, m.url)));
+  members.slice(0, 4).forEach(m => {
+    const a = avatarEl(m.name, m.url);
+    if (m.live !== true) return g.append(a);
+    const w = el('span', 'avl'), d = el('i', 'livedot');  // a streamer who is live right now gets a red dot
+    d.title = 'Live now';
+    w.append(a, d); g.append(w);
+  });
   return g;
 }
 const groupLive = g => g.members.filter(m => m.live === true).length;
@@ -1998,15 +2006,15 @@ $('twitchrow').onclick = async () => {
   if (r) { twitchInfo = r; renderTwitch(); }
 };
 fetch('/api/twitch').then(r => r.json()).then(j => { twitchInfo = j; renderTwitch(); }).catch(() => {});
-let chatNow = {kick: null, tw: ''};  // the channel whose chat is showing, for the send box
+let chatNow = {kick: null, tw: '', ek: ''};  // the channel whose chat is showing, for the send box; ek is the key of its emote list
 $('kicksend').onsubmit = async e => {
   e.preventDefault();
   const text = $('kicktext').value.trim();
   if (!text) return;
-  const r = await busy($('kicksend').querySelector('button'), () => chatNow.tw ? api('/api/twitch/chat', 'POST', {channel: chatNow.tw, text}) : api('/api/kick/chat', 'POST', {channel: chatNow.kick || kickSlug(st.url || ''), text}));
+  const r = await busy($('kicksend').querySelector('button'), () => chatNow.tw ? api('/api/twitch/chat', 'POST', {channel: chatNow.tw, text}) : api('/api/kick/chat', 'POST', {channel: chatNow.kick || kickSlug(st.url || ''), text: kickOut(text)}));
   if (r && r.ok) { $('kicktext').value = ''; chatInputChanged(); $('kicktext').focus(); }  // stay in the box so the keyboard stays up for the next one
 };
-$('kickfull').onclick = () => { const k = chatNow.kick; if (chatNow.tw) togglePicker(); else if (k) window.open('https://kick.com/popout/' + encodeURIComponent(k) + '/chat', '_blank', 'noopener'); };
+$('kickfull').onclick = () => togglePicker();
 fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {});
 
 // ---- settings: your account, linked platforms, and (for admins) people, access requests and guest links ----
@@ -2518,19 +2526,19 @@ function chatRow(name, color, parts) {
   return row;
 }
 // ---- emotes: Twitch's own and the 7TV, BetterTTV and FrankerFaceZ sets for the channel in view (the Pi fetches the lists, the pictures come from each CDN) ----
-const emotesFor = {};  // channel -> {sets: [{provider, scope, emotes}], map: name -> emote, flat: [emote]}
-const PROV = {twitch: 'Twitch', '7tv': '7TV', bttv: 'BTTV', ffz: 'FFZ'};
-async function loadEmotes(login) {
-  if (!login || emotesFor[login]) return;
-  const e = emotesFor[login] = {sets: [], map: new Map(), flat: []};
-  const r = await fetch('/api/emotes?channel=' + encodeURIComponent(login)).then(x => x.json()).catch(() => null);
-  if (!r || !r.sets) { delete emotesFor[login]; return; }  // try again the next time the chat opens
+const emotesFor = {};  // key -> {sets: [{provider, scope, emotes}], map: name -> emote, flat: [emote]}; the key is the Twitch name, or 'kick:' and the Kick channel
+const PROV = {kick: 'Kick', twitch: 'Twitch', '7tv': '7TV', bttv: 'BTTV', ffz: 'FFZ'};
+async function loadEmotes(key) {
+  if (!key || emotesFor[key]) return;
+  const e = emotesFor[key] = {sets: [], map: new Map(), flat: []}, kk = key.startsWith('kick:');
+  const r = await fetch('/api/emotes?channel=' + encodeURIComponent(kk ? key.slice(5) : key) + (kk ? '&site=kick' : '')).then(x => x.json()).catch(() => null);
+  if (!r || !r.sets) { delete emotesFor[key]; return; }  // try again the next time the chat opens
   e.sets = r.sets;
   r.sets.forEach(set => set.emotes.forEach(m => { if (!e.map.has(m.n)) { const o = {...m, p: set.provider, scope: set.scope}; e.map.set(m.n, o); e.flat.push(o); } }));
-  if (chatNow.tw === login) { renderEmotePicker(); updateSuggest(); }
+  if (chatNow.ek === key) { renderEmotePicker(); updateSuggest(); }
 }
 function withEmotes(text) {  // a word that is an emote's name becomes its picture
-  const em = emotesFor[chatNow.tw];
+  const em = emotesFor[chatNow.ek];
   if (!em || !em.map.size || !text) return [{t: text}];
   const out = []; let buf = '';
   text.split(/(\s+)/).forEach(w => { const m = em.map.get(w); if (m) { if (buf) out.push({t: buf}); buf = ''; out.push({img: m.u, alt: w}); } else buf += w; });
@@ -2556,8 +2564,12 @@ function emoteBtn(m) {
 }
 function renderEmotePicker() {
   if (!pickOpen) return;
-  const grid = $('emotegrid'), em = emotesFor[chatNow.tw], q = $('emoteq').value.trim().toLowerCase();
+  const grid = $('emotegrid'), em = emotesFor[chatNow.ek], q = $('emoteq').value.trim().toLowerCase();
   if (!em) { grid.replaceChildren(el('p', 'en', 'Loading emotes\u2026')); return; }
+  const have = new Set(em.sets.map(x => x.provider));
+  document.querySelectorAll('#emotetabs button').forEach(b => b.classList.toggle('hide', b.dataset.p !== 'all' && !have.has(b.dataset.p)));
+  if (pickTab !== 'all' && !have.has(pickTab)) pickTab = 'all';
+  document.querySelectorAll('#emotetabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === pickTab)));
   const parts = [], cap = q ? 300 : 160;
   const add = (title, list) => { if (list.length) { parts.push(el('div', 'eh', title + (list.length > cap ? ' (first ' + cap + ': search for more)' : ''))); const g = el('div', 'eg'); g.append(...list.slice(0, cap).map(emoteBtn)); parts.push(g); } };
   if (pickTab === 'all' && !q) add('Recent', emoteRecent());
@@ -2579,7 +2591,7 @@ function insertEmote(m) {  // at the caret, with a space before and after
   pushRecent(m); chatInputChanged();
 }
 function updateSuggest() {  // the word being typed, completed to emote names: tap one (or press Tab for the first)
-  const box = $('emotesuggest'), em = emotesFor[chatNow.tw], t = $('kicktext');
+  const box = $('emotesuggest'), em = emotesFor[chatNow.ek], t = $('kicktext');
   const word = (t.value.slice(0, t.selectionStart == null ? t.value.length : t.selectionStart).match(/(\S+)$/) || [])[1] || '';
   const w = word.replace(/^:/, '').toLowerCase();
   let list = [];
@@ -2617,18 +2629,24 @@ $('emotetabs').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   pickTab = b.dataset.p; document.querySelectorAll('#emotetabs button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderEmotePicker();
 };
-$('chatlink').onclick = () => { location.href = '/auth/twitch/start'; };
+$('chatlink').onclick = () => { location.href = '/auth/' + ($('chatlink').dataset.site === 'kick' ? 'kick' : 'twitch') + '/start'; };
 function twitchParts(m) {
   const chars = [...m.text], parts = [];  // emote positions count characters, not UTF-16 units
   let at = 0;
   (m.emotes || []).forEach(e => {
-    if (e.s < at || !/^[\w-]+$/.test(e.id)) return;
+    const ok = e.u ? /^https:\/\/files\.kick\.com\//.test(e.u) : /^[\w-]+$/.test(e.id);  // (Kick sends the address, Twitch an id)
+    if (e.s < at || !ok) return;
     parts.push(...withEmotes(chars.slice(at, e.s).join('')),
-      {img: 'https://static-cdn.jtvnw.net/emoticons/v2/' + e.id + '/default/dark/1.0', alt: chars.slice(e.s, e.e + 1).join('')});
+      {img: e.u || 'https://static-cdn.jtvnw.net/emoticons/v2/' + e.id + '/default/dark/1.0', alt: chars.slice(e.s, e.e + 1).join('')});
     at = e.e + 1;
   });
   parts.push(...withEmotes(chars.slice(at).join('')));
   return parts;
+}
+function kickOut(text) {  // a word that is one of the channel's Kick emotes goes out as [emote:id:name], so Kick draws it
+  const em = emotesFor[chatNow.ek];
+  if (!em) return text;
+  return text.split(/(\s+)/).map(w => { const m = em.map.get(w); return m && m.p === 'kick' && m.id ? '[emote:' + m.id + ':' + w + ']' : w; }).join('');
 }
 function kickParts(text) {  // emotes arrive inside the text as [emote:12345:name]
   const parts = [], re = /\[emote:(\d+):([^\]]*)\]/g;
@@ -2656,17 +2674,6 @@ async function chatPoll() {  // Twitch
   chatLast = r.last || chatLast;
   $('chatsub').textContent = r.ok ? '#' + r.channel : '';
 }
-
-function kickEmbed(slug) {  // Kick's own chat page (the one its OBS chat dock uses), shown inside the card
-  const f = document.createElement('iframe');
-  f.src = 'https://kick.com/popout/' + encodeURIComponent(slug) + '/chat';
-  f.title = 'Kick chat'; f.loading = 'lazy'; f.referrerPolicy = 'no-referrer';
-  $('chatbox').replaceChildren(f);
-  $('chatsub').textContent = '#' + slug;
-}
-
-// Our own Kick send box is off for now (to be rethought): Kick's embedded chat, with its own username/password login, does the typing.
-const KICK_OWN_SEND = false;
 
 let chatTab = 0;
 function chatTiles() {  // the streams that can have a chat: every one on the multistream screen, or the one playing
@@ -2710,18 +2717,18 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   $('chatpop').classList.toggle('hide', !pop);  // in the header, between the title and the chevron, open or not
   if (pop) $('chatpop').href = pop;
   $('chatbox').classList.toggle('hide', !want);
-  chatNow = {kick, tw};
-  const kickSend = KICK_OWN_SEND && want && !!kick && !!(kickInfo || {}).can_chat;  // typing needs a Kick account linked with chat permission
+  chatNow = {kick, tw, ek: kick ? 'kick:' + kick : tw};
+  const kickSend = want && !!kick && !!(kickInfo || {}).can_chat;  // typing needs a Kick account linked with chat permission
   const twSend = want && !!tw && !!(twitchInfo || {}).can_chat;  // and a Twitch account linked with it
   const canSend = kickSend || twSend;
   $('kicksend').classList.toggle('hide', !canSend); $('chatcomp').classList.toggle('hide', !canSend);
   if (!canSend && pickOpen) togglePicker(false);
-  const tw2 = (twitchInfo || {}); $('chatlink').classList.toggle('hide', !(want && tw && tw2.can_link && !tw2.can_chat));
-  $('chatlink').textContent = tw2.name ? 'Link Twitch again to allow chatting' : 'Link Twitch to chat as yourself';
-  if (want && tw) loadEmotes(tw);
-  $('kickfull').title = $('kickfull').ariaLabel = tw ? 'Emotes' : 'Emotes: opens Kick\u2019s full chat';
+  const site = kick ? (kickInfo || {}) : (twitchInfo || {}), siteName = kick ? 'Kick' : 'Twitch';  // linking an account is what lets you type
+  $('chatlink').classList.toggle('hide', !(want && (kick || tw) && site.can_link && !site.can_chat));
+  $('chatlink').textContent = site.name ? 'Link ' + siteName + ' again to allow chatting' : 'Link ' + siteName + ' to chat as yourself';
+  $('chatlink').dataset.site = siteName.toLowerCase();
+  if (want && chatNow.ek) loadEmotes(chatNow.ek);
   $('chatsendbtn').disabled = !$('kicktext').value.trim();
-  $('chatbox').classList.toggle('crop', kickSend);  // only Kick's own message bar needs hiding
   if (canSend) $('kicktext').placeholder = 'Chat as ' + (twSend ? twitchInfo.name : kickInfo.name);
   $('chatTog').setAttribute('aria-expanded', String(want)); $('chatChev').setAttribute('aria-expanded', String(want));
   const key = want ? (kick ? 'kick:' + kick : 'twitch:' + (cur.url || '')) : '';
@@ -2730,8 +2737,7 @@ function chatShow() {  // the card only exists while a Twitch or Kick channel is
   if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
   $('chatbox').replaceChildren(); chatLast = 0; $('chatsub').textContent = '';
   if (!key) return;
-  if (kick) kickEmbed(kick);
-  else { chatPoll(); chatTimer = setInterval(chatPoll, 2000); }
+  chatPoll(); chatTimer = setInterval(chatPoll, 2000);  // Twitch and Kick alike: the Pi reads the chat and the phone asks it for new messages
 }
 $('chatTog').onclick = $('chatChev').onclick = () => { chatOpen = !chatOpen; chatShow(); };
 
