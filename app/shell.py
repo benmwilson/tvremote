@@ -55,7 +55,7 @@ def layout(text):
 QR_MODULE, QR_MARGIN = 8, 56  # px per dot; gap from the screen's right and bottom edges
 
 
-def qr_pieces(url):
+def qr_pieces(url, caption="Scan for the remote"):
     """The remote's QR code as ASS drawings for the Ready screen's lower right: a light card, one drawing of rounded dark dots, a caption.
     [] when there is no address or the QR library isn't installed (the written address is still on screen)."""
     try:
@@ -79,7 +79,7 @@ def qr_pieces(url):
                 d.append("m %.1f %.1f l %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f" % (
                     a + r, b, a + c - r, b, a + c, b + r, a + c, b + c - r, a + c - r, b + c, a + r, b + c, a, b + c - r, a, b + r))
     dots = r"{\an7\pos(%d,%d)\p1\bord0\shad0\1c&H%s&}%s{\p0}" % (x0 + q, y0 + q, BG[4:] + BG[2:4] + BG[:2], " ".join(d))  # BG is RGB, ASS wants BGR
-    cap = r"{\an8\pos(%d,%d)\fs28\b1\bord0\shad0\c&H%s&}Scan for the remote" % (x0 + side // 2, y0 + side + 8, DIM)
+    cap = r"{\an8\pos(%d,%d)\fs28\b1\bord0\shad0\c&H%s&}%s" % (x0 + side // 2, y0 + side + 8, DIM, caption)
     return [card, dots, cap]
 
 
@@ -224,9 +224,10 @@ class Shell:
     renew = IDLE_SPAN - 30  # seconds after which the Ready screen's file is written again
 
     def __init__(self, hint="", spawn=subprocess.Popen, ipc=mpvipc.send, ready=None, sleep=time.sleep,
-                 clock=datetime.now, favs=lambda: [], write=write_file, qr=lambda: ""):
+                 clock=datetime.now, favs=lambda: [], write=write_file, qr=lambda: "", qr_caption=lambda: "Scan for the remote"):
         self.hint, self._spawn, self._ipc, self._sleep = hint, spawn, ipc, sleep
         self._clock, self._favs, self._write = clock, favs, write
+        self._qr_caption = qr_caption
         self._qr = qr  # the address to draw as a QR code on the Ready screen, or "" for none
         self._n, self._sid = 0, None  # which file to write next; the subtitle track now showing
         self._ready = ready or (lambda: os.path.exists(SOCK))
@@ -340,7 +341,7 @@ class Shell:
         path = ASS_FILES[self._n % 2]
         self._n += 1
         try:
-            self._write(path, ass_file(events, self.accent, self.kind != "wall", qr_pieces(self._qr()) if self.kind == "idle" else ()))
+            self._write(path, ass_file(events, self.accent, self.kind != "wall", qr_pieces(self._qr(), self._qr_caption()) if self.kind == "idle" else ()))
         except OSError:
             return
         r = self._ipc(SOCK, ["sub-add", path, "select"])

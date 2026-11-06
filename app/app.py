@@ -675,8 +675,11 @@ def _watch(proc):
     raw = last_error()
     name = fav_name(state["url"] or "")
     if raw and re.search(r"No playable streams|offline", raw, re.I):
+        if not livewatch.snapshot().get(state["url"], {}).get("last_live"):
+            forget(state["url"])  # never seen live: a typo or a channel that doesn't exist. One that has been live is just offline for now: keep it.
         screen("offline", name)
     elif proc.returncode or raw:
+        forget(state["url"])
         screen("error", describe_error(raw) or "The player stopped unexpectedly.")
     else:
         screen("ended", name)
@@ -1194,6 +1197,18 @@ def remember(url):
         pass  # history is a convenience
 
 
+def forget(url):
+    """Take a link out of the recents: it turned out to be offline or not found, so it was never a stream we had."""
+    try:
+        with _files_lock:
+            items = load_recents()
+            kept = [r for r in items if r.get("url") != url]
+            if len(kept) != len(items):
+                store.write_json(RECENT_FILE, kept)
+    except OSError:
+        pass
+
+
 _sleep = {}  # per TV: when to stop (epoch seconds)
 
 
@@ -1282,6 +1297,7 @@ def play_async(c, url, quality, via=None):
             play_on(None, url, quality, via)
         except Exception as e:
             app.logger.warning("Starting %s failed: %s", url, e)
+            forget(url)
             screen("error", str(e)[:160])
         finally:
             _pending["t"] = 0.0  # the player is up (or it failed): "Starting" is over
@@ -2201,12 +2217,27 @@ def tv_only_card(tv_id):
 cards = targets.Cards({"living": living_card, "bedroom": bedroom_card}, ORDER)
 
 
+qr_guest = {"url": ""}  # a guest link an admin chose to show on the TV for now; not saved, a restart goes back to the remote
+
+
+def qr_info():
+    """(address, caption) for the QR code on the Ready screen: a guest link if one was put up, else the iPhone Shortcut when chosen and set, else the remote."""
+    if settings.get("qr", True) is False:
+        return "", ""
+    if qr_guest["url"]:
+        return qr_guest["url"], "Scan to join as a guest"
+    if settings.get("qr_mode") == "shortcut" and settings.get("shortcut_url"):
+        return settings["shortcut_url"], "Scan to get the Play on Pi shortcut"
+    return f"http://{shell.lan_ip()}:{PORT}", "Scan for the remote"
+
+
 SHELL_SHOT = "/tmp/tvremote-shell.png"
 
 
 def shell_state():
     running = bool(HOME and HOME.running())
     return {"enabled": bool(settings.get("shell")), "running": running, "qr": settings.get("qr", True) is not False,
+            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "qr_guest": bool(qr_guest["url"]),
             "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None,
             "props": HOME.props() if running and hasattr(HOME, "props") else None}  # what the window is doing, for debugging
 
@@ -2224,6 +2255,14 @@ def api_screen():
     except (OSError, subprocess.SubprocessError):
         return jsonify(ok=False, error="Couldn't capture the screen (is grim installed, and is the desktop running?)."), 502
     return send_file(SCREEN_SHOT, mimetype="image/png", max_age=0)
+
+
+@app.post("/api/restart")
+def api_restart():
+    """Quit the app; the container's restart policy (unless-stopped) starts it again. Stops the player too."""
+    admin_only()
+    threading.Timer(1.0, lambda: (stop_player(), os._exit(1))).start()  # after the answer is sent
+    return jsonify(ok=True)
 
 
 @app.get("/api/stats")
@@ -2287,8 +2326,21 @@ def api_shell_set():
     """Turn the TV's home screen on or off (off shows the Pi desktop again). The app and this remote keep running."""
     admin_only()  # the switch lives in the admin part of Settings; it also stops what is playing
     body = request.get_json(silent=True) or {}
-    if "qr" in body:  # the QR code on the Ready screen: redraw it now if that screen is showing
-        settings["qr"] = bool(body["qr"])
+    if any(k in body for k in ("qr", "qr_mode", "shortcut_url", "qr_guest")):  # the QR code on the Ready screen: redraw it now if that screen is showing
+        if "qr" in body:
+            settings["qr"] = bool(body["qr"])
+        if body.get("qr_mode") in ("remote", "shortcut"):
+            settings["qr_mode"] = body["qr_mode"]
+        if "shortcut_url" in body:
+            u = str(body["shortcut_url"] or "").strip()[:300]
+            if u and not u.startswith("https://"):
+                return jsonify(ok=False, error="Paste the shortcut's iCloud link (it starts with https://)."), 400
+            settings["shortcut_url"] = u
+        if "qr_guest" in body:  # a guest link to show, or "" to take it down
+            u = str(body["qr_guest"] or "")[:300]
+            if u and not u.startswith(("http://", "https://")):
+                return jsonify(ok=False, error="Not a link."), 400
+            qr_guest["url"] = u
         save_settings()
         if HOME and HOME.kind == "idle":
             HOME.show("idle")
@@ -3540,7 +3592,7 @@ if __name__ == "__main__":
     threading.Thread(target=lambda: (inproc.warm(), versions()), daemon=True).start()  # one-time loads and the tool versions, so no tap pays for them
     settings.update(load_settings())
     HOME = shell.Shell(hint=f"Open http://{shell.lan_ip()}:{PORT} on your phone",
-                       qr=lambda: f"http://{shell.lan_ip()}:{PORT}" if settings.get("qr", True) is not False else "",
+                       qr=lambda: qr_info()[0], qr_caption=lambda: qr_info()[1],
                        favs=lambda: [(f.get("name") or "")[:28] for f in load_favs()][:5])
     if settings["shell"]:
         threading.Thread(target=HOME.start, daemon=True).start()

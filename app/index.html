@@ -2,7 +2,7 @@
 <html lang="en-CA">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -21,7 +21,7 @@
 :root{--bg:#0b0e14;--card:#141922;--card2:#1d2431;--line:#2a3344;--fg:#eef1f6;--dim:#8c97a9;
   --ok:#4ade80;--warn:#ffb547;--bad:#ff6b6b;--tv:#62b0ff;--r:20px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{-webkit-text-size-adjust:100%}
+html{touch-action:manipulation;-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.35 ui-rounded,"SF Pro Rounded",-apple-system,system-ui,sans-serif;
   padding:max(14px,env(safe-area-inset-top)) 14px max(28px,env(safe-area-inset-bottom));max-width:560px;margin:auto}
 .ic{width:24px;height:24px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -567,6 +567,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   </div>
 
   <h3 class="shead">How to use this</h3>
+  <div class="card s-form"><button id="tourgo" type="button" class="go">Take the tour</button></div>
   <div class="card help" id="help">
     <details open><summary>Play something</summary>
       <p>Copy a link, or tap Share in Kick, Twitch, YouTube or Safari, then run the <b>Play on Pi</b> Shortcut. You pick a TV, and it starts playing there.</p>
@@ -617,7 +618,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <option value="3">Works on up to 3 devices</option><option value="5">Works on up to 5 devices</option></select>
       <button class="go" id="invmake">Create a guest link</button>
       <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. It is shown only now, so copy it before you leave this page.</p>
-        <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button">Copy</button></div></div>
+        <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button">Copy</button></div>
+        <button id="invtv" type="button" class="hide" style="margin-top:8px">Show its QR code on the TV</button></div>
       <p class="sub">A guest can play Kick, Twitch and YouTube links and control the TVs. They can't change favourites, link accounts or manage people and TVs. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
     </div>
     <div class="card hide" id="guests"></div>
@@ -633,6 +635,15 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <button id="desktop" class="pibtn"><svg class="ic" aria-hidden="true"><use id="piicon" href="#i-eye-off"/></svg><span id="pilabel">Hide the remote from the TV</span></button>
       <p class="sub" id="pihelp"></p>
       <label class="s-check" style="justify-content:space-between">Show a QR code for the remote on the TV<input id="qrtoggle" type="checkbox" class="tg" role="switch"></label>
+      <select id="qrmode" aria-label="What the QR code opens" style="font-size:16px;min-height:52px">
+        <option value="remote">QR opens the remote</option><option value="shortcut">QR opens the iPhone shortcut</option></select>
+      <input id="shortcuturl" placeholder="Shortcut iCloud link (https://www.icloud.com/shortcuts/…)" aria-label="The Play on Pi shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off">
+      <p class="sub hide" id="qrguestnote">A guest link is showing on the TV. <button id="qrguestoff" type="button">Show the normal QR code</button></p>
+    </div>
+    <h3 class="shead">The app</h3>
+    <div class="card s-form">
+      <button id="restartapp" type="button">Restart the app</button>
+      <p class="sub" id="restartnote">Restarts the container's app (Docker brings it straight back). It stops what is playing on the Pi's screen. Use it if something is stuck.</p>
     </div>
     <h3 class="shead">Phone viewing</h3>
     <div class="card s-form" id="cfgcard">
@@ -725,6 +736,12 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
 <div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multi-view</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
+<dialog id="tour" class="sheet" aria-labelledby="tourttl">
+  <div class="sh"><div class="grow"><b id="tourttl"></b><span class="sub" id="toursub"></span></div>
+    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb"><p id="tourtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
+    <div class="row"><button id="tourback" type="button">Back</button><button id="tournext" type="button" class="go">Next</button></div></div>
+</dialog>
 <dialog id="confirm" class="sheet" aria-labelledby="confirmttl">
   <div class="sh"><div class="grow"><b id="confirmttl"></b></div></div>
   <div class="sb"><p id="confirmtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
@@ -1474,6 +1491,28 @@ function confirmSheet(title, text, yes, danger) {
     d.showModal();
   });
 }
+// Tour: a few steps, one at a time. The text is the Help section's own (kept short), so there is one thing to keep up to date.
+const TOUR = [
+  ['Play something', 'Copy a link, or tap Share in Kick, Twitch or YouTube, then run the “Play on Pi” Shortcut. Or paste a link or type a channel name in the box on the remote.'],
+  ['Pick a TV', 'The first screen has a card for each TV. Tap one to open its remote. Controls only act on the TV you opened.'],
+  ['The remote', 'Pause, volume, mute, skip and quality. Refresh reloads a stalled stream. The power button turns the TV on or off. Stop ends playback.'],
+  ['Favourites and recents', 'Tap the star on a stream to keep it. Recents lists what you watched lately; the LIVE badge shows who is on now.'],
+  ['Several streams', 'On the Pi’s screen you can watch up to four streams at once. Open Multi-view, add streams, and use Enlarge to make one big.'],
+  ['Add it to your Home Screen', 'In Safari tap Share, then Add to Home Screen. It then opens like an app.'],
+  ['That’s it', 'Stuck? The Help section below has more. Tap Take the tour any time to see this again.']];
+let tourI = 0;
+function tourShow() {
+  $('tourttl').textContent = TOUR[tourI][0]; $('tourtext').textContent = TOUR[tourI][1]; $('toursub').textContent = 'Step ' + (tourI + 1) + ' of ' + TOUR.length;
+  $('tourback').disabled = !tourI; $('tournext').textContent = tourI === TOUR.length - 1 ? 'Done' : 'Next';
+}
+$('tourgo').onclick = () => { tourI = 0; tourShow(); $('tour').showModal(); };
+$('tourback').onclick = () => { if (tourI) { tourI--; tourShow(); } };
+$('tournext').onclick = () => { if (tourI < TOUR.length - 1) { tourI++; tourShow(); } else $('tour').close(); };
+$('restartapp').onclick = async () => {
+  if (!await confirmSheet('Restart the app?', 'It stops what is playing on the Pi’s screen and the remote is unavailable for a few seconds.', 'Restart', true)) return;
+  const r = await api('/api/restart', 'POST', {});
+  if (r) $('restartnote').textContent = 'Restarting… this page works again in a few seconds.';
+};
 $('move').onclick = async () => {
   const mv = moveInfo(), url = st.url;
   if (!mv || !url) return;
@@ -1558,6 +1597,10 @@ function renderShell() {
     : s.error ? 'Couldn\u2019t start: ' + s.error : 'Starting\u2026';
   $('desktop').classList.toggle('show', !s.enabled);
   $('qrtoggle').checked = s.qr !== false;
+  $('qrmode').value = s.qr_mode || 'remote';
+  if (document.activeElement !== $('shortcuturl')) $('shortcuturl').value = s.shortcut_url || '';
+  $('qrguestnote').classList.toggle('hide', !s.qr_guest);
+  $('invtv').classList.toggle('hide', !targets.some(t => t.kind === 'pi'));
   $('piicon').setAttribute('href', s.enabled ? '#i-eye-off' : '#i-eye');
   $('pilabel').textContent = s.enabled ? 'Hide the remote from the TV' : 'Show the remote on the TV';
   $('pihelp').textContent = s.enabled ? 'Stops what is playing and gives you the Pi\u2019s desktop. Streams still open on top when you play something.'
@@ -1572,6 +1615,11 @@ async function loadShell() {
   try { shellInfo = await (await fetch('/api/shell')).json(); renderShell(); } catch (e) {}
 }
 $('qrtoggle').onchange = async () => { const r = await api('/api/shell', 'POST', {qr: $('qrtoggle').checked}); if (r) { shellInfo = r; renderShell(); } };
+const qrSet = async body => { const r = await api('/api/shell', 'POST', body); if (r) { shellInfo = r; renderShell(); } return r; };
+$('qrmode').onchange = () => qrSet({qr_mode: $('qrmode').value});
+$('shortcuturl').onchange = () => qrSet({shortcut_url: $('shortcuturl').value});
+$('qrguestoff').onclick = () => qrSet({qr_guest: ''});
+$('invtv').onclick = async () => { const r = await qrSet({qr_guest: $('invurl').value}); if (r) $('invtv').textContent = 'Showing on the TV'; };
 let hideSure = null;
 $('desktop').onclick = () => {
   const hide = !shellInfo || shellInfo.enabled;
@@ -1787,7 +1835,7 @@ $('acctadd').onsubmit = async e => {
 $('invmake').onclick = async e => {
   e.preventDefault();
   const r = await busy($('invmake'), () => api('/api/invites', 'POST', {hours: Number($('invhours').value), devices: Number($('invdevices').value), label: $('invlabel').value}));
-  if (r && r.ok) { $('invurl').value = r.url; $('invout').classList.remove('hide'); $('invlabel').value = ''; loadAccess(); }
+  if (r && r.ok) { $('invurl').value = r.url; $('invtv').textContent = 'Show its QR code on the TV'; $('invout').classList.remove('hide'); $('invlabel').value = ''; loadAccess(); }
 };
 
 // ---- Show/Hide on every password field, so you can check two entries match ----
