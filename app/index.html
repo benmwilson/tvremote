@@ -311,7 +311,7 @@ body.chatfull{overflow:hidden}
 .s-danger{color:#ff6b6b}
 input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin:0 2px 0 8px;cursor:pointer;background:var(--dim,#8b93a7);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat}input[type=search]::-webkit-search-cancel-button:hover{background:var(--fg)}
 .qrpick{display:grid;gap:6px}.qrpick button{display:flex;align-items:center;gap:12px;justify-content:flex-start;text-align:left;min-height:52px;padding:8px 14px}.qrpick button.on{outline:2px solid var(--tv,#6bb2ff);outline-offset:-2px}.qrpick .qi .ic{width:22px;height:22px}.qrpick .qc{color:#7be29a}.qrpick b{display:block}.qrpick .sub{display:block;margin:2px 0 0}
-.scat{margin:34px 4px 4px;padding-top:16px;border-top:1px solid var(--line);font-size:20px;font-weight:700;letter-spacing:.2px}#view-settings>.scat:first-child{border-top:0}
+.scat+.shead{margin-top:0}[data-url]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.scat{margin:34px 4px 8px;padding-top:16px;border-top:1px solid var(--line);font-size:20px;font-weight:700;letter-spacing:.2px}#view-settings>.scat:first-child{border-top:0}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}.iconbtn.on{color:#7be29a}.iconbtn .ic{margin:0}
 #tvsadmin{margin-bottom:12px}
 .dd{position:relative;flex:1;min-width:0;width:100%}.ddnative{display:none!important}
@@ -704,12 +704,13 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <label class="s-check" style="justify-content:space-between">Scroll long titles<input id="appmarquee" type="checkbox" class="tg" role="switch"></label>
     <label class="s-check" style="justify-content:space-between">Match the site’s colour while playing<input id="appcolour" type="checkbox" class="tg" role="switch"></label>
     <p class="sub">These are saved on this device only, so each phone can look different.</p>
+    <button id="forgetsites" type="button" class="s-wide">Forget the sites I picked for streamers</button>
   </div>
 
   <div id="adminarea" class="hide">
     <h2 class="scat">People and access</h2>
     <h3 class="shead">People</h3>
-    <p class="sub s-note" style="margin-top:0"><b>Owner</b> is the first admin, made at setup: the only one who can add or change other admins. <b>Admins</b> manage users, guest links, TVs and these settings. <b>Users</b> play, favourite and link their own accounts. <b>Guests</b> come in through a link and can only control the TVs, for a limited time.</p>
+    <p class="sub s-note" style="margin:0 4px 10px"><b>Owner</b> is the first admin, made at setup: the only one who can add or change other admins. <b>Admins</b> manage users, guest links, TVs and these settings. <b>Users</b> play, favourite and link their own accounts. <b>Guests</b> come in through a link and can only control the TVs, for a limited time.</p>
     <div class="card" id="people"></div>
     <button id="addperson" class="s-wide" aria-expanded="false">Add a person</button>
     <form id="acctadd" class="card s-form hide">
@@ -1039,6 +1040,12 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb"><div id="qrpopimg" style="width:min(300px,80vw);margin:0 auto;border-radius:14px;overflow:hidden;background:#fff"></div>
     </div>
+</dialog>
+<dialog id="sitepick" class="sheet" aria-labelledby="sitepickttl">
+  <div class="sh"><div class="grow"><b id="sitepickttl">Which one?</b><span class="sub" id="sitepicksub"></span></div>
+    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb"><div id="sitepickrow" class="pickrow"></div>
+    <label class="s-check" style="justify-content:space-between;margin-top:12px">Always use the one I pick for this streamer<input id="sitepickkeep" type="checkbox" class="tg" role="switch"></label></div>
 </dialog>
 <div id="tourbox" class="hide" role="dialog" aria-live="polite" aria-labelledby="tourttl">
   <div class="tt"><b id="tourttl"></b><span class="sub" id="toursub"></span>
@@ -1623,9 +1630,48 @@ function markFavs() {
     if (on) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
   });
 }
-async function playFav(url) {  // a new tap replaces the one still loading: the Pi keeps only the newest
+// A streamer who is on Kick and Twitch has one entry in the lists, whichever site was used first. Tapping it plays the site they are live on;
+// live on both: the two-card sheet asks (and can remember the answer on this device); live on neither: the saved link.
+// Long press (about half a second) on a streamer in favourites, recents or quick play: choose Kick or Twitch for them, live or not.
+let lpTimer = 0, lpFired = false, lpX = 0, lpY = 0;
+document.addEventListener('pointerdown', e => {
+  const t = e.target.closest('[data-url]');
+  if (!t || e.target.closest('button, a, input, select') || e.button || /^Play group/.test(t.getAttribute('aria-label') || '')) return;
+  lpX = e.clientX; lpY = e.clientY; clearTimeout(lpTimer);
+  lpTimer = setTimeout(() => { lpFired = true; if (navigator.vibrate) navigator.vibrate(15); playFav(t.dataset.url, true); }, 500);
+});
+['pointerup', 'pointercancel'].forEach(n => document.addEventListener(n, () => clearTimeout(lpTimer)));
+document.addEventListener('pointermove', e => { if (Math.abs(e.clientX - lpX) + Math.abs(e.clientY - lpY) > 12) clearTimeout(lpTimer); });
+document.addEventListener('click', e => { if (lpFired) { lpFired = false; e.preventDefault(); e.stopPropagation(); } }, true);  // the tap that ends a long press does not also play
+document.addEventListener('contextmenu', e => { if (e.target.closest('[data-url]')) e.preventDefault(); });
+const sitePrefKey = slug => 'sitepref:' + slug;
+const siteUrl = (site, slug) => site === 'twitch' ? 'https://www.twitch.tv/' + slug : 'https://kick.com/' + slug;
+async function chooseSite(url, force) {  // force (a long press): always ask, live or not
+  const slug = kickSlug(url) || twSlug(url);
+  if (!slug || !/^[\w-]{2,25}$/.test(slug)) return force ? null : url;  // not a bare channel link (a video, a YouTube link...): play it as it is (a long press does nothing)
+  if (!force) try { const pref = localStorage.getItem(sitePrefKey(slug)); if (pref) return siteUrl(pref, slug); } catch (e) {}
+  const d = await fetch('/api/detect?name=' + encodeURIComponent(slug)).then(x => x.json()).catch(() => null);
+  const live = d && d.ok ? (force ? d.matches : d.matches.filter(m => m.live)) : [];
+  if (live.length === 1) return live[0].url;
+  if (live.length !== 2) return force ? null : url;
+  return new Promise(res => {
+    const dlg = $('sitepick'); let done = false;
+    const finish = v => { if (done) return; done = true; res(v); if (dlg.open) dlg.close(); };
+    $('sitepickttl').textContent = slug + ' is live on both'; $('sitepicksub').textContent = 'Pick where to watch';
+    $('sitepickkeep').checked = false;
+    $('sitepickrow').replaceChildren(...pickCards(slug, live, m => {
+      if ($('sitepickkeep').checked) { try { localStorage.setItem(sitePrefKey(slug), m.source.toLowerCase()); } catch (e) {} }
+      finish(m.url);
+    }).slice(1));  // (the cards, without their own heading: the sheet has one)
+    dlg.addEventListener('close', () => finish(null), {once: true});
+    dlg.showModal();
+  });
+}
+async function playFav(url, force) {  // a new tap replaces the one still loading: the Pi keeps only the newest
   favLoading = {url, t0: Date.now()}; markFavs();
-  const r = await play(url);
+  const go = await chooseSite(url, force);
+  if (!go) { favLoading = null; markFavs(); return; }  // the sheet was closed: nothing starts
+  const r = await play(go);
   if ((!r || !r.ok) && favLoading && favLoading.url === url) { favLoading = null; markFavs(); }
 }
 function checkFavLoading() {
@@ -2543,6 +2589,7 @@ $('suphonenext').onclick = async () => {
   setupStep = 4; renderSetup();
 };
 $('rerun').onclick = () => { location.hash = '#/setup'; };
+$('forgetsites').onclick = () => { try { Object.keys(localStorage).filter(k => k.startsWith('sitepref:')).forEach(k => localStorage.removeItem(k)); } catch (e) {} $('forgetsites').title = 'Done'; };
 $('onboardgo').onclick = () => { setupStart = 3; location.hash = '#/setup'; };  // the onboarding again, from the phone step: then the tour
 // One tap after plugging into a new TV: look for TVs and save what was found, but only when every guess is clear. When it is not sure
 // (a screen with no TV to match, a Chromecast no TV claims, nothing found) it opens the wizard with what it found, instead of saving a guess.
