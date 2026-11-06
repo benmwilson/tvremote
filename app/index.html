@@ -316,6 +316,8 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appeara
 .sfield input:placeholder-shown~.sclear{display:none}
 #walladd .chatbtn,#repladd .chatbtn{width:52px;min-width:52px;height:52px;min-height:52px;flex:none}  /* as tall as the field beside it */
 .qrpick{display:grid;gap:6px}.qrpick button{display:flex;align-items:center;gap:12px;justify-content:flex-start;text-align:left;min-height:52px;padding:8px 14px}.qrpick button.on{outline:2px solid var(--tv,#6bb2ff);outline-offset:-2px}.qrpick .qi .ic{width:22px;height:22px}.qrpick .qc{color:#7be29a}.qrpick b{display:block}.qrpick .sub{display:block;margin:2px 0 0}
+#site button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding-left:6px;padding-right:6px}#site .ic{width:16px;height:16px;flex:none}
+#site .bi{width:16px;height:16px;flex:none;fill:currentColor;stroke:none}#site .bi.kick{color:#53fc18}#site .bi.twitch{color:#9146ff}#site .bi.youtube{color:#ff3b3b}#site button.on .bi{color:inherit}
 .scat+.shead{margin-top:0}.namechips:not(.hide){margin:10px 0 2px}[data-url]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.scat{margin:34px 4px 8px;padding-top:16px;border-top:1px solid var(--line);font-size:20px;font-weight:700;letter-spacing:.2px}#view-settings>.scat:first-child{border-top:0}
 .iconbtn{width:44px;min-height:44px;padding:0;flex:none}.iconbtn.on{color:#7be29a}.iconbtn .ic{margin:0}
 #tvsadmin{margin-bottom:12px}
@@ -566,6 +568,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <symbol id="i-grid" viewBox="0 0 24 24"><rect x="5" y="5" width="5.5" height="5.5" rx="1.2"/><rect x="13.5" y="5" width="5.5" height="5.5" rx="1.2"/><rect x="5" y="13.5" width="5.5" height="5.5" rx="1.2"/><rect x="13.5" y="13.5" width="5.5" height="5.5" rx="1.2"/></symbol>
 <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M10 6H6.5A1.5 1.5 0 005 7.5v10A1.5 1.5 0 006.5 19h10a1.5 1.5 0 001.5-1.5V14"/></symbol>
 <symbol id="i-kick" viewBox="0 0 24 24"><path d="M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z"/></symbol>
+<symbol id="i-youtube" viewBox="0 0 24 24"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 00.5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 002.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 002.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.6 15.6V8.4l6.2 3.6-6.2 3.6z"/></symbol>
 <symbol id="i-twitch" viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.43l-3 3v-3H6.857V1.714h13.714Z"/></symbol>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
 </defs></svg>
@@ -1003,7 +1006,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 <div class="card">
   <input type="search" id="link" placeholder="Paste a link, a channel name or a search" autocapitalize="off" autocorrect="off" enterkeyhint="go" aria-label="Link, channel or search">
   <div class="row seg" id="site">
-    <button data-s="auto" class="on">Auto</button><button data-s="kick">Kick</button><button data-s="twitch">Twitch</button><button data-s="youtube">YouTube</button>
+    <button data-s="auto" class="on"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Auto</button><button data-s="kick"><svg class="bi kick" aria-hidden="true" viewBox="0 0 24 24"><use href="#i-kick"/></svg>Kick</button><button data-s="twitch"><svg class="bi twitch" aria-hidden="true" viewBox="0 0 24 24"><use href="#i-twitch"/></svg>Twitch</button><button data-s="youtube"><svg class="bi youtube" aria-hidden="true" viewBox="0 0 24 24"><use href="#i-youtube"/></svg>YouTube</button>
   </div>
   <div id="linksugg" class="sugg namechips hide" role="listbox" aria-label="Live channels that match"></div>
   <div id="playpick" class="pickrow hide"></div>
