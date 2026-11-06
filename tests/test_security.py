@@ -1,4 +1,5 @@
 import os
+import threading
 import shutil
 import sys
 import tempfile
@@ -82,7 +83,23 @@ class Security(unittest.TestCase):
             play.assert_not_called()
             for good in ("https://kick.com/capped", "https://www.twitch.tv/xqc", "https://m.youtube.com/watch?v=abc", "https://youtu.be/abc"):
                 self.assertEqual(self.guest.post("/api/play", json={"url": good}).status_code, 200, good)
+            for _ in range(60):  # the start runs in the background now
+                if play.call_count >= 4:
+                    break
+                threading.Event().wait(0.05)
             self.assertEqual(play.call_count, 4)
+
+    def test_a_guests_background_play_is_not_remembered_but_a_users_is(self):
+        done = threading.Event()
+        with mock.patch.object(server, "start_player", side_effect=lambda *a, **k: done.set()), mock.patch.object(server, "switch_input"),                 mock.patch.object(server, "resolve", return_value=("Kick", "streamlink")),                 mock.patch.object(server, "RECENT_FILE", os.path.join(self.dir, "recents.json")):
+            self.guest.post("/api/play", json={"url": "https://kick.com/guestpick"})
+            self.assertTrue(done.wait(3))
+            self.assertEqual(server.load_recents(), [])  # the start runs in a thread, which must still know a guest asked
+            done.clear()
+            server._start_seq.clear()
+            self.user.post("/api/play", json={"url": "https://kick.com/userpick"})
+            self.assertTrue(done.wait(3))
+            self.assertEqual([r["url"] for r in server.load_recents()], ["https://kick.com/userpick"])
 
     def test_a_guest_cannot_get_there_through_the_shortcut_or_move_either(self):
         with mock.patch.object(server, "play_on") as play:

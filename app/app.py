@@ -17,7 +17,7 @@ import time
 import zlib
 from urllib.parse import quote, urlparse
 
-from flask import Flask, Response, abort, g, has_request_context, jsonify, send_file, redirect, request, send_from_directory
+from flask import Flask, Response, abort, copy_current_request_context, g, has_request_context, jsonify, send_file, redirect, request, send_from_directory
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("TVREMOTE_DATA", "/data")
@@ -1205,8 +1205,11 @@ def play_async(c, url, quality, via=None):
     if c:
         return play_on(c, url, quality, via)
     _pending["t"] = time.time()
+    who = getattr(g, "user", None) if has_request_context() else None
 
     def run():
+        if who is not None:
+            g.user = who  # the copied request context does not carry what the app stored per request
         try:
             play_on(None, url, quality, via)
         except Exception as e:
@@ -1214,7 +1217,7 @@ def play_async(c, url, quality, via=None):
             screen("error", str(e)[:160])
         finally:
             _pending["t"] = 0.0  # the player is up (or it failed): "Starting" is over
-    threading.Thread(target=run, daemon=True).start()
+    threading.Thread(target=copy_current_request_context(run), daemon=True).start()  # keeps who asked: a guest's plays must not be remembered
 
 
 def play_on(c, url, quality, via=None):
