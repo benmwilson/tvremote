@@ -27,17 +27,11 @@ SOCK = "/tmp/tvremote-mpv.sock"
 FAV_FILE = os.path.join(DATA, "favourites.json")
 LOG_FILE = os.path.join(DATA, "player.log")
 
-# Routing table: one line per site. player: "streamlink", "ytdlp" or "auto" (YouTube: live -> streamlink).
-SOURCES = [
-    # (name,      hosts,                              player)
-    ("Kick",    ("kick.com",),                       "streamlink"),
-    ("Twitch",  ("twitch.tv",),                      "streamlink"),
-    ("YouTube", ("youtube.com", "youtu.be"),         "auto"),
-]
 SL_DEFAULT = "1080p60,best"
 YTDL_HEIGHTS = ("1080", "720", "480")
 
 import hlsproxy
+from routing import SOURCES, normalise, route  # noqa: F401  (kept importable from here)
 import groups
 import inproc
 import live
@@ -259,15 +253,6 @@ def api_auth():
 
 # ---------- routing ----------
 
-def route(url):
-    """Return (source name, player) for a URL."""
-    host = (urlparse(url).hostname or "").lower()
-    for name, hosts, player in SOURCES:
-        if any(host == h or host.endswith("." + h) for h in hosts):
-            return name, player
-    return "Other", "ytdlp"
-
-
 LIVE_CHECK_TTL = 300  # a stream can start or end, so an answer is only good for a few minutes
 
 
@@ -317,17 +302,6 @@ def guest_link_refused(url):
     if p.scheme in ("http", "https") and any(host == s or host.endswith("." + s) for s in GUEST_SITES):
         return None
     return "Guests can play Kick, Twitch and YouTube links."
-
-
-def normalise(text, site="kick"):
-    """Pull the first URL out of shared text; a bare word becomes a channel on `site`."""
-    text = (text or "").strip()
-    m = re.search(r"https?://[^\s<>\"']+", text)
-    if m:
-        return m.group(0).rstrip(").,")
-    if re.fullmatch(r"[A-Za-z0-9_\-]{2,40}", text):
-        return f"https://{'twitch.tv' if site == 'twitch' else 'kick.com'}/{text}"
-    return None
 
 
 # ---------- mpv ----------
