@@ -273,6 +273,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .s-actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 0 12px 56px}.s-actions button{flex:1 1 auto;min-height:44px;padding:0 14px}
 .s-actions form{display:flex;gap:8px;flex:1 1 100%}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
 .s-danger{color:#ff6b6b}
+.iconbtn{width:44px;min-height:44px;padding:0;flex:none}
 .s-wide{display:block;width:100%;min-height:52px;margin-top:10px}
 .s-form{display:grid;gap:10px}.s-form input,.s-form select{font-size:16px;min-height:52px;width:100%;box-sizing:border-box}
 .s-check{display:flex;gap:10px;align-items:center;min-height:44px}.s-check input{width:22px;height:22px;min-height:0;flex:0 0 auto}
@@ -377,6 +378,11 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 .btile .bact{display:flex;gap:6px}.btile .bact button{min-height:40px;padding:0 8px;font-size:13px;font-weight:700}
 .btile .bact .bp{flex:1;min-width:0}.btile .bact .bp.Kick{background:#53fc18;color:#000}.btile .bact .bp.Twitch{background:#9146ff;color:#fff}
 .btile .bact .bpadd{flex:none;width:auto;padding:0 14px;background:var(--fg);color:#0b0e14;font-weight:800;box-shadow:0 0 0 2px var(--tv,#6bb2ff) inset}.btile .bact .bpadd:disabled{opacity:1;background:var(--tv,#6bb2ff)}
+.bctl{display:flex;gap:8px;align-items:center;margin:0 0 4px}.bctl select{flex:1;min-width:0;min-height:44px;font-size:16px}
+.bfilters summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;color:var(--dim);cursor:pointer}
+.bfilters summary button{min-height:36px;padding:0 12px;font-size:13px;background:none;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line)}
+.bfgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.bfgrid select{min-width:0;min-height:44px;font-size:16px}
+.bfilters{margin:0 0 8px}
 #browseq{display:block;width:100%;box-sizing:border-box}#browseq:focus-visible{outline-offset:-2px}
 .bnote{grid-column:1/-1;margin:6px 2px;color:var(--dim);font-size:14px}
 /* ruler notches over a slider's track, only while it is being dragged (the thumb travels the width minus its own 30px) */
@@ -758,12 +764,6 @@ body:has(dialog.sheet[open]){overflow:hidden}
 </div>
 <div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multistream</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
 <div class="card hide" id="browsecard"><button id="browseopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Browse live channels</b><span class="sub" style="display:block">Kick and Twitch: play one, or add it to the multistream</span></span><span class="chatbtn"><span class="chev">&rsaquo;</span></span></button></div>
-<dialog id="tour" class="sheet" aria-labelledby="tourttl">
-  <div class="sh"><div class="grow"><b id="tourttl"></b><span class="sub" id="toursub"></span></div>
-    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
-  <div class="sb"><p id="tourtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
-    <div class="row"><button id="tourback" type="button">Back</button><button id="tournext" type="button" class="go">Next</button></div></div>
-</dialog>
 <dialog id="tvapps" class="sheet" aria-labelledby="tvappsttl">
   <div class="sh"><div class="grow"><b id="tvappsttl">TV apps</b><span class="sub" id="tvappssub">Tap one to open it on the TV</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -773,23 +773,15 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="sh"><div class="grow"><b id="browsettl">Browse live</b><span class="sub" id="browsesub">Kick and Twitch, biggest first</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
-    <input id="browseq" type="search" placeholder="Search live channels, games, titles" aria-label="Search live channels" autocomplete="off" autocapitalize="off" autocorrect="off" enterkeyhint="search" style="font-size:16px;min-height:48px;margin-bottom:10px">
-    <div class="row" style="margin:0 0 10px"><select id="browsesort" aria-label="Sort by" style="font-size:16px;min-height:48px">
-      <option value="viewers">Most viewers</option><option value="fewest">Fewest viewers</option><option value="new">Just started</option><option value="name">Name A to Z</option></select></div>
-    <details id="browsefilters" style="margin:0 0 10px"><summary style="min-height:44px;line-height:44px;color:var(--dim)">Filters <span id="browsefcount" class="sub"></span></summary>
-      <div class="row"><select id="browsegame" aria-label="Category" style="font-size:16px;min-height:48px"></select>
-        <select id="browselang" aria-label="Language" style="font-size:16px;min-height:48px"></select></div>
-      <label class="s-check" style="justify-content:space-between;margin-top:8px">Only streamers live on both sites<input id="browseboth" type="checkbox" class="tg" role="switch"></label>
-      <button id="browsereset" type="button" style="width:100%;margin-top:8px">Clear search and filters</button>
+    <input id="browseq" type="search" placeholder="Search live channels, games, titles" aria-label="Search live channels" autocomplete="off" autocapitalize="off" autocorrect="off" enterkeyhint="search" style="font-size:16px;min-height:46px;margin-bottom:8px">
+    <div class="bctl"><div class="wseg" id="browsesite" role="group" aria-label="Site"><button type="button" data-s="" aria-pressed="true">All</button><button type="button" data-s="kick" aria-pressed="false">Kick</button><button type="button" data-s="twitch" aria-pressed="false">Twitch</button></div>
+      <select id="browsesort" aria-label="Sort by"><option value="viewers">Most viewers</option><option value="fewest">Fewest viewers</option><option value="new">Just started</option><option value="name">A to Z</option></select></div>
+    <details id="browsefilters" class="bfilters"><summary><span>Filters <span id="browsefcount" class="sub"></span></span><button id="browsereset" type="button">Clear all</button></summary>
+      <div class="bfgrid"><select id="browsegame" aria-label="Category"></select><select id="browselang" aria-label="Language"></select></div>
+      <label class="s-check" style="justify-content:space-between;margin-top:6px">Only streamers live on both sites<input id="browseboth" type="checkbox" class="tg" role="switch"></label>
     </details>
-    <div class="wseg" id="browsesite" role="group" aria-label="Site" style="margin-bottom:10px"><button type="button" data-s="" aria-pressed="true">All</button><button type="button" data-s="kick" aria-pressed="false">Kick</button><button type="button" data-s="twitch" aria-pressed="false">Twitch</button></div>
     <div id="browsegrid" class="bgrid" aria-live="polite"></div>
   </div>
-</dialog>
-<dialog id="confirm" class="sheet" aria-labelledby="confirmttl">
-  <div class="sh"><div class="grow"><b id="confirmttl"></b></div></div>
-  <div class="sb"><p id="confirmtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
-    <div class="row"><button id="confirmno" type="button" autofocus>Cancel</button><button id="confirmyes" type="button" class="go"></button></div></div>
 </dialog>
 <dialog id="wallcard" class="sheet" aria-labelledby="wallttl">
   <div class="sh"><div class="grow"><b id="wallttl">Multistream</b><span class="sub" id="wallsub"></span></div>
@@ -855,6 +847,17 @@ body:has(dialog.sheet[open]){overflow:hidden}
 
 <p id="dbgrow" class="hide" style="text-align:center;margin-top:26px"><button id="dbgOpen" style="min-height:44px;background:none;color:var(--dim);font-size:14px"><svg class="ic" aria-hidden="true"><use href="#i-terminal"/></svg>Debug</button></p>
 </section>
+<dialog id="tour" class="sheet" aria-labelledby="tourttl">
+  <div class="sh"><div class="grow"><b id="tourttl"></b><span class="sub" id="toursub"></span></div>
+    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb"><p id="tourtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
+    <div class="row"><button id="tourback" type="button">Back</button><button id="tournext" type="button" class="go">Next</button></div></div>
+</dialog>
+<dialog id="confirm" class="sheet" aria-labelledby="confirmttl">
+  <div class="sh"><div class="grow"><b id="confirmttl"></b></div></div>
+  <div class="sb"><p id="confirmtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
+    <div class="row"><button id="confirmno" type="button" autofocus>Cancel</button><button id="confirmyes" type="button" class="go"></button></div></div>
+</dialog>
 
 <div id="scrim" class="hide"></div>
 <aside id="drawer" class="hide" aria-label="Debug">
@@ -1753,6 +1756,7 @@ $('kickfull').onclick = () => { const k = chatNow.kick, t = chatNow.tw; if (k) w
 fetch('/api/kick').then(r => r.json()).then(j => { kickInfo = j; renderKick(); }).catch(() => {});
 
 // ---- settings: your account, linked platforms, and (for admins) people, access requests and guest links ----
+const iconBtn = (name, label, cls, fn) => { const b = mk('button', {class: 'iconbtn ' + cls, 'aria-label': label, title: label, onclick: fn}); b.innerHTML = ic(name); return b; };  // a round-cornered square with just a picture
 function mk(tag, attrs, ...kids) {
   const e = document.createElement(tag);
   Object.entries(attrs || {}).forEach(([k, v]) => {
@@ -1844,8 +1848,8 @@ function requestRow(r) {
   return mk('div', {class: 's-row', style: 'flex-wrap:wrap'},
     mk('div', {class: 'avatar', 'aria-hidden': 'true'}, r.name.slice(0, 1)),
     mk('div', {class: 'grow'}, mk('b', {}, r.name), mk('span', {class: 'sub'}, (r.note ? '“' + r.note + '” · ' : '') + ago(r.ts))),
-    mk('button', {onclick: () => { form.classList.toggle('hide'); }}, 'Approve'),
-    mk('button', {class: 's-danger', onclick: async () => { await api('/api/requests/' + r.id, 'DELETE'); loadAccess(); }}, 'Deny'),
+    iconBtn('check', 'Approve ' + r.name, '', () => { form.classList.toggle('hide'); }),
+    iconBtn('x', 'Deny ' + r.name, 's-danger', async () => { await api('/api/requests/' + r.id, 'DELETE'); loadAccess(); }),
     form, result);
 }
 function renderAccess() {
@@ -2426,7 +2430,8 @@ $('browsesort').onchange = () => { browseSort = $('browsesort').value; renderBro
 $('browsegame').onchange = () => { browseGame = $('browsegame').value; renderBrowse(); };
 $('browselang').onchange = () => { browseLang = $('browselang').value; renderBrowse(); };
 $('browseboth').onchange = () => { browseBoth = $('browseboth').checked; renderBrowse(); };
-$('browsereset').onclick = () => {
+$('browsereset').onclick = e => {
+  e.preventDefault(); e.stopPropagation();
   browseGame = browseLang = ''; browseBoth = false; browseSort = 'viewers'; $('browseq').value = ''; $('browseboth').checked = false; $('browsesort').value = 'viewers';
   renderBrowse();
 };
