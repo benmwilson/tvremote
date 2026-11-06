@@ -314,7 +314,6 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appeara
 .sfield{position:relative;display:block;flex:1;min-width:0}.sfield input{padding-right:46px}
 .sclear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;min-height:0;padding:0;border-radius:50%;background:none;color:var(--dim);display:grid;place-items:center}.sclear .ic{width:18px;height:18px}.sclear:hover{color:var(--fg)}
 .sfield input:placeholder-shown~.sclear{display:none}
-#walladd .chatbtn,#repladd .chatbtn{width:52px;min-width:52px;height:52px;min-height:52px;flex:none}  /* as tall as the field beside it */
 .qrpick{display:grid;gap:6px}.qrpick button{display:flex;align-items:center;gap:12px;justify-content:flex-start;text-align:left;min-height:52px;padding:8px 14px}.qrpick button.on{outline:2px solid var(--tv,#6bb2ff);outline-offset:-2px}.qrpick .qi .ic{width:22px;height:22px}.qrpick .qc{color:#7be29a}.qrpick b{display:block}.qrpick .sub{display:block;margin:2px 0 0}
 #site button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding-left:6px;padding-right:6px}#site .ic{width:16px;height:16px;flex:none}
 #site .bi{width:16px;height:16px;flex:none;fill:currentColor;stroke:none}#site .bi.kick{color:#53fc18}#site .bi.twitch{color:#9146ff}#site .bi.youtube{color:#ff3b3b}#site button.on .bi{color:inherit}
@@ -962,7 +961,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <div id="wallgroupswrap" class="hide"><div class="wlabel" style="display:flex;align-items:center;justify-content:space-between">Groups<button id="wallsavegroup" class="hide" type="button" style="min-height:30px;padding:0 10px;font-size:12px;gap:5px"><svg class="ic" aria-hidden="true" style="width:14px;height:14px"><use href="#i-multi-grid"/></svg>Save these as a group</button></div><div id="wallgroups" class="wallfavs"></div></div>
         <div id="walladdbox">
       <div class="wlabel" id="walladdlabel">Add a stream</div>
-      <form id="walladd" class="row"><input id="wallurl" type="search" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="chatbtn" aria-label="Add this stream" title="Add"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button></form>
+      <form id="walladd" class="row"><input id="wallurl" type="search" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="Add a stream to the screen" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Add</button></form>
         <div id="wallpick" class="pickrow hide"></div>
       <div id="wallfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="wallfavs" class="wallfavs"></div></div>
     </div>
@@ -972,7 +971,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="sh"><div class="grow"><b id="replttl">Replace</b><span class="sub">Pick what goes in its place</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div class="sb">
-    <form id="repladd" class="row"><input id="replurl" type="search" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="The stream to put in its place" style="font-size:16px"><button class="chatbtn" aria-label="Replace with this stream" title="Replace"><svg class="ic" aria-hidden="true"><use href="#i-swap"/></svg></button></form>
+    <form id="repladd" class="row"><input id="replurl" type="search" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" placeholder="Channel name or link" aria-label="The stream to put in its place" style="font-size:16px"><button class="go" style="flex:0 0 auto;padding:0 20px">Replace</button></form>
     <div id="replpick" class="pickrow hide"></div>
     <div id="replfavswrap" class="hide"><div class="wlabel">Live now, suggested</div><div id="replfavs" class="wallfavs"></div></div>
   </div>
