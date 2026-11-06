@@ -755,7 +755,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <option value="1" selected>Works on 1 device (one-time)</option><option value="2">Works on up to 2 devices</option>
         <option value="3">Works on up to 3 devices</option><option value="5">Works on up to 5 devices</option></select>
       <button class="go" id="invmake">Create a guest link</button>
-      <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. It is shown only now, so copy it before you leave this page.</p>
+      <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. Copy it or show its QR code. It clears from here in a minute; its QR code stays in the list below.</p>
         <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button" class="iconbtn" aria-label="Copy the link" title="Copy the link"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg></button><button id="invqr" type="button" class="iconbtn" aria-label="Show QR code" title="Show QR code"><svg class="ic" aria-hidden="true"><use href="#i-qr"/></svg></button><button id="invtv" type="button" class="iconbtn hide" aria-label="Show it on the TV" title="Show it on the TV"><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg></button></div></div>
       <p class="sub">A guest can play Kick, Twitch and YouTube links and control the TVs. They can't change favourites, link accounts or manage people and TVs. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
     </div>
@@ -2040,6 +2040,7 @@ $('installurl').onchange = () => qrSet({install_url: $('installurl').value});
 $('installqr').onclick = () => $('installurl').value.trim() ? showQr($('installurl').value.trim(), 'Add the shortcut') : null;
 $('shortcuturl').onchange = () => qrSet({shortcut_url: $('shortcuturl').value});
 $('qrguestoff').onclick = () => qrSet({qr_guest: ''});
+let invClear = 0;  // the new link's panel hides itself after a minute (the link stays in the list, with its QR code)
 async function showQr(url, title) {  // a popup with the QR code of a link; from there it can go up on the TV's idle screen
   const r = await api('/api/qr', 'POST', {url});
   if (!r || !r.ok) return;
@@ -2298,7 +2299,7 @@ $('acctadd').onsubmit = async e => {
 $('invmake').onclick = async e => {
   e.preventDefault();
   const r = await busy($('invmake'), () => api('/api/invites', 'POST', {hours: Number($('invhours').value), devices: Number($('invdevices').value), label: $('invlabel').value}));
-  if (r && r.ok) { $('invurl').value = r.url; $('invtv').title = 'Show it on the TV'; $('invtv').classList.remove('on'); $('invout').classList.remove('hide'); $('invlabel').value = ''; loadAccess(); }
+  if (r && r.ok) { $('invurl').value = r.url; clearTimeout(invClear); invClear = setTimeout(() => { $('invurl').value = ''; $('invout').classList.add('hide'); }, 60000); $('invtv').title = 'Show it on the TV'; $('invtv').classList.remove('on'); $('invout').classList.remove('hide'); $('invlabel').value = ''; loadAccess(); }
 };
 
 // ---- Show/Hide on every password field, so you can check two entries match ----
