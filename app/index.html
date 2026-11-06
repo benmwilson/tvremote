@@ -304,8 +304,10 @@ body.chatfull{overflow:hidden}
 .s-link{color:var(--dim);padding:12px 6px;font-size:15px}
 .s-row{display:flex;align-items:center;gap:12px;padding:12px 0}.s-row~.s-row,#kickrow:not(.hide)+.s-row{border-top:1px solid var(--line)}.s-row:first-child{padding-top:2px}.s-row:last-child{padding-bottom:2px}#kickrow:not(.hide)+.s-row{margin-top:10px}
 .s-more{width:44px;height:44px;flex:0 0 auto;background:none;color:var(--dim);font-size:22px;padding:0}
-.s-actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 0 12px 56px}.s-actions button{flex:1 1 auto;min-height:44px;padding:0 14px}
-.s-actions form{display:flex;gap:8px;flex:1 1 100%}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
+.made{padding:4px 0 10px;border-bottom:1px solid var(--line);margin-bottom:6px}.made .who{justify-content:space-between}.made .s-out input{flex:1;min-width:0}
+.who{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.who b{font-size:16px}.pill.you{background:var(--line);color:var(--fg)}
+.s-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 0 14px 56px}.s-actions button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 12px;font-size:15px}.s-actions .ic{width:18px;height:18px;flex:none}
+.s-actions form{display:flex;gap:8px;grid-column:1/-1}.s-actions form input{flex:1;min-width:0;font-size:16px;min-height:44px}
 .s-danger{color:#ff6b6b}
 input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin:0 2px 0 8px;cursor:pointer;background:var(--dim,#8b93a7);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat}input[type=search]::-webkit-search-cancel-button:hover{background:var(--fg)}
 .qrpick{display:grid;gap:6px}.qrpick button{display:flex;align-items:center;gap:12px;justify-content:flex-start;text-align:left;min-height:52px;padding:8px 14px}.qrpick button.on{outline:2px solid var(--tv,#6bb2ff);outline-offset:-2px}.qrpick .qi .ic{width:22px;height:22px}.qrpick .qc{color:#7be29a}.qrpick b{display:block}.qrpick .sub{display:block;margin:2px 0 0}
@@ -2185,8 +2187,8 @@ function personRow(u) {
   const lastDid = u.last && u.last.text !== 'Logged in' ? u.last.text + ' · ' + ago(u.last.ts) : null;
   const row = mk('div', {class: 's-row'},
     mk('div', {class: 'avatar', 'aria-hidden': 'true'}, u.name.slice(0, 1)),
-    mk('div', {class: 'grow'}, mk('b', {}, u.name), ' ', mk('span', {class: 'pill ' + (u.owner || u.founder ? 'owner' : u.role)}, u.owner || u.founder ? 'owner' : u.role),
-      mine && !u.owner ? mk('span', {class: 'pill'}, 'you') : null, mk('span', {class: 'sub'}, facts), lastDid ? mk('span', {class: 'sub'}, 'Last: ' + lastDid) : null),
+    mk('div', {class: 'grow'}, mk('div', {class: 'who'}, mk('b', {}, u.name), mk('span', {class: 'pill ' + (u.owner || u.founder ? 'owner' : u.role)}, u.owner || u.founder ? 'owner' : u.role),
+      mine && !u.owner ? mk('span', {class: 'pill you'}, 'you') : null), mk('span', {class: 'sub'}, facts), lastDid ? mk('span', {class: 'sub'}, 'Last: ' + lastDid) : null),
     canAct ? mk('button', {class: 's-more', 'aria-label': 'Actions for ' + u.name, 'aria-expanded': String(openPerson === u.name),
       onclick: () => { openPerson = openPerson === u.name ? null : u.name; renderPeople(); }}, '⋯') : null);
   const out = [row];
@@ -2197,14 +2199,15 @@ function personRow(u) {
       const r = await busy(reset.querySelector('button'), () => api('/api/accounts', 'POST', {name: u.name, password: reset.querySelector('input').value}));
       if (r && r.ok !== false) { openPerson = null; loadSettings(); }
     };
-    const remove = mk('button', {class: 's-danger', onclick: async () => {
-      if (remove.dataset.sure !== '1') { remove.dataset.sure = '1'; remove.textContent = 'Tap again: deletes their favourites'; return; }
+    const act = (icon, label, fn, cls) => { const b = mk('button', {type: 'button', class: cls || '', onclick: fn}); b.innerHTML = ic(icon) + '<span>' + label + '</span>'; return b; };
+    const remove = act('x', 'Remove', async () => {
+      if (remove.dataset.sure !== '1') { remove.dataset.sure = '1'; remove.querySelector('span').textContent = 'Tap again to delete'; return; }  // it also deletes their favourites
       await api('/api/accounts', 'DELETE', {name: u.name}); openPerson = null; loadSettings();
-    }}, 'Remove');
+    }, 's-danger');
     out.push(mk('div', {class: 's-actions'},
-      mk('button', {onclick: async () => { await api('/api/accounts', 'PATCH', {name: u.name, role: u.role === 'admin' ? 'user' : 'admin'}); loadSettings(); }}, u.role === 'admin' ? 'Make user' : 'Make admin'),
-      mk('button', {onclick: () => { reset.classList.toggle('hide'); const i = reset.querySelector('input'); if (!reset.classList.contains('hide')) i.focus(); }}, 'Reset password'),
-      mk('button', {onclick: async e => { await busy(e.currentTarget, () => api('/api/accounts/signout', 'POST', {name: u.name})); }}, 'Sign out everywhere'),
+      act('sliders', u.role === 'admin' ? 'Make user' : 'Make admin', async () => { await api('/api/accounts', 'PATCH', {name: u.name, role: u.role === 'admin' ? 'user' : 'admin'}); loadSettings(); }),
+      act('pencil', 'Reset password', () => { reset.classList.toggle('hide'); const i = reset.querySelector('input'); if (!reset.classList.contains('hide')) i.focus(); }),
+      act('logout', 'Sign out everywhere', async e => { await busy(e.currentTarget, () => api('/api/accounts/signout', 'POST', {name: u.name})); }),
       remove, reset));
   }
   return out;
@@ -2226,10 +2229,8 @@ function requestRow(r) {
     const [n, p] = form.querySelectorAll('input');
     const res = await busy(form.querySelector('button'), () => api('/api/requests/' + r.id + '/approve', 'POST', {name: n.value, password: p.value}));
     if (res && res.ok) {
-      form.classList.add('hide');
-      result.classList.remove('hide');
-      result.textContent = 'Created "' + res.name + '"' + (res.password ? '. Password (shown once): ' + res.password : '') + '. Tell them.';
-      loadPeople();
+      createdNote = {name: res.name, password: res.password || ''};  // shown at the top of the list until dismissed (the request itself is gone now)
+      loadPeople(); loadAccess();
     }
   };
   return mk('div', {class: 's-row', style: 'flex-wrap:wrap'},
@@ -2237,13 +2238,22 @@ function requestRow(r) {
     mk('div', {class: 'grow'}, mk('b', {}, r.name), mk('span', {class: 'sub'}, (r.note ? '“' + r.note + '” · ' : '') + ago(r.ts))),
     iconBtn('check', 'Approve ' + r.name, '', () => { form.classList.toggle('hide'); }),
     iconBtn('x', 'Deny ' + r.name, 's-danger', async () => { await api('/api/requests/' + r.id, 'DELETE'); loadAccess(); }),
-    form, result);
+    form);
+}
+let createdNote = null;
+function createdRow() {  // the account just made from a request: its password is shown once, with a copy button, until dismissed
+  const pw = mk('input', {readonly: '', value: createdNote.password, 'aria-label': 'The password, shown once', style: 'font-size:16px;min-height:44px'});
+  const copy = iconBtn('copy', 'Copy the password', '', () => { copyText(pw); copy.classList.add('on'); setTimeout(() => copy.classList.remove('on'), 1500); });
+  return mk('div', {class: 'made'},
+    mk('div', {class: 'who'}, mk('b', {}, '“' + createdNote.name + '” is ready'), iconBtn('x', 'Dismiss', '', () => { createdNote = null; renderAccess(); })),
+    mk('p', {class: 'sub', style: 'margin:4px 0 ' + (createdNote.password ? '8px' : '0')}, createdNote.password ? 'Their password is shown only now. Tell them it.' : 'They can log in with the password you set.'),
+    createdNote.password ? mk('div', {class: 's-out'}, pw, copy) : null);
 }
 const iBtn = (icon, label, onclick, cls) => { const b = mk('button', {type: 'button', class: 'iconbtn' + (cls ? ' ' + cls : ''), 'aria-label': label, title: label, onclick}); b.innerHTML = ic(icon); return b; };
 function renderAccess() {
   const n = access.requests.length;
   $('reqcount').textContent = n; $('reqcount').classList.toggle('hide', !n);
-  $('requests').replaceChildren(...(n ? access.requests.map(requestRow) : [mk('p', {class: 's-empty'}, 'No requests waiting.')]));
+  $('requests').replaceChildren(...(createdNote ? [createdRow()] : []), ...(n ? access.requests.map(requestRow) : createdNote ? [] : [mk('p', {class: 's-empty'}, 'No requests waiting.')]));
   const now = Date.now() / 1000;
   const used = (access.used || []).filter(u => !access.guests.some(g => g.entry === u.id))  // still in use: shown above
     .map(u => ({...u, ended: u.opened + u.hours * 3600 < now}));
