@@ -1632,7 +1632,11 @@ def api_wall():
         # Once a wall exists, a quick second add must not be refused because the first add is still restarting the main window (for those
         # seconds the player reports "not running"): the wall itself knows what the main stream is.
         if not wall.active() and not (state["url"] and pi_status()["running"]):
-            return jsonify(ok=False, error="Start a stream first, then add the others."), 400
+            refused = guest_link_refused(url)
+            if refused:
+                return jsonify(ok=False, error=refused), 403
+            play_async(None, url, None)  # nothing is playing: the first stream just starts, and the next one added makes it a multistream
+            return jsonify(ok=True, started=True)
         with lock:
             if not wall.active():
                 wall.saved_quality = state["quality"]
@@ -1940,6 +1944,17 @@ def phone_settings():
     q = settings.get("phone_quality", 720)
     return {"phone_quality": q if q in PHONE_QUALITIES else 720, "phone_guests": settings.get("phone_guests", True) is not False,
             "qr": settings.get("qr", True) is not False, "heat_tv": bool(settings.get("heat_tv")), **ui_settings()}
+
+
+@app.post("/api/qr")
+def api_qr():
+    """A QR code (SVG) for a link, for the guest-link popup. A POST so a guest link's token never sits in a request log."""
+    admin_only()
+    u = str((request.get_json(silent=True) or {}).get("url") or "")[:400]
+    if not u.startswith(("http://", "https://", "shortcuts://")):
+        return jsonify(ok=False, error="Not a link."), 400
+    import segno
+    return jsonify(ok=True, svg=segno.make(u, error="m").svg_inline(scale=8, border=3, dark="#000", light="#fff"))
 
 
 @app.get("/api/config")
@@ -2298,6 +2313,8 @@ def qr_info():
         return "", ""
     if qr_guest["url"]:
         return qr_guest["url"], "Scan to join as a guest"
+    if settings.get("qr_mode") == "install" and settings.get("install_url"):  # an iCloud share link: scanning offers to add the shortcut to the phone
+        return settings["install_url"], "Scan to add the shortcut to your iPhone"
     if settings.get("qr_mode") == "shortcut" and settings.get("shortcut_url"):
         if settings["shortcut_url"].startswith("shortcuts://"):  # runs a shortcut already on the phone
             return settings["shortcut_url"], "Scan to run the shortcut on your iPhone"
@@ -2311,7 +2328,7 @@ SHELL_SHOT = "/tmp/tvremote-shell.png"
 def shell_state():
     running = bool(HOME and HOME.running())
     return {"enabled": bool(settings.get("shell")), "running": running, "qr": settings.get("qr", True) is not False,
-            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "qr_guest": bool(qr_guest["url"]),
+            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "install_url": settings.get("install_url", ""), "qr_guest": bool(qr_guest["url"]),
             "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None,
             "props": HOME.props() if running and hasattr(HOME, "props") else None}  # what the window is doing, for debugging
 
@@ -2448,10 +2465,15 @@ def api_shell_set():
     """Turn the TV's home screen on or off (off shows the Pi desktop again). The app and this remote keep running."""
     admin_only()  # the switch lives in the admin part of Settings; it also stops what is playing
     body = request.get_json(silent=True) or {}
-    if any(k in body for k in ("qr", "qr_mode", "shortcut_url", "qr_guest")):  # the QR code on the Ready screen: redraw it now if that screen is showing
+    if any(k in body for k in ("qr", "qr_mode", "shortcut_url", "install_url", "qr_guest")):  # the QR code on the Ready screen: redraw it now if that screen is showing
         if "qr" in body:
             settings["qr"] = bool(body["qr"])
-        if body.get("qr_mode") in ("remote", "shortcut"):
+        if "install_url" in body:
+            u = str(body["install_url"] or "").strip()[:300]
+            if u and not u.startswith("https://"):
+                return jsonify(ok=False, error="Paste the iCloud link of the shortcut (it starts with https://www.icloud.com/shortcuts/)."), 400
+            settings["install_url"] = u
+        if body.get("qr_mode") in ("remote", "shortcut", "install"):
             settings["qr_mode"] = body["qr_mode"]
         if "shortcut_url" in body:
             u = str(body["shortcut_url"] or "").strip()[:300]

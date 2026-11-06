@@ -713,7 +713,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <button class="go" id="invmake">Create a guest link</button>
       <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. It is shown only now, so copy it before you leave this page.</p>
         <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button">Copy</button></div>
-        <button id="invtv" type="button" class="hide" style="margin-top:8px">Show its QR code on the TV</button></div>
+        <div class="row" style="margin-top:8px"><button id="invqr" type="button">Show QR code</button><button id="invtv" type="button" class="hide">Show on the TV</button></div></div>
       <p class="sub">A guest can play Kick, Twitch and YouTube links and control the TVs. They can't change favourites, link accounts or manage people and TVs. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
     </div>
     <div class="card hide" id="guests"></div>
@@ -736,9 +736,15 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <label class="s-check" style="justify-content:space-between">Show a QR code between streams<input id="qrtoggle" type="checkbox" class="tg" role="switch"></label>
       <div class="s-form" id="qropts">
         <div><div class="s-cap">What it opens</div>
-          <select id="qrmode" aria-label="What the QR code opens"><option value="remote">This remote</option><option value="shortcut">The iPhone shortcut</option></select></div>
+          <select id="qrmode" aria-label="What the QR code opens"><option value="remote">This remote</option><option value="shortcut">Run the iPhone shortcut</option><option value="install">Add the iPhone shortcut</option></select></div>
         <div id="qrshortcut" class="hide"><div class="s-cap">Shortcut link</div>
           <input id="shortcuturl" placeholder="shortcuts://run-shortcut?name=TV%20Remote" aria-label="The Play on Pi shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"></div>
+        <div id="qrinstall" class="hide"><div class="s-cap">The shortcut's iCloud link</div>
+          <div class="s-out"><input id="installurl" placeholder="https://www.icloud.com/shortcuts/..." aria-label="The shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"><button id="installqr" type="button">Show QR</button></div>
+          <p class="sub">To get the link: open the Shortcuts app, touch and hold the shortcut, tap Share, then Copy iCloud Link. Paste it here. Anyone who scans the code on an iPhone is offered the shortcut to add. The shortcut has to be shared this way, so it can't be made for you.</p></div>
+        <div id="scname-wrap" class="hide"><div class="s-cap">Or just the shortcut's name</div>
+          <div class="s-out"><input id="scname" placeholder="TV Remote" aria-label="The shortcut's name, as shown in the Shortcuts app" autocapitalize="off" autocorrect="off"><button id="scuse" type="button">Use it</button></div>
+          <p class="sub">Open the Shortcuts app on the iPhone, find the shortcut and type its name here exactly as shown. The QR code then runs that shortcut when it is scanned on an iPhone that has it. No link needed.</p></div>
         <p class="sub" id="qrhelp"></p>
         <div id="qrguestnote" class="hide row" style="align-items:center;margin:0"><span class="sub grow" style="margin:0">A guest link is showing on the TV.</span><button id="qrguestoff" type="button" style="flex:none">Show the normal QR code</button></div>
       </div>
@@ -862,6 +868,12 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <button id="chatlink" type="button" class="hide" style="margin:8px 8px 0 0;width:calc(100% - 8px)">Link Twitch to chat as yourself</button>
 </div>
 <div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multistream</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chatbtn"><span class="chev r"></span></span></button></div>
+<dialog id="qrpop" class="sheet" aria-labelledby="qrpopttl">
+  <div class="sh"><div class="grow"><b id="qrpopttl">QR code</b><span class="sub" id="qrpopsub"></span></div>
+    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb"><div id="qrpopimg" style="width:min(300px,80vw);margin:0 auto;border-radius:14px;overflow:hidden;background:#fff"></div>
+    <button id="qrpoptv" type="button" class="go" style="margin-top:12px">Show it on the TV</button></div>
+</dialog>
 <dialog id="tvapps" class="sheet" aria-labelledby="tvappsttl">
   <div class="sh"><div class="grow"><b id="tvappsttl">TV apps</b><span class="sub" id="tvappssub">Tap one to open it on the TV</span></div>
     <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -1725,8 +1737,8 @@ const TOUR = [
   {t: 'TV controls', x: 'Volume, mute, power and the TV\u2019s HDMI inputs, for the TV you opened.', view: 'tv', sel: '#tvctl'},
   {t: 'TV apps', x: 'Open the TV\u2019s own apps (YouTube, Netflix and so on) from here.', view: 'tv', sel: '#appsopen', when: 'Only TVs with a Roku have apps.'},
   {t: 'Browse live channels', x: 'See who is live on Kick and Twitch. Search, filter and sort, then play one or add it to the multistream.', view: 'tv', sel: '#browsecard'},
-  {t: 'Multistream', x: 'Watch up to four streams at once on the Pi\u2019s screen. Open it, add streams, and use Enlarge to make one big.', view: 'tv', sel: '#wallopencard', when: 'It appears while a stream plays on the Pi\u2019s screen.'},
-  {t: 'Chat', x: 'Read the chat of the Twitch or Kick channel that is playing. Link your account in Settings to type in Twitch chat, or show the chat on the TV.', view: 'tv', sel: '#chatcard', when: 'It appears while a Twitch or Kick channel plays.'},
+  {t: 'Multistream', x: 'Watch up to four streams at once on the Pi\u2019s screen. Open it, add streams, and use Enlarge to make one big.', view: 'tv', sel: '#wallopencard', needsPlay: true, when: 'Only on the Pi\u2019s screen.'},
+  {t: 'Chat', x: 'Read the chat of the Twitch or Kick channel that is playing. Link your account in Settings to type in Twitch chat, or show the chat on the TV.', view: 'tv', sel: '#chatcard', needsPlay: true, when: 'It appears while a Twitch or Kick channel plays.'},
   {t: 'Link your accounts', x: 'Link Kick or Twitch here to chat as yourself.', view: 'settings', sel: '#platforms', when: 'Guests can\u2019t link accounts.'},
   {t: 'Help and Home Screen', x: 'More answers live here. To use this like an app, open it in Safari, tap Share, then Add to Home Screen.', view: 'settings', sel: '#help'},
   {t: 'That\u2019s it', x: 'Tap Take the tour any time to see this again.', view: 'settings', sel: '#tourgo'}];
@@ -1744,6 +1756,14 @@ async function tourShow() {
     await new Promise(r => setTimeout(r, 500));  // the screen draws itself
   }
   if (seq !== tourSeq || !tourOpen()) return;  // a newer step, or the tour ended, while the screen changed
+  const cur = targets.find(t => t.id === tourTv()) || {};
+  if (s.needsPlay && cur.kind === 'pi' && !st.running && !st.starting && !st.wall) {  // this card only exists while something plays: ask for that, or let them skip
+    $('tourtext').textContent = 'This part appears once something is playing. Play a channel with the box below and it shows up here, or skip it.';
+    $('tournext').textContent = 'Skip';
+    const q = $('link'); tourEl = q; q.classList.add('tour-hl'); q.scrollIntoView({block: 'center', behavior: 'smooth'});
+    const w = setInterval(() => { if (seq !== tourSeq || !tourOpen()) clearInterval(w); else if (st.running || st.wall) { clearInterval(w); tourShow(); } }, 1000);  // it carries on by itself once a stream plays
+    return;
+  }
   const e = s.sel ? document.querySelector(s.sel) : null, on = !!(e && e.getClientRects().length);
   $('tourtext').textContent = on || !s.when ? s.x : s.x + ' (' + s.when + ')';
   if (on) { tourEl = e; e.classList.add('tour-hl'); e.scrollIntoView({block: 'center', behavior: 'smooth'}); }
@@ -1944,9 +1964,11 @@ function renderShell() {
   const mode = s.qr_mode || 'remote';
   $('qrmode').value = mode;
   if (document.activeElement !== $('shortcuturl')) $('shortcuturl').value = s.shortcut_url || '';
-  $('qrshortcut').classList.toggle('hide', mode !== 'shortcut');
+  $('qrshortcut').classList.toggle('hide', mode !== 'shortcut'); $('scname-wrap').classList.toggle('hide', mode !== 'shortcut'); $('qrinstall').classList.toggle('hide', mode !== 'install'); if (document.activeElement !== $('installurl')) $('installurl').value = s.install_url || '';
   $('qropts').classList.toggle('hide', s.qr === false);
-  $('qrhelp').textContent = mode === 'shortcut'
+  $('qrhelp').textContent = mode === 'install'
+    ? (s.install_url ? 'Scanning on an iPhone offers to add the shortcut.' : 'Paste the shortcut iCloud link above. Until then the QR code opens this remote.')
+    : mode === 'shortcut'
     ? (/^shortcuts:/.test(s.shortcut_url || '') ? 'Scanning on an iPhone runs that shortcut, if it is installed on the phone.' : s.shortcut_url ? 'Scanning opens the shortcut\u2019s iCloud page, so a phone can add \u201cPlay on Pi\u201d.' : 'Paste the shortcut\u2019s iCloud link, or shortcuts://run-shortcut?name=TV%20Remote, above. Until then the QR code opens this remote.')
     : 'Scanning opens this remote.';
   $('qrguestnote').classList.toggle('hide', !s.qr_guest);
@@ -1969,8 +1991,20 @@ async function loadShell() {
 $('qrtoggle').onchange = async () => { const r = await api('/api/shell', 'POST', {qr: $('qrtoggle').checked}); if (r) { shellInfo = r; renderShell(); } };
 const qrSet = async body => { const r = await api('/api/shell', 'POST', body); if (r) { shellInfo = r; renderShell(); } return r; };
 $('qrmode').onchange = () => qrSet({qr_mode: $('qrmode').value});
+$('scuse').onclick = () => { const n = $('scname').value.trim(); if (n) { $('shortcuturl').value = 'shortcuts://run-shortcut?name=' + encodeURIComponent(n); qrSet({shortcut_url: $('shortcuturl').value}); } };
+$('installurl').onchange = () => qrSet({install_url: $('installurl').value});
+$('installqr').onclick = () => $('installurl').value.trim() ? showQr($('installurl').value.trim(), 'Add the shortcut') : null;
 $('shortcuturl').onchange = () => qrSet({shortcut_url: $('shortcuturl').value});
 $('qrguestoff').onclick = () => qrSet({qr_guest: ''});
+async function showQr(url, title) {  // a popup with the QR code of a link; from there it can go up on the TV's idle screen
+  const r = await api('/api/qr', 'POST', {url});
+  if (!r || !r.ok) return;
+  $('qrpopttl').textContent = title; $('qrpopsub').textContent = 'Scan with a phone camera';
+  $('qrpopimg').innerHTML = r.svg; $('qrpopimg').firstElementChild.style.cssText = 'display:block;width:100%;height:auto';
+  $('qrpoptv').textContent = 'Show it on the TV'; $('qrpoptv').onclick = async () => { if (await qrSet({qr_guest: url})) { $('qrpoptv').textContent = 'Showing on the TV'; } };
+  $('qrpop').showModal();
+}
+$('invqr').onclick = () => showQr($('invurl').value, 'Guest link');
 $('invtv').onclick = async () => { const r = await qrSet({qr_guest: $('invurl').value}); if (r) $('invtv').textContent = 'Showing on the TV'; };
 let hideSure = null;
 $('desktop').onclick = () => {
@@ -2934,7 +2968,7 @@ const wallPut = async url => {
 };
 function renderWall() {
   const cur = targets.find(t => t.id === target) || {};
-  const show = cur.kind === 'pi' && (!!st.running || !!st.starting || !!st.wall);  // not while a window restarts: the sheet must stay open
+  const show = cur.kind === 'pi';  // always on the Pi's screen (the first stream added just starts playing); never hidden while a window restarts: the sheet must stay open
   $('wallopencard').classList.toggle('hide', !show);
   if (!show) { if ($('wallcard').open) $('wallcard').close(); return; }
   const w = st.wall, rows = w ? wallStreams(w) : [];
@@ -2942,7 +2976,7 @@ function renderWall() {
   $('walllayout').classList.toggle('hide', !w);
   $('wallsync').classList.toggle('hide', !w);
   if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
-  $('wallsub').textContent = syncMsg && Date.now() < syncMsg.until ? syncMsg.text : w && w.note ? w.note : w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') + (w.heat ? ' \u00b7 Pi running hot: quality lowered' : '') : 'Watch more than one at once';
+  $('wallsub').textContent = syncMsg && Date.now() < syncMsg.until ? syncMsg.text : w && w.note ? w.note : w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') + (w.heat ? ' \u00b7 Pi running hot: quality lowered' : '') : (!st.running && !st.starting ? 'Nothing is playing yet. The first stream starts by itself, add more for a multistream' : 'Watch more than one at once');
   $('wallcard').classList.toggle('updating', !!(w && w.busy));  // the Pi is changing the windows: a spinner, and the buttons that change them wait
   const sig = JSON.stringify([w, wallReplace, favList.map(f => f.live === true), recentList.map(x => x.live === true)]);
   if (sig === wallSig) return;

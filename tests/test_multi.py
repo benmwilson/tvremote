@@ -173,15 +173,17 @@ class QuickSecondAddTest(unittest.TestCase):
         self.assertEqual(urls, ["https://kick.com/b", "https://kick.com/c"])
         self.assertEqual(refused[1], 400)
 
-    def test_nothing_is_added_when_nothing_is_playing_and_there_is_no_wall(self):
+    def test_the_first_stream_added_with_nothing_playing_just_starts(self):
         import app as server
         try:
             with mock.patch.object(server, "tgt", return_value=None), mock.patch.object(server, "pi_status", return_value={"running": False}),                     mock.patch.dict(server.state, {"url": None}):
-                with server.app.test_request_context("/api/wall", method="POST", json={"action": "add", "url": "https://kick.com/b"}):
+                with server.app.test_request_context("/api/wall", method="POST", json={"action": "add", "url": "https://kick.com/b"}),                         mock.patch.object(server, "play_async") as play:
                     r = server.api_wall()
         finally:
             server.wall.clear()
-        self.assertEqual(r[1], 400)
+        play.assert_called_once()
+        self.assertTrue(r.get_json()["started"])
+        self.assertFalse(server.wall.active())
 
 
 class HomeScreenPausedTest(unittest.TestCase):
