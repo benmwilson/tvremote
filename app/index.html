@@ -2339,7 +2339,7 @@ function cardEl(c, onTap, extra) {
     if (n.stream) tags.append(el('span', 'badge', n.stream));
   }
   if (c.reachable && !c.roku) tags.append(el('span', 'sub', 'No TV controls yet: pair its Roku in Settings'));
-  const pw = c.reachable && c.roku && c.power === 'PowerOn' && c.input && c.input !== 'Roku' && !c.external ? c.input : '';  // what it is showing, only while it is on
+  const pw = c.reachable && c.roku && c.power === 'PowerOn' && c.input && c.input !== 'Roku' && !c.external ? (/^tvinput\.hdmi\d$/i.test(c.input_id || '') ? 'HDMI ' + c.input_id.slice(-1) : c.input) : '';  // what it is showing, only while it is on; an HDMI port is named by its number (the TV's own label can be stale: "PlayStation 4")
   if (pw) tags.append(el('span', 'sub', pw));
   if (tags.childNodes.length) b.append(tags);
   if (extra) b.append(extra);
