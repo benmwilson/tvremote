@@ -104,9 +104,12 @@ using the Pi's hardware decoder. So the container needs the host's sockets and d
 
 ## Dev workflow
 - Code is edited on Ben's Windows PC and pushed to GitHub.
-- No SSH from Claude Code. Ben runs every Pi-side command himself in Termius and pastes the output back.
-  Give him one copy-paste block at a time, in a code block, with what to look for in the output.
-- Deploy (Ben runs on the Pi): `cd ~/tvremote && git pull && docker compose up -d --build`
+- SSH from Claude Code is allowed since 2026-11-05 with a dedicated key (`~/.ssh/tvremote_claude`, comment `claude-code-tvremote`, address in `CLAUDE.local.md`):
+  `ssh -i ~/.ssh/tvremote_claude -o BatchMode=yes ben@<pi-ip> "<command>"`. Reading is free (logs, `docker ps`, status, files).
+  Ask Ben first before anything that stops, restarts, rebuilds or changes what is playing on a TV, or edits the Pi's system settings;
+  never touch what a TV is showing without asking. If SSH fails, fall back to giving Ben one copy-paste block for Termius.
+  To revoke: delete the `claude-code-tvremote` line from `~/.ssh/authorized_keys` on the Pi.
+- Deploy: `cd ~/tvremote && git pull && docker compose up -d --build` (Ben runs it, or Claude after asking, when nobody is watching the TV)
 - Test from the PC over HTTP (no SSH needed): `curl http://<pi-ip>:8765/api/status`
 - Logs (Ben runs on the Pi): `docker logs --tail 50 tvremote`
 
@@ -228,6 +231,41 @@ Goal: anyone can run the container on a Pi and get a remote that finds and contr
 - **No addresses in the repo**: discovery and `/data` config replace the `.env` entries (`ROKU_*`, `INPUT_*`).
 - Before this: settle Kick-on-Chromecast quality (soak-test direct vs relay), finish the per-source bedroom tests, then refactor `tgt()` and the picker around a target registry.
 - Open idea: chat overlay for the Chromecast via DashCast or a custom receiver (the default receiver can't draw over video).
+
+## Todo
+- **Admins manage TVs from Settings without the wizard:** rename a TV, re-pair its Roku, change its HDMI input, switch it off, from a card per TV in the admin "TVs" section. (Renaming works today but only inside "Change or move a TV"; names are limited to the two fixed slots.) Owners and admins both; guests never. Part of the target-registry refactor above.
+- **One-tap "Auto-set up"** after plugging into a new TV: scan, save the guesses only when each is clear, otherwise open the wizard.
+- Notice when the Pi's TV changed (CEC name or HDMI port differs from what was saved) and show an admin banner "The Pi looks like it moved: review TVs".
+- Look at the new help section, QR code and login eye icon on the Pi / in Chrome (not seen on screen yet).
+
+- **Watch on the phone** (keep watching when leaving the room): a "Watch on phone" button on the now-playing card opens a bottom sheet (`dialog.sheet`) with a `<video playsinline controls>`. First version: the Pi hands the phone the stream's own address (`stream_url()`, already cached 5 min) and iOS plays HLS natively. Works for Kick, YouTube live and other HLS; YouTube videos need a progressive MP4 from yt-dlp; Twitch would show ads (its ad filter lives inside streamlink's pipe) so it needs the relay. If a CDN refuses the phone (headers, tokens), extend `hlsproxy.py` to several token-guarded sessions served over the LAN. Notes: the phone sits some seconds behind the TV; quality should drop to 720p; guests may use it only if Ben says so; check it doesn't change what the TV plays.
+
+### Test on the Pi (nothing from the last multi-view round has run there; checklist A-G in `docs/multi-view.md`)
+Rebuild when nobody is watching the TV. The Pi is now on the bedroom TV (Wi-Fi), so "living" in the notes means the Pi's own screen.
+- **A. Single stream first** (the core path changed): Kick at 1080p60 via direct mpv, then quality change, Refresh and a different channel each loading in place with no flash; an offline channel; a Twitch stream; a YouTube video. If one misbehaves: `TVREMOTE_HOT=0` in the compose environment and rebuild, and report what happened.
+- **B. Multi-view basics:** add up to four streams, Grid/Focus toggle, sound per stream, tap a picture to choose which stream the top card controls.
+- **C. Swapping:** Enlarge in Focus swaps in place; tap Enlarge quickly several times, no stream duplicated or lost.
+- **D. Removing and replacing:** remove the first stream, Replace, Full screen from a tile (watch for a flash), a stream going offline ("Went offline", Try again).
+- **E. Sync streams button:** with 2-4 streams of one event, does it line the pictures up? Does it say "no timing to compare" when Kick's playlists carry no `PROGRAM-DATE-TIME`? Unproven: its backwards seek on live HLS.
+- **F. Phone UI from the last round:** the bottom sheet, platform cards with logos, styled selects, confirm sheets (move TV, revoke/remove/clear guest links), Stop vs Remove in multi-view, recents with LIVE, chat tabs, the All TVs card listing every stream.
+- **G. Odd cases:** TV off while multi-view runs then on (should start a single stream), Roku volume bubble, power button states.
+- Also unproven there: a tile window going full screen in place; the volume bar in the smallest focus tiles; the Pi stream surviving a container restart (it can't today).
+- When something fails send `docker logs --tail 80 tvremote`, a photo of the TV, and the Debug page's Multi-view section.
+
+### Multi-view and streaming ideas
+- **Multi-view on the bedroom Chromecast** (Ben wants it). A custom receiver page is a likely dead end (the plain dongle has one decoder, and it needs Cast developer registration). Realistic: the Pi makes one picture and the Chromecast plays it, either by combining the streams on the Pi or by capturing the Pi's own multi-view screen, hardware-encoded (`h264_v4l2m2m`). Expect 8-15 s delay and about 720p30, and the Pi can't also run the wall at full quality. First step: measure CPU and encode fps with the wall running. Needs the Chromecast's exact model from its mDNS name.
+- Auto-remove a stream a few minutes after it goes offline (restarts the other windows once).
+- Sync using the platform's own clock if Kick's playlists have none.
+- The same in-place loading for the Chromecast.
+- Twitch account link and real Twitch profile pictures (needs a Twitch developer app).
+- Kick embedded chat can't log in inside a frame (our send box is hidden behind `KICK_OWN_SEND=false`).
+
+### Housekeeping and security
+- `app.py` is about 2500 lines: split it.
+- Security review leftovers: refuse private addresses in `/play` for guests, `MAX_CONTENT_LENGTH`, security headers, pin and audit dependencies.
+- Router: DHCP reservation for the Pi (`192.168.1.149`, MAC `D8:3A:DD:3E:A9:76`), and for the Rokus and Chromecast.
+- Rotate the Kick client secret (it was pasted in chat once).
+- Optional: let Claude Code SSH to the Pi with a dedicated key, then change the "no SSH" rule above.
 
 ## Conventions
 - Canadian spelling in UI text (favourites, colour).

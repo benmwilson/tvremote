@@ -147,7 +147,7 @@ SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/se
 # later) is refused, so a new endpoint is closed to guests until it is listed here on purpose.
 GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
              "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
-             "/api/shell", "/api/stats", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon"}
+             "/api/shell", "/api/stats", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch"}  # /api/watch checks the guest setting itself
 GUEST_POST = {"/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/api/roku/launch", "/logout"}
 
 
@@ -230,7 +230,8 @@ def api_auth():
         info = {"guest_until": v.get("exp"), "label": v.get("label", "")}
     role = accounts.role(g.user)
     return jsonify(required=auth_required(), user=g.user, owner=accounts.is_owner(g.user), role=role,
-                   admin=role == "admin", guest=g.user == accounts.GUEST, **info)
+                   admin=role == "admin", guest=g.user == accounts.GUEST,
+                   watch=g.user != accounts.GUEST or phone_settings()["phone_guests"], **info)
 
 
 # ---------- routing ----------
@@ -1494,6 +1495,72 @@ def api_status():
     if not d.get("running") and not d.get("starting") and not d.get("error"):
         d["external"] = external_now(tid)
     return jsonify({**d, "sleep_at": _sleep.get(tid)})
+
+
+PHONE_QUALITIES = (360, 480, 720, 1080)
+
+
+def phone_settings():
+    """App settings an admin can change from Settings (kept in settings.json). Phone viewing: the biggest picture the phone is sent, and
+    whether a guest may use it. More of these (and per-role permissions) can join this one place."""
+    q = settings.get("phone_quality", 720)
+    return {"phone_quality": q if q in PHONE_QUALITIES else 720, "phone_guests": settings.get("phone_guests", True) is not False,
+            "qr": settings.get("qr", True) is not False}
+
+
+@app.get("/api/config")
+def api_config():
+    admin_only()
+    return jsonify(phone_settings())
+
+
+@app.post("/api/config")
+def api_config_set():
+    admin_only()
+    body = request.get_json(silent=True) or {}
+    if "phone_quality" in body:
+        if body["phone_quality"] not in PHONE_QUALITIES:
+            return jsonify(ok=False, error="Pick 360, 480, 720 or 1080."), 400
+        settings["phone_quality"] = body["phone_quality"]
+    for k in ("phone_guests", "qr"):
+        if k in body:
+            settings[k] = bool(body[k])
+    save_settings()
+    if HOME and HOME.kind == "idle":
+        HOME.show("idle")  # the QR code may have been switched
+    return jsonify(ok=True, **phone_settings())
+
+
+@app.get("/api/watch")
+def api_watch():
+    """The address of what this TV is playing, so the phone can play it itself (home network only: the address is the stream's own).
+    Twitch is left out: its ad filter only works inside the Pi's player. Starts at the TV's position for a video."""
+    cfg = phone_settings()
+    if g.user == accounts.GUEST and not cfg["phone_guests"]:
+        return jsonify(ok=False, error="Watching on the phone is switched off for guests."), 403
+    c = tgt()
+    url = (c.state.get("url") if c else state.get("url"))
+    if not url:
+        return jsonify(ok=False, error="Nothing is playing on this TV."), 409
+    h = cfg["phone_quality"]
+    try:
+        source, player = resolve(url)
+        if source == "Twitch":
+            return jsonify(ok=False, error="Twitch streams can't play on the phone yet (the ads can't be filtered out there)."), 422
+        if player == "streamlink":
+            addr, kind = stream_url(url, f"{h}p60,{h}p,480p,best"), "hls"
+        else:
+            fmt = f"b[vcodec^=avc1][height<={h}][ext=mp4]/b[ext=mp4][height<={h}]/b[ext=mp4]"
+            p = subprocess.run(["yt-dlp", "--no-playlist", "-g", "-f", fmt, url], capture_output=True, text=True, timeout=45)
+            lines = p.stdout.strip().splitlines()
+            if p.returncode or not lines:
+                raise RuntimeError((p.stderr.strip().splitlines() or ["no video address"])[-1][:200])
+            addr, kind = lines[0], "mp4"
+        pos = (c.status() or {}).get("position") if c else sprop(SOCK, "time-pos")
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as e:
+        return jsonify(ok=False, error=f"Couldn't get the stream for the phone: {e}"), 502
+    return jsonify(ok=True, url=addr, kind=kind, live=kind == "hls", quality=h, title=fav_name(url),
+                   start=pos if isinstance(pos, (int, float)) and kind == "mp4" else 0)
 
 
 def pi_status():
