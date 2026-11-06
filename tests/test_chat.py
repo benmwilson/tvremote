@@ -131,3 +131,16 @@ class Detect(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ColumnTests(unittest.TestCase):
+    def test_column_wraps_and_keeps_the_newest(self):
+        msgs = [("Foo", "#FF8000", "word " * 30)] + [("Bar", "", "n%d" % i) for i in range(40)]
+        out = chat.ass_column("xqc", msgs)
+        head, body = out.split("\n")
+        self.assertIn("CHAT XQC", head)
+        self.assertLessEqual(body.count("\\N") + 1, chat.COL_LINES)
+        self.assertIn("n39", body)
+        self.assertNotIn("Foo", body)  # scrolled off the top
+        one = chat.ass_column("xqc", [("Foo", "#FF8000", "hi {\\b1}")])
+        self.assertIn("{\\c&H0080FF&\\b1}Foo{\\r}: hi b1", one)

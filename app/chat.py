@@ -3,6 +3,7 @@ Anonymous IRC over TLS: no login and no extra dependency. Twitch only for now.
 shortcut: Kick and YouTube chat are not supported; emotes show as their text names."""
 import random
 import re
+import textwrap
 import socket
 import ssl
 import threading
@@ -117,12 +118,32 @@ def ass(msgs):
     return "{\\an1\\fs34\\bord3\\shad0\\q2}" + "\\N".join(rows)
 
 
-class TwitchChat:
-    """send(ass_text or None) draws or clears the overlay and returns True when mpv accepted it."""
+COL_X, COL_CHARS, COL_LINES = 1456, 30, 24  # the strip the picture makes room for (it shrinks to 1440 wide), and how much text fits in it
 
-    def __init__(self, channel, send):
-        self.channel, self.send = channel, send
-        self.msgs = deque(maxlen=MAX_LINES)  # (arrival time, (name, colour, text))
+
+def ass_column(channel, msgs):
+    """The chat as a column beside the picture: a header, then the newest messages growing up from the bottom, wrapped to fit."""
+    lines = []
+    for name, colour, text in msgs:
+        rgb = colour[1:] if re.fullmatch(r"#[0-9A-Fa-f]{6}", colour) else "FFFFFF"
+        bgr = rgb[4:6] + rgb[2:4] + rgb[0:2]
+        who = _esc(name)
+        wrapped = textwrap.wrap(who + ": " + _esc(text), COL_CHARS, break_long_words=True) or [who]
+        if wrapped[0].startswith(who + ": "):
+            wrapped[0] = "{\\c&H" + bgr + "&\\b1}" + who + "{\\r}: " + wrapped[0][len(who) + 2:]
+        lines += wrapped
+    head = "{\\an7\\pos(%d,24)\\fs26\\b1\\bord0\\shad0\\1c&HA9978C&}CHAT " % COL_X + _esc(channel).upper()
+    body = "{\\an1\\pos(%d,1056)\\fs30\\bord3\\shad0\\q2}" % COL_X + "\\N".join(lines[-COL_LINES:])
+    return head + "\n" + body
+
+
+class TwitchChat:
+    """send(ass_text or None) draws or clears the overlay and returns True when mpv accepted it.
+    column=True: a chat column that stays up (the player has made room for it), else short-lived lines over the picture."""
+
+    def __init__(self, channel, send, column=False):
+        self.channel, self.send, self.column = channel, send, column
+        self.msgs = deque(maxlen=COL_LINES if column else MAX_LINES)  # (arrival time, (name, colour, text))
         self.stopped = threading.Event()
         threading.Thread(target=self._read, daemon=True).start()
         threading.Thread(target=self._draw, daemon=True).start()
@@ -141,8 +162,8 @@ class TwitchChat:
         last = None
         while not self.stopped.wait(1):
             now = time.time()
-            live = [m for t, m in list(self.msgs) if now - t < SHOW_S]
-            text = ass(live) if live else None
+            live = [m for t, m in list(self.msgs) if self.column or now - t < SHOW_S]
+            text = ass_column(self.channel, live) if self.column else ass(live) if live else None
             if text != last and self.send(text):  # only remember it once mpv accepted it
                 last = text
 

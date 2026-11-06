@@ -467,13 +467,17 @@ def stop_player():
     chat_stop()
 
 
-_chat = {"obj": None, "pref": False}  # off by default: redrawing the overlay drops about 2 frames/s on the Pi
+_chat = {"obj": None, "pref": False, "col": False}  # off by default: redrawing the overlay drops about 2 frames/s on the Pi
 
 
 def chat_send(text):
     """Draw (or clear) the chat overlay in mpv; True when mpv accepted it."""
     r = mpv(["osd-overlay", 1, "ass-events", text, 1920, 1080] if text else ["osd-overlay", 1, "none", ""])
-    return bool(r and r.get("error") == "success")
+    ok = bool(r and r.get("error") == "success")
+    if ok and bool(text) != _chat["col"]:  # the column: the picture moves over to make room while the chat is up, and back after
+        mpv(["set_property", "video-margin-ratio-right", 0.25 if text else 0])
+        _chat["col"] = bool(text)
+    return ok
 
 
 def chat_stop():
@@ -485,9 +489,10 @@ def chat_stop():
 def chat_sync():
     """Match the overlay to what is playing: a live Twitch channel with chat switched on."""
     chat_stop()
+    _chat["col"] = False  # a new player starts with no margin
     ch = chat.channel_of(state["url"] or "") if state["source"] == "Twitch" and state["proc"] else None
     if ch and _chat["pref"]:
-        _chat["obj"] = chat.TwitchChat(ch, chat_send)
+        _chat["obj"] = chat.TwitchChat(ch, chat_send, column=not wall.active())  # a column only for one stream; multi-view has no room
 
 
 def _watch(proc):
