@@ -595,6 +595,11 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <form id="kicksend" class="row hide" style="margin:8px 8px 0 0"><input id="kicktext" type="text" maxlength="500" autocomplete="off" autocorrect="on" autocapitalize="sentences" enterkeyhint="send" aria-label="Chat message" style="font-size:16px;min-height:52px"><button id="kickfull" type="button" aria-label="Open Kick's chat in a new tab, with the emote picker" title="Emotes: opens Kick's full chat" style="flex:0 0 auto;padding:0 14px">&#128512;</button><button class="go" style="flex:0 0 auto;padding:0 18px;min-height:52px">Send</button></form>
 </div>
 <div class="card hide" id="wallopencard"><button id="wallopen" class="chathead" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg><span class="grow"><b>Multi-view</b><span class="sub" id="wallopensub" style="display:block"></span></span><span class="chev">&rsaquo;</span></button></div>
+<dialog id="confirm" class="sheet" aria-labelledby="confirmttl">
+  <div class="sh"><div class="grow"><b id="confirmttl"></b></div></div>
+  <div class="sb"><p id="confirmtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
+    <div class="row"><button id="confirmno" type="button" autofocus>Cancel</button><button id="confirmyes" type="button" class="go"></button></div></div>
+</dialog>
 <dialog id="wallcard" class="sheet" aria-labelledby="wallttl">
   <div class="sh"><div class="grow"><b id="wallttl">Multi-view</b><span class="sub" id="wallsub"></span></div>
     <span class="wseg hide" id="walllayout"><button data-l="grid" aria-label="Grid layout" title="Grid: equal tiles"><svg class="ic" aria-hidden="true"><use href="#i-multi-grid"/></svg></button><button data-l="focus" aria-label="Focus layout" title="Focus: one big, the rest below"><svg class="ic" aria-hidden="true"><use href="#i-multi-focus"/></svg></button></span>
@@ -1111,9 +1116,27 @@ async function loadApps() {
 }
 $('appsbox').addEventListener('toggle', () => { if ($('appsbox').open) loadApps(); });
 const otherTv = () => (targets || []).find(t => t.id !== target && t.reachable);
-$('move').onclick = () => {
+// A confirmation sheet for something that stops what is playing: resolves true on the confirm button, false on Cancel, Esc or a tap outside.
+function confirmSheet(title, text, yes) {
+  return new Promise(resolve => {
+    const d = $('confirm');
+    $('confirmttl').textContent = title; $('confirmtext').textContent = text; $('confirmyes').textContent = yes;
+    let done = false;
+    const finish = v => { if (done) return; done = true; if (d.open) d.close(); resolve(v); };
+    $('confirmyes').onclick = () => finish(true);
+    $('confirmno').onclick = () => finish(false);
+    d.addEventListener('close', () => finish(false), {once: true});
+    d.showModal();
+  });
+}
+$('move').onclick = async () => {
   const to = otherTv(), url = st.url;
   if (!to || !url) return;
+  const here = (targets.find(t => t.id === target) || {}).name || 'this TV', who = chanName(url) || 'this stream';
+  const ok = await confirmSheet('Move to ' + to.name + '?', st.wall
+    ? 'Plays ' + who + ' (the stream you are controlling) on ' + to.name + ', and ends the multi-view on ' + here + '.'
+    : 'Plays ' + who + ' on ' + to.name + ' and stops it on ' + here + '.', 'Move');
+  if (!ok) return;
   return busy($('move'), async () => {
     // the Pi starts it on the other TV first (if that fails, what is playing here is left alone), stops this one, and switches
     // back off a TV that the move had woken
