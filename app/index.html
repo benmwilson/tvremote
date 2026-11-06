@@ -3648,7 +3648,7 @@ async function loadTargets() {
     }
   } catch (e) {}
   $('dot').classList.toggle('on', ok);
-  if (changed) { renderCards(); tvInfo(); if (view() === 'share') renderPicker(); if (view() === 'tv' || view() === 'all') loadShell(); }
+  if (changed) { renderCards(); tvInfo(); if (view() === 'share') renderPicker(); if (view() === 'tv' || view() === 'all' || view() === 'settings') loadShell(); }  // (settings too: opened straight from its address, the TVs arrive after the page draws)
 }
 
 let beforeSettings = '#/';  // where the gear takes you back to
