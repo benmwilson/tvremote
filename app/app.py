@@ -2095,11 +2095,22 @@ def apply_tv_config(tvs):
     providers = {"living": living_card, "bedroom": bedroom_card, **{tid: (lambda tid=tid: tv_only_card(tid)) for tid in TV_ONLY}}
     cards.set(providers, ORDER)
     if CAST and ep["bedroom"]["enabled"]:
-        CAST.cfg.update(name=LABELS["bedroom"], device=ep["bedroom"]["device"])
+        CAST.cfg.update(name=LABELS["bedroom"], device=ep["bedroom"]["device"], uuid=ep["bedroom"].get("uuid"))
+        CAST.on_uuid = remember_cast_uuid
         CAST.name = LABELS["bedroom"]
     _roku.clear()  # details cached for the old addresses
     _apps.clear()
     _icons.clear()
+
+
+def remember_cast_uuid(uid):
+    """The saved Chromecast was found by name: keep its id too, so renaming it later does not lose it."""
+    tvs = tvconfig.load_tvs(DATA)
+    for t in tvs:
+        if t.get("chromecast") and not t["chromecast"].get("uuid"):
+            t["chromecast"]["uuid"] = uid
+            tvconfig.save_tvs(DATA, tvs)
+            return
 
 
 def init_tvs(data_dir):
@@ -2119,7 +2130,7 @@ def api_discover():
     ips = discover.roku_scan()
     ips += [t["roku"] for t in saved if t.get("roku") and t["roku"] not in ips]
     rokus = discover.describe(ips, roku.info)
-    casts = [{"name": d.friendly_name, "model": d.model_name, "host": str(d.host)}
+    casts = [{"name": d.friendly_name, "model": d.model_name, "host": str(d.host), "uuid": str(d.uuid)}
              for d in (list(CAST.devices.values()) if CAST else []) if d.cast_type == "cast"]
     display = discover.display_connected()
     cec = tv_cec() if display else None

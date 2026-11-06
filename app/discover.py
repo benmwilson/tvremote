@@ -124,7 +124,7 @@ def suggest(rokus, casts, display, cec_name, pi_input, saved):
             why.append(f"The Pi is on HDMI {pi_input[-1]} of this TV (from its HDMI address)." if pi_input else "The Pi's screen is plugged into this TV.")
         if r is cc_pick:
             m = re.fullmatch(r"tvinput\.hdmi(\d)", r.get("app_id") or "")
-            t["chromecast"] = {"device": casts[0]["name"], "input": f"HDMI{m.group(1)}" if m else ""}
+            t["chromecast"] = {"device": casts[0]["name"], "input": f"HDMI{m.group(1)}" if m else "", **({"uuid": casts[0]["uuid"]} if casts[0].get("uuid") else {})}
             why.append("The Chromecast is probably on this TV." + (f" It is showing HDMI {m.group(1)} right now." if m else ""))
         if not display and not why:
             why.append("No screen is attached to the Pi, so it can't be plugged into a TV.")

@@ -115,7 +115,8 @@ def clean_tvs(raw):
             tid = f"tv{n}"
         out.append({"id": tid, "name": name, "roku": ip,
                     "pi": {"input": _input((pi or {}).get("input"))} if isinstance(pi, dict) else None,
-                    "chromecast": {"device": str(cc.get("device") or "").strip()[:60], "input": _input(cc.get("input"))} if isinstance(cc, dict) else None})
+                    "chromecast": {"device": str(cc.get("device") or "").strip()[:60], "input": _input(cc.get("input")),
+                                   **({"uuid": str(cc["uuid"]).strip()[:40]} if cc.get("uuid") else {})} if isinstance(cc, dict) else None})
     if sum(1 for t in out if t["pi"]) > 1:
         raise ValueError("Only one TV can have the Pi plugged in.")
     if sum(1 for t in out if t["chromecast"]) > 1:
@@ -139,4 +140,5 @@ def endpoints(tvs):
         out[eid] = {"enabled": bool(t), "roku": (t or {}).get("roku") or "", "input": ((t or {}).get(key) or {}).get("input") or "",
                     "label": (t["name"] + (suffix if both else "")) if t else DEFAULT_NAMES[eid]}
     out["bedroom"]["device"] = ((cc or {}).get("chromecast") or {}).get("device") or None
+    out["bedroom"]["uuid"] = ((cc or {}).get("chromecast") or {}).get("uuid") or None  # the Chromecast's own id: survives a rename in Google Home
     return out

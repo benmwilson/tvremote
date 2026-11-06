@@ -108,3 +108,10 @@ class Files(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChromecastId(unittest.TestCase):
+    def test_the_id_is_kept_and_reaches_the_endpoint(self):
+        out = tvconfig.clean_tvs({"tvs": [{"name": "Bedroom", "chromecast": {"device": "Bedroom TV", "uuid": "abc-123"}}]})
+        self.assertEqual(out[0]["chromecast"]["uuid"], "abc-123")
+        self.assertEqual(tvconfig.endpoints(out)["bedroom"]["uuid"], "abc-123")

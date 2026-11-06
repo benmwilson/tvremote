@@ -58,6 +58,7 @@ class CastTarget:
     def __init__(self, data_dir, resolve, title_fn, ytdl_heights, sl_default):
         self.data_dir = data_dir
         self.resolve, self.title_fn, self.heights, self.sl_default = resolve, title_fn, ytdl_heights, sl_default
+        self.on_uuid = None  # called with the id of the Chromecast the saved name matched, so it can be saved
         self.cfg = dict(DEFAULT_CFG)
         try:
             with open(os.path.join(data_dir, "targets.json")) as f:
@@ -102,9 +103,16 @@ class CastTarget:
 
     def device(self):
         """CastInfo of the configured (or first) Chromecast, or None."""
-        want = self.cfg.get("device")
-        for info in list(self.devices.values()):
-            if info.cast_type == "cast" and (not want or info.friendly_name == want):
+        want, uid = self.cfg.get("device"), self.cfg.get("uuid")
+        casts = [i for i in list(self.devices.values()) if i.cast_type == "cast"]
+        for info in casts:
+            if uid and str(info.uuid) == uid:  # the id wins: the name can be changed in Google Home
+                return info
+        for info in casts:
+            if not want or info.friendly_name == want:
+                if want and not uid and self.on_uuid:  # a name match with no id saved yet: remember the id from now on
+                    self.cfg["uuid"] = str(info.uuid)
+                    self.on_uuid(str(info.uuid))
                 return info
         return None
 

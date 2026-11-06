@@ -143,3 +143,18 @@ class SurvivesARestart(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FindsTheChromecastById(unittest.TestCase):
+    def test_id_beats_a_changed_name_and_a_name_match_learns_the_id(self):
+        t = target()
+        self.addCleanup(shutil.rmtree, t.data_dir, True)
+        t.cfg, t.on_uuid = {}, None
+        t.devices = {"u1": SimpleNamespace(uuid="u1", cast_type="cast", friendly_name="Renamed in Google Home")}
+        t.cfg.update(device="Bedroom TV", uuid="u1")
+        self.assertEqual(t.device().uuid, "u1")  # the old name no longer exists, the id still does
+        t.cfg.update(device="Renamed in Google Home", uuid=None)
+        learned = []
+        t.on_uuid = learned.append
+        self.assertEqual(t.device().uuid, "u1")
+        self.assertEqual(learned, ["u1"])
