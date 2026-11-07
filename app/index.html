@@ -2167,11 +2167,8 @@ function renderQrPick(s) {
     if (on === key) { const c = mk('span', {class: 'qc'}); c.innerHTML = ic('check'); b.append(c); }
     b.disabled = !!off; return b;
   };
-  const guests = ((typeof access === 'object' && access && access.invites) || []).map(g => row(g.id, 'qr', 'Guest link' + (g.label ? ': ' + g.label : ''),
-    g.can_qr ? (g.uses ? 'Partly used' : 'Not opened yet') + ' \u00b7 expires in ' + inFuture(g.redeem_by) : 'Made before this was possible, so it can\u2019t be shown',
-    async () => { const r = await api('/api/invites/' + g.id + '/link'); if (r && r.ok) qrSet({qr: true, qr_guest: r.url}); }, !g.can_qr));
   box.replaceChildren(row('off', 'x', 'Nothing', 'No QR code on the idle screen', () => qrSet({qr: false, qr_guest: ''})),
-    row('remote', 'qr', 'The remote', 'Scan to open this remote', () => qrSet({qr: true, qr_guest: ''})), ...guests);
+    row('remote', 'qr', 'The remote', 'Scan to open this remote', () => qrSet({qr: true, qr_guest: ''})));
 }
 function renderShell() {
   const s = shellInfo;
@@ -2435,7 +2432,6 @@ function renderAccess() {
     ...access.invites.map(i => mk('div', {class: 's-row', 'data-t': String(i.created || 0)}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✉'),
       mk('div', {class: 'grow'}, mk('b', {}, i.label || 'Unopened link'), ' ', mk('span', {class: 'pill'}, i.uses ? 'partly used' : 'not opened'),
         mk('span', {class: 'sub'}, (i.max_uses > 1 ? 'Opened on ' + (i.uses || 0) + ' of ' + i.max_uses + ' devices · ' : '') + hoursText(i.hours) + ' of access each · link expires in ' + inFuture(i.redeem_by))),
-      iBtn('qr', 'Show this link as a QR code', async () => { const r = await api('/api/invites/' + i.id + '/link'); if (r && r.ok) showQr(r.url, i.label || 'Guest link'); }),
       iBtn('x', 'Revoke this link', async () => {
         if (!await confirmSheet('Revoke this link?', 'It stops working. Nobody who has not opened it yet will be able to.', 'Revoke', true)) return;
         await api('/api/invites/' + i.id, 'DELETE'); loadAccess();

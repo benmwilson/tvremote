@@ -90,9 +90,9 @@ def create_invite(hours, label, max_uses=1, now=None):
     max_uses = max(1, min(int(max_uses or 1), MAX_DEVICES))
     token = secrets.token_urlsafe(24)
     with _lock:
-        d = {k: v for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now}
+        d = {k: {f: x for f, x in v.items() if f != "token"} for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now}  # also scrubs tokens saved by older versions
         d[_h(token)] = {"created": now, "redeem_by": now + REDEEM_WINDOW, "hours": hours, "label": (label or "").strip()[:30],
-                        "max_uses": max_uses, "uses": 0, "token": token}  # kept so an admin can show its QR code again (while the link still works: it goes when used up, revoked or expired)
+                        "max_uses": max_uses, "uses": 0}  # the token is never saved: only its hash is the key, so the file cannot open a link
         _write("invites.json", d)
     return token
 
@@ -138,7 +138,7 @@ def clear_used(uid=None):
 
 def invites_pending(now=None):
     now = now or time.time()
-    return [{"id": k[:8], **{f: x for f, x in v.items() if f != "token"}, "can_qr": bool(v.get("token"))} for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now]  # never the token: only invite_token() hands that out, one link at a time
+    return [{"id": k[:8], **{f: x for f, x in v.items() if f != "token"}} for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now]
 
 
 def revoke_invite(iid):
@@ -157,12 +157,3 @@ def invite_id_for_url(url):
     token = (url or "").rsplit("/join/", 1)[-1] if "/join/" in (url or "") else ""
     return k[:8] if token and (k := _h(token)) in _read("invites.json", {}) else None
 
-
-def invite_token(iid):
-    """The token of an unopened invite (by the id the list shows), for showing its QR code again. None when it is gone."""
-    if len(iid or "") < 8:
-        return None
-    for k, v in _read("invites.json", {}).items():
-        if k.startswith(iid) and v.get("token") and v["redeem_by"] > time.time():
-            return v["token"]
-    return None

@@ -3703,15 +3703,6 @@ def invite_create():
     return jsonify(ok=True, url=request.host_url + "join/" + token)
 
 
-@app.get("/api/invites/<iid>/link")
-def invite_link(iid):
-    admin_only()
-    token = access.invite_token(iid)
-    if not token:
-        return jsonify(ok=False, error="That link can't be shown again."), 404
-    return jsonify(ok=True, url=request.host_url + "join/" + token)
-
-
 @app.delete("/api/invites/<iid>")
 def invite_revoke(iid):
     admin_only()
