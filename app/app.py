@@ -2519,7 +2519,27 @@ def launcher_rows():
         grp = [{"id": x["id"], "name": x["name"], "members": x["members"]} for x in groups.load(groups_file(owner))["groups"]]
     except Exception:
         grp = []
+    fill_avatars(favs + recents)
     return launcher.build_rows(favs, recents, grp)
+
+
+def fill_avatars(items):
+    """Profile pictures for the tiles that have none yet: Kick from its official API, Twitch from the users lookup (both remembered)."""
+    by = {"Kick": {}, "Twitch": {}}
+    for x in items:
+        if not x.get("avatar") and x.get("source") in by and x.get("url"):
+            ch = chat.channel_of(x["url"])
+            if ch:
+                by[x["source"]].setdefault(ch.lower(), []).append(x)
+    try:
+        pics = {"Kick": kick.avatars(list(by["Kick"])), "Twitch": {n: u.get("avatar") for n, u in twitch.users(list(by["Twitch"])).items()}}
+    except Exception as e:
+        app.logger.info("Avatars: %s", e)
+        return
+    for src, chans in by.items():
+        for ch, xs in chans.items():
+            for x in xs:
+                x["avatar"] = pics[src].get(ch)
 
 
 def launcher_state():
@@ -2535,7 +2555,7 @@ def launcher_state():
     return (LAUNCHER.rows, LAUNCHER.row, LAUNCHER.col)
 
 
-TV_PATHS = ("/tv", "/tv/data", "/tv/img")
+TV_PATHS = ("/tv", "/tv/data", "/tv/focus", "/tv/img")
 TV_KEY = secrets.token_urlsafe(16)  # new at every start; only the browser the app opens on the TV is given it
 TV_THUMBS = 6  # tiles with a stream picture; the rest are cards with the profile picture (the Pi's browser can't draw many)
 _tv_imgs = {}   # id -> picture address, from the last /tv/data (only these can be fetched through /tv/img)
@@ -2618,6 +2638,13 @@ def tv_data():
     return jsonify(rows=rows, row=st[1], col=st[2])
 
 
+@app.get("/tv/focus")
+def tv_focus():
+    """Just where the focus ring is: the TV's page asks for this several times a second."""
+    tv_viewer_ok()
+    return jsonify(row=LAUNCHER.row, col=LAUNCHER.col)
+
+
 @app.get("/tv/img")
 def tv_img():
     """A picture the page asked for by id: fetched here (https only, images only, small) so the TV's browser never talks to the internet itself."""
@@ -2659,7 +2686,8 @@ def api_launcher_key():
     launcher_state()
     ev = LAUNCHER.key(key)
     if ev and ev.get("redraw"):
-        HOME.show("idle")
+        if not tv_browser_wanted():  # the browser draws the focus itself: redrawing the old launcher would only slow the key down
+            HOME.show("idle")
     elif ev and ev.get("play"):
         refused = guest_link_refused(ev["play"])
         if refused:

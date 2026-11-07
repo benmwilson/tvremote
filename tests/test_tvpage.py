@@ -92,3 +92,26 @@ class BrowserFlagTests(unittest.TestCase):
                 self.assertFalse(server.tv_browser_wanted())
             with mock.patch.object(server, "launcher_on", return_value=False):
                 self.assertFalse(server.tv_browser_wanted())
+
+
+class FocusAndAvatarTests(unittest.TestCase):
+    def test_kick_avatars_come_from_channels_then_users_and_are_remembered(self):
+        from unittest import mock as m
+        import kick
+        kick._avatars.clear()
+        calls = []
+        def fake(req, timeout=10):
+            calls.append(req.full_url)
+            if "/channels" in req.full_url:
+                return '{"data":[{"slug":"omie","broadcaster_user_id":7}]}'
+            return '{"data":[{"user_id":7,"profile_picture":"https://files.kick.com/p.webp"}]}'
+        with m.patch.object(kick, "enabled", return_value=True), m.patch.object(kick, "_app_token", return_value="t"), m.patch.object(kick, "_open", fake):
+            self.assertEqual(kick.avatars(["Omie"]), {"omie": "https://files.kick.com/p.webp"})
+            self.assertEqual(kick.avatars(["omie"]), {"omie": "https://files.kick.com/p.webp"})
+        self.assertEqual(len(calls), 2)  # two requests the first time, none the second
+
+    def test_fill_avatars_sets_only_missing_pictures(self):
+        items = [{"url": "https://kick.com/omie", "source": "Kick"}, {"url": "https://kick.com/xqc", "source": "Kick", "avatar": "keep"}]
+        with mock.patch.object(server.kick, "avatars", return_value={"omie": "https://p/omie"}), mock.patch.object(server.twitch, "users", return_value={}):
+            server.fill_avatars(items)
+        self.assertEqual([i.get("avatar") for i in items], ["https://p/omie", "keep"])

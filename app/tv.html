@@ -3,10 +3,10 @@
 <style>
 :root{--bg:#0b0e14;--card:#151a26;--fg:#e8ecf4;--dim:#8d97ab;--ring:#4da3ff;--live:#e0243a}
 html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--fg);font:600 22px system-ui,sans-serif}
-#rows{position:absolute;left:60px;top:60px;width:1800px;transition:transform .3s ease}
-.row{height:330px;position:relative;overflow:hidden}
-.row h2{margin:0 0 14px;font-size:26px;color:var(--dim);font-weight:700}
-.strip{display:flex;gap:22px;transition:transform .3s ease;padding:10px 0 0 10px}
+#rows{position:absolute;left:40px;top:40px;width:1840px;transition:transform .3s ease}
+.row{height:350px;position:relative;overflow:hidden}
+.row h2{margin:0 0 0 22px;font-size:26px;color:var(--dim);font-weight:700}
+.strip{display:flex;gap:22px;transition:transform .25s ease;padding:16px 24px 24px 22px}
 .card{flex:0 0 330px;height:258px;background:var(--card);border-radius:18px;position:relative;transition:transform .2s,box-shadow .2s;overflow:hidden}
 .card.f{transform:scale(1.07);box-shadow:0 0 0 4px var(--ring),0 20px 40px #000a;z-index:2}
 .card img.t{width:330px;height:186px;object-fit:cover;display:block}
@@ -51,7 +51,7 @@ function focus() {
   const strip = r.querySelector('.strip'), cards = strip.children, c = cards[cur.col];
   if (c) c.classList.add('f');
   strip.style.transform = 'translateX(' + -Math.max(0, cur.col - 4) * 352 + 'px)';
-  document.getElementById('rows').style.transform = 'translateY(' + -Math.max(0, cur.row - 2) * 330 + 'px)';
+  document.getElementById('rows').style.transform = 'translateY(' + -Math.max(0, cur.row - 2) * 350 + 'px)';
 }
 function draw(d) {
   const s = JSON.stringify(d.rows);
@@ -63,5 +63,6 @@ function draw(d) {
   cur = {row: d.row, col: d.col}; focus();
 }
 async function tick() { try { draw(await (await fetch(q('/tv/data'), {cache: 'no-store'})).json()); } catch (e) {} }
-tick(); setInterval(tick, 1000);
+async function focusTick() { try { const f = await (await fetch(q('/tv/focus'), {cache: 'no-store'})).json(); if (f.row !== cur.row || f.col !== cur.col) { cur = f; focus(); } } catch (e) {} }
+tick(); setInterval(tick, 2000); setInterval(focusTick, 150);
 </script></body></html>

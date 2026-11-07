@@ -198,6 +198,30 @@ def check(slug):
             "uptime_s": up, "viewers": st.get("viewer_count"), "thumb": st.get("thumbnail")}
 
 
+_avatars = {}  # slug -> (time, url or None)
+
+
+def avatars(slugs):
+    """{slug: profile picture address} for these channels, from the official API (channels give the user ids, users give the pictures).
+    Remembered a day (an hour when a channel has none), so a list of favourites costs two requests the first time and none after."""
+    now = time.time()
+    slugs = [s for s in dict.fromkeys(x.lower() for x in slugs if x)][:50]
+    need = [s for s in slugs if s not in _avatars or now - _avatars[s][0] > (86400 if _avatars[s][1] else 3600)]
+    if need and enabled():
+        try:
+            hdr = {"Authorization": "Bearer " + _app_token()}
+            rows = json.loads(_open(Request("https://api.kick.com/public/v1/channels?" + urlencode([("slug", s) for s in need]), headers=hdr))).get("data") or []
+            ids = {r["broadcaster_user_id"]: r["slug"].lower() for r in rows if r.get("slug") and r.get("broadcaster_user_id")}
+            users = json.loads(_open(Request("https://api.kick.com/public/v1/users?" + urlencode([("id", i) for i in ids]), headers=hdr))).get("data") if ids else []
+            got = {ids[u["user_id"]]: u.get("profile_picture") for u in users or [] if u.get("user_id") in ids}
+            for s in need:
+                _avatars[s] = (now, got.get(s))
+        except Exception as e:
+            print("Kick avatars:", describe(e), flush=True)
+            _token["value"] = None
+    return {s: _avatars[s][1] for s in slugs if s in _avatars and _avatars[s][1]}
+
+
 def live_among(slugs):
     """The ones of these channels (Kick slugs) that are live right now, in live_now's shape ([] on any failure). One request for up to 50."""
     slugs = [s for s in dict.fromkeys(x.lower() for x in slugs if x)][:50]
