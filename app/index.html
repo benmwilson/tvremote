@@ -354,7 +354,8 @@ body.is-guest #fav{display:none!important}body.is-guest #recents .x{display:none
 /* ===== desktop layout: wide, panels side by side, mouse and keyboard ===== */
 html[data-layout=desktop] body{max-width:1320px;padding-left:32px;padding-right:32px}
 html[data-layout=desktop] header{margin-bottom:22px}
-html[data-layout=desktop] #view-all #cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px;align-items:start}
+html[data-layout=desktop] #view-all #cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px;align-items:stretch}  /* cards in a row share one height */
+html[data-layout=desktop] #view-all #cards .tvcard{margin-bottom:0;height:100%}
 html[data-layout=desktop] #view-tv{display:grid;grid-template-columns:minmax(400px,480px) minmax(0,1fr);column-gap:32px;align-items:start}
 html[data-layout=desktop] #view-tv>#tvid{grid-column:1/-1}
 html[data-layout=desktop] #view-tv>#now,html[data-layout=desktop] #view-tv>#watchcard,html[data-layout=desktop] #view-tv>#chatcard,html[data-layout=desktop] #view-tv>#wallopencard,html[data-layout=desktop] #view-tv>#browsecard,html[data-layout=desktop] #view-tv>#tvctl{grid-column:1}
