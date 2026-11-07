@@ -56,7 +56,7 @@ function avatar(t, cls) {
   return el('div', 'av ' + (cls || ''), (t.name || '?').trim().charAt(0).toUpperCase());
 }
 function card(t) {
-  const c = el('div', 'card');
+  const c = el('div', 'card'); c._t = t;
   if (t.thumb) { const i = el('img', 't'); i.src = q(t.thumb); c.append(i); if (t.live) c.append(el('span', 'chip live', 'LIVE')); if (t.viewers != null) c.append(el('span', 'chip view', num(t.viewers))); c.append(avatar(t, 'small'), el('div', 'name', t.name), el('div', 'game', t.game || t.title || ''));
   } else {
     const ph = el('div', 'ph');
@@ -67,12 +67,39 @@ function card(t) {
   }
   return c;
 }
+// hover preview: after a pause on a live card its stream plays muted in the card, through the app's relay (never from the internet directly)
+let pvCard = null, pvTimer = 0, pvHls = null, pvVideo = null;
+const hs = document.createElement('script'); hs.src = q('/vendor/hls.min.js'); document.head.append(hs);
+function stopPreview() {
+  clearTimeout(pvTimer); if (pvHls) { pvHls.destroy(); pvHls = null; } if (pvVideo) { pvVideo.remove(); pvVideo = null; }
+}
+function preview(c) {
+  stopPreview(); pvCard = c;
+  const t = c && c._t;
+  if (!t || t.kind !== 'stream' || !t.live || !t.thumb) return;
+  pvTimer = setTimeout(async () => {
+    try {
+      if (!window.Hls || !Hls.isSupported()) return;
+      const r = await (await fetch(q('/tv/pv?u=' + encodeURIComponent(t.url)), {cache: 'no-store'})).json();
+      if (!r.ok || pvCard !== c || !c.isConnected) return;
+      const v = el('video'); v.muted = true; v.autoplay = true; v.playsInline = true;
+      v.style.cssText = 'position:absolute;left:0;top:0;width:330px;height:186px;object-fit:cover;background:#000';
+      v.addEventListener('playing', () => { v.style.opacity = 1; }); v.style.opacity = 0;
+      const im = c.querySelector('img.t'); im.after(v); pvVideo = v;  // right after the picture, so the chips stay on top
+      pvHls = new Hls({capLevelToPlayerSize: true, maxBufferLength: 6, liveSyncDurationCount: 2});
+      pvHls.on(Hls.Events.ERROR, (e, d) => { if (d.fatal) stopPreview(); });
+      pvHls.loadSource(r.src); pvHls.attachMedia(v);
+      pvTimer = setTimeout(stopPreview, 90000);  // a preview is a glance, not a viewing
+    } catch (e) { report('preview: ' + e); }
+  }, 1500);
+}
 function focus() {
   document.querySelectorAll('.card.f').forEach(c => c.classList.remove('f'));
   const rows = document.querySelectorAll('.row');
   const r = rows[cur.row]; if (!r) return;
   const strip = r.querySelector('.strip'), cards = strip.children, c = cards[cur.col];
   if (c) c.classList.add('f');
+  if (c !== pvCard) preview(c);
   strip.style.transform = 'translateX(' + -Math.max(0, cur.col - 4) * 352 + 'px)';
   document.getElementById('rows').style.transform = 'translateY(' + -Math.max(0, cur.row - 1) * 350 + 'px)';
 }

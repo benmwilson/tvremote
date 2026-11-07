@@ -51,6 +51,7 @@ import throttle
 import kick
 import twitch
 import twitchads
+import tvpreview
 import dockerctl
 import emotes
 import mpvipc
@@ -137,7 +138,7 @@ def guard():
         if request.method == "GET" and "text/html" in request.headers.get("Accept", ""):
             return redirect("/", 303)
         return Response(json.dumps({"ok": False, "error": "Finish the setup first."}), 403, mimetype="application/json")
-    if re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/watch/[\w-]+\.m3u8|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
+    if re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/watch/[\w-]+\.m3u8|/tv/pv/[\w-]+\.m3u8|/tv/pv/seg|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
         return None
@@ -2589,7 +2590,7 @@ def launcher_state():
 BOOT_ID = secrets.token_hex(4)  # new at every start: an open page that sees it change reloads itself, so it never runs an older script against a newer app
 
 
-TV_PATHS = ("/tv", "/tv/data", "/tv/focus", "/tv/info", "/tv/img", "/tv/log")
+TV_PATHS = ("/tv", "/tv/data", "/tv/focus", "/tv/info", "/tv/img", "/tv/log", "/tv/pv", "/vendor/hls.min.js")
 TV_KEY = secrets.token_urlsafe(16)  # new at every start; only the browser the app opens on the TV is given it
 TV_THUMBS = 6  # tiles with a stream picture; the rest are cards with the profile picture (the Pi's browser can't draw many)
 _tv_imgs = {}   # id -> picture address, from the last /tv/data (only these can be fetched through /tv/img)
@@ -2724,6 +2725,55 @@ def tv_img():
             _tv_img_cache.pop(next(iter(_tv_img_cache)))
         hit = _tv_img_cache[url] = (time.time(), body, ctype)
     return Response(hit[1], mimetype=hit[2], headers={"Cache-Control": "max-age=100"})
+
+@app.get("/tv/pv")
+def tv_preview_start():
+    """The launcher's hover preview: a live channel's low-quality playlist, relayed by the app (see tvpreview.py). Answers the playlist's path."""
+    tv_viewer_ok()
+    url = request.args.get("u", "")
+    if not is_channel(url):
+        abort(404)
+    try:
+        source, _ = resolve(url)
+        q = "480p,360p,worst"
+        addr = stream_url(url, q)
+        if source == "Twitch":
+            def fresh():
+                _addr_cache.pop((url, q), None)
+                return stream_url(url, q)
+            relay = twitchads.Relay(addr, hlsproxy._get, fresh)
+            token = tvpreview.create(relay.playlist, addr)
+        else:
+            token = tvpreview.create(lambda: hlsproxy._get(addr).decode(errors="replace"), addr)
+    except Exception as e:
+        app.logger.info("TV preview: %s", e)
+        return jsonify(ok=False), 502
+    return jsonify(ok=True, src=f"/tv/pv/{token}.m3u8")
+
+
+@app.get("/tv/pv/<token>.m3u8")
+def tv_preview_playlist(token):
+    """The preview's playlist; the unguessable token is the login (the video player sends no key)."""
+    try:
+        text = tvpreview.playlist(token)
+    except Exception as e:
+        app.logger.info("TV preview playlist: %s", e)
+        return Response("", 502)
+    if text is None:
+        abort(404)
+    return Response(text, mimetype="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/tv/pv/seg")
+def tv_preview_segment():
+    try:
+        data = tvpreview.segment(request.args.get("t", ""), request.args.get("u", ""))
+    except Exception:
+        return Response("", 502)
+    if data is None:
+        abort(404)
+    return Response(data, mimetype="video/mp2t", headers={"Cache-Control": "max-age=60"})
+
 
 
 @app.get("/api/launcher")
