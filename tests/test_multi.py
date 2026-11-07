@@ -426,6 +426,9 @@ class ControlledStreamTest(unittest.TestCase):
         sent = []
         with mock.patch.object(self.server, "tgt", return_value=None),                 mock.patch.object(self.server.mpvipc, "send", lambda sock, cmd, timeout=1.0: sent.append((sock, cmd)) or {"error": "success", "data": 40}):
             self.post({"action": "volume", "value": 40})
+            self.assertEqual([s for s, c in sent if c[0] == "show-text"], [])  # a drag draws nothing until the finger lifts
+            sent.clear()
+            self.post({"action": "volume", "value": 40, "final": True})
         shown = [s for s, c in sent if c[0] == "show-text"]
         self.assertEqual(shown, [multi._sock(1)])  # not the first window's
 
