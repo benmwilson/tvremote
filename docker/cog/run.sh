@@ -7,7 +7,7 @@ pid=
 while true; do
   if [ -f "$FLAG" ] && [ -s "$KEY" ]; then
     if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
-      cog -P wl "http://127.0.0.1:${PORT:-8765}/tv?k=$(cat "$KEY")" >/dev/null 2>&1 &
+      cog -P wl "http://127.0.0.1:${PORT:-8765}/tv?k=$(cat "$KEY")" >>/tmp/cog.log 2>&1 &  # the browser's own messages (a renderer crash says why here): docker exec tvbrowser tail /tmp/cog.log
       pid=$!
     fi
   elif [ -n "$pid" ]; then
