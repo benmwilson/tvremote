@@ -66,7 +66,6 @@ services:
     volumes:
       - /run/user/${PI_UID:-1000}/${WAYLAND_DISPLAY:-wayland-0}:/run/user/${PI_UID:-1000}/${WAYLAND_DISPLAY:-wayland-0} # only the Wayland socket, not the PipeWire ones
       - tvremote-data:/data:ro
-      - /run/user/${PI_UID:-1000}/pulse:/run/user/${PI_UID:-1000}/pulse # the sound server's socket (PipeWire's Pulse one), for the launcher's preview sound
     # WebKit's own sandbox (bubblewrap) runs inside this container: the profile is Docker's default plus user namespaces and mounts for bwrap,
     # and /proc is unmasked so bwrap can mount its own. Only this container; the app container keeps Docker's default.
     security_opt:
@@ -78,7 +77,6 @@ services:
       - HOME=/tmp
       - PORT=${PORT:-8765}
       - COG_PLATFORM_WL_VIEW_FULLSCREEN=1
-      - PULSE_SERVER=unix:/run/user/${PI_UID:-1000}/pulse/native
 
 volumes:
   tvremote-data:

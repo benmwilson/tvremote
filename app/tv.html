@@ -159,7 +159,7 @@ function draw(d) {
   });
   document.getElementById('empty').hidden = d.rows.length > 0;
   liveNow = ((d.rows.find(r => r.title === 'Live now') || {}).tiles || []).length;
-  pvCfg = {on: d.preview !== false, sound: d.sound !== false};  // the admin's switches (Settings > TV screen), live
+  pvCfg = {on: d.preview !== false, sound: d.sound === true};  // the admin's switches (Settings > TV screen), live
   if (!pvCfg.on) stopPreview(); else if (pvVideo) pvVideo.muted = !pvCfg.sound;
   const nt = document.getElementById('note'); nt.textContent = d.note || ''; nt.hidden = !d.note;
   cur = {row: d.row, col: d.col}; focus();
