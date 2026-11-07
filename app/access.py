@@ -2,7 +2,8 @@
 one-time guest links (opening one starts a timed session that can control the TVs and nothing else).
 Invite tokens are never saved. Each one is derived (HMAC) from a random seed saved with the invite and a secret key kept in a separate file, and only
 the token's hash is the lookup key, so invites.json alone can't be used to get in. An admin can still show an unopened link's QR code again: the app
-derives the token again from the seed and the key. Files live in /data and are readable only by the app."""
+derives the token again from the seed and the key. The key is a file in /data unless TVREMOTE_INVITE_KEY (32+ characters) is set: then a backup of /data
+can't rebuild an unopened link. Links last 48 hours and a few uses. Files live in /data and are readable only by the app."""
 import base64
 import hashlib
 import hmac
@@ -85,6 +86,9 @@ def _h(token):
 
 def _key():
     """The secret the invite tokens are derived with (its own file, so a copy of invites.json is not enough to rebuild a link)."""
+    env = os.environ.get("TVREMOTE_INVITE_KEY", "")
+    if len(env) >= 32:
+        return env.encode()  # kept outside /data (an env var or a secrets mount): a backup of /data then can't rebuild a link
     path = _path("invite.key")
     try:
         with open(path, "rb") as f:

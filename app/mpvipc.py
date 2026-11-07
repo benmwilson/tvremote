@@ -26,3 +26,12 @@ def send(sock_path, cmd, timeout=1.0):
                         return msg
     except (OSError, AttributeError):  # AttributeError: no AF_UNIX (Windows test machines)
         return None
+
+
+def set_mute(sock_path, muted):
+    """Mute or unmute one player. Unmuting mutes and unmutes again: the sound server (WirePlumber) remembers a stream's mute and puts it back on the next mpv,
+    so a player that starts silent reports "not muted" itself, and setting the same value again would change nothing."""
+    if not muted:
+        send(sock_path, ["set_property", "mute", True])
+    return send(sock_path, ["set_property", "mute", bool(muted)])
+

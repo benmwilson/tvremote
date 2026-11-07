@@ -256,7 +256,7 @@ class Wall:
             if not 0 <= i < self.count():
                 return
             (self.sound.add if on else self.sound.discard)(i)
-            mpvipc.send(self.sock(i, main_sock), ["set_property", "mute", not on])
+            mpvipc.set_mute(self.sock(i, main_sock), not on)
 
     # ---- the tile list ----
     def add(self, url, main_url):

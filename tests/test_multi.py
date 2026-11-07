@@ -83,7 +83,7 @@ class WallTest(unittest.TestCase):
         self.assertEqual(w.sound, {0})  # not on by default
         with mock.patch.object(multi.mpvipc, "send") as send:
             w.set_sound(1, True, "/tmp/main.sock")  # more than one can be heard at once
-            send.assert_called_once_with(multi._sock(1), ["set_property", "mute", False])
+            self.assertEqual(send.call_args_list, [mock.call(multi._sock(1), ["set_property", "mute", True]), mock.call(multi._sock(1), ["set_property", "mute", False])])  # unmuting sets it twice so a remembered mute is overwritten
             self.assertEqual(w.sound, {0, 1})
             w.set_sound(0, False, "/tmp/main.sock")
         send.assert_called_with("/tmp/main.sock", ["set_property", "mute", True])

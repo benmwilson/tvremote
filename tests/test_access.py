@@ -193,6 +193,12 @@ class AccessTest(unittest.TestCase):
         access.redeem_invite(t)  # a one-device link is gone once opened
         self.assertIsNone(access.invite_token(iid))
 
+    def test_the_invite_key_can_come_from_outside_the_data_folder(self):
+        with mock.patch.dict(os.environ, {"TVREMOTE_INVITE_KEY": "k" * 40}):
+            t = access.create_invite(1, "env")
+            self.assertFalse(os.path.exists(access._path("invite.key")))  # nothing in /data to rebuild it from
+            self.assertEqual(access.invite_token(access.invites_pending()[-1]["id"]), t)
+
     def test_which_guest_link_is_on_the_tv_is_found_from_its_url(self):
         t = access.create_invite(1, "tv")
         iid = access.invites_pending()[-1]["id"]

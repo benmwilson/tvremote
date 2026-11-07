@@ -710,6 +710,8 @@ def _watch(proc):
     if proc.poll() is None:
         if settings.get("volume") is not None:
             mpv(["set_property", "volume", settings["volume"]])  # a new mpv starts at 100: put back what was chosen
+        if not wall.active():
+            mpvipc.set_mute(SOCK, False)  # a stream starts with sound, whatever the sound server remembers from a muted multistream tile
         screen("playing")
     proc.wait()
     if state["proc"] is not proc:
@@ -1524,7 +1526,7 @@ def wall_relayout(main_url=None):
         p = state["proc"]
         if HOT and not wall.active() and p and p.poll() is None and state.get("hot") and state.get("wid"):
             mpvipc.send(SOCK, ["set_property", "fullscreen", True])  # a window can make itself full screen: nothing closes
-            mpvipc.send(SOCK, ["set_property", "mute", False])
+            mpvipc.set_mute(SOCK, False)
             state["wid"] = None
             try:
                 if hot_load(url, wall.saved_quality):
@@ -1648,7 +1650,7 @@ def reconcile_job():
         if any(i for i in left):
             wall.start_windows()  # restarts only the windows that do not match
         for k in range(wall.count()):  # the windows kept their own mute setting: put it with the streams
-            mpvipc.send(wall.sock(k, SOCK), ["set_property", "mute", k not in wall.sound])
+            mpvipc.set_mute(wall.sock(k, SOCK), k not in wall.sound)
         screen("playing")
     except Exception as e:
         app.logger.warning("Changing the windows' streams failed: %s", e)
