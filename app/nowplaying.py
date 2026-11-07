@@ -3,17 +3,20 @@
 The Roku only says which app is open, whether it plays, and where it is (ECP has no titles). Apps that publish more get a provider here:
 YouTube listens to its own "Lounge" interface (the one phones use to cast) as a read-only remote and never sends a command.
 Unofficial: if it breaks, nothing else does, and the card falls back to the app name and position.
-Netflix and Prime Video have no known local interface; Plex would need its server's address and token (not built).
+Netflix and Prime Video have no known local interface. Plex: the server's /status/sessions says what each player (matched by the TV's address) is playing;
+it needs TVREMOTE_PLEX_TOKEN in .env (the server is found on the LAN, or set TVREMOTE_PLEX_URL).
 
 A listener only runs while somebody is looking at that TV (sync() is called from the Roku refresh) and stops 90 s after the last look."""
 import json
 import os
 import re
+import socket
 import threading
 import time
 import urllib.parse
 import urllib.request
 import uuid
+import xml.etree.ElementTree as ET
 
 YT_ORIGIN = "package:com.google.android.youtube"  # the Roku's DIAL only answers callers with an approved Origin; this is one it accepts
 LINGER = 90  # seconds a listener keeps going after the last look at the TV
@@ -116,6 +119,7 @@ def _run(tv_id, ip, st):
 
 def sync(tv_id, ip, app):
     """Called when the TV's open app is known (None when it is on an input, home or off): start, keep or stop its listener."""
+    _tv_ip[tv_id] = ip
     allowed = [x.strip() for x in os.environ.get("TVREMOTE_NOWPLAYING_IPS", "").split(",") if x.strip()]
     if allowed and ip not in allowed:
         return  # listen only to the TVs named here (empty: every TV)
@@ -135,8 +139,62 @@ def sync(tv_id, ip, app):
     threading.Thread(target=_run, args=(tv_id, ip, st), daemon=True).start()
 
 
+CRLF = bytes([13, 10])
+_plex = {"url": None, "tried": 0, "sessions": (0, None)}  # server address, when we last looked for it, (time, parsed sessions)
+_tv_ip = {}  # tv_id -> address, to match a Plex player
+
+
+def plex_server():
+    """The Plex server's address: TVREMOTE_PLEX_URL, else the first server that answers Plex's LAN discovery (GDM), looked for at most once a minute."""
+    if os.environ.get("TVREMOTE_PLEX_URL"):
+        return os.environ["TVREMOTE_PLEX_URL"].rstrip("/")
+    if not _plex["url"] and time.time() - _plex["tried"] > 60:
+        _plex["tried"] = time.time()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.settimeout(1.5)
+            sock.sendto(b"M-SEARCH * HTTP/1.1" + CRLF * 2, ("239.0.0.250", 32414))
+            data, addr = sock.recvfrom(2048)
+            port = re.search(rb"Port:\s*(\d+)", data)
+            _plex["url"] = f"http://{addr[0]}:{port.group(1).decode() if port else 32400}"
+        except OSError:
+            pass
+        finally:
+            sock.close()
+    return _plex["url"]
+
+
+def parse_plex(xml_text):
+    """{player address: {"title", "channel", "thumb"}} from /status/sessions."""
+    out = {}
+    for v in ET.fromstring(xml_text).iter("Video"):
+        pl = v.find("Player")
+        if pl is None or not pl.get("address"):
+            continue
+        show = v.get("grandparentTitle")
+        out[pl.get("address")] = {"title": v.get("title"), "channel": show, "thumb": v.get("grandparentThumb") or v.get("thumb")}
+    return out
+
+
+def plex_get(ip):
+    token, base = os.environ.get("TVREMOTE_PLEX_TOKEN"), plex_server()
+    if not (token and base and ip):
+        return None
+    when, cached = _plex["sessions"]
+    if time.time() - when > 5:  # one look at the server serves every card for a few seconds
+        try:
+            cached = parse_plex(_open(f"{base}/status/sessions?X-Plex-Token={urllib.parse.quote(token)}", timeout=4).read())
+        except (OSError, ET.ParseError):
+            cached = None
+        _plex["sessions"] = (time.time(), cached)
+    return (cached or {}).get(ip)
+
+
 def get(tv_id, app):
     """{"title", "channel", "thumb", "video"} for what the TV's app is playing, or None (unknown, or a different app now)."""
+    if app == "Plex":
+        d = plex_get(_tv_ip.get(tv_id))
+        return dict(d) if d else None
     with _lock:
         d = _info.get(tv_id)
         return dict(d) if d and d.get("app") == app else None

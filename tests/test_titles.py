@@ -53,3 +53,13 @@ class FavouriteTitles(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlexTests(unittest.TestCase):
+    def test_sessions_are_matched_by_player_address(self):
+        import nowplaying
+        xml = ('<MediaContainer><Video title="Pilot" grandparentTitle="Show" grandparentThumb="/t.jpg"><Player address="192.168.1.141"/></Video>'
+               '<Video title="Other"><Player address="192.168.1.9"/></Video></MediaContainer>')
+        d = nowplaying.parse_plex(xml)
+        self.assertEqual(d["192.168.1.141"], {"title": "Pilot", "channel": "Show", "thumb": "/t.jpg"})
+        self.assertEqual(d["192.168.1.9"]["title"], "Other")
