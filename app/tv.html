@@ -79,7 +79,7 @@ function preview(c) {
   if (!t || t.kind !== 'stream' || !t.live || !t.thumb) return;
   pvTimer = setTimeout(async () => {
     try {
-      if (!window.Hls || !Hls.isSupported()) return;
+      if (!window.Hls || !Hls.isSupported()) { report('preview: hls.js ' + (window.Hls ? 'has no MSE here' : 'did not load')); return; }
       const r = await (await fetch(q('/tv/pv?u=' + encodeURIComponent(t.url)), {cache: 'no-store'})).json();
       if (!r.ok || pvCard !== c || !c.isConnected) return;
       const v = el('video'); v.muted = true; v.autoplay = true; v.playsInline = true;
@@ -87,7 +87,7 @@ function preview(c) {
       v.addEventListener('playing', () => { v.style.opacity = 1; }); v.style.opacity = 0;
       const im = c.querySelector('img.t'); im.after(v); pvVideo = v;  // right after the picture, so the chips stay on top
       pvHls = new Hls({capLevelToPlayerSize: true, maxBufferLength: 6, liveSyncDurationCount: 2});
-      pvHls.on(Hls.Events.ERROR, (e, d) => { if (d.fatal) stopPreview(); });
+      pvHls.on(Hls.Events.ERROR, (e, d) => { if (d.fatal) { report('preview: ' + d.type + ' ' + d.details); stopPreview(); } });
       pvHls.loadSource(r.src); pvHls.attachMedia(v);
       pvTimer = setTimeout(stopPreview, 90000);  // a preview is a glance, not a viewing
     } catch (e) { report('preview: ' + e); }
