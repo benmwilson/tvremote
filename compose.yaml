@@ -62,7 +62,7 @@ services:
       - /dev/video11:/dev/video11
       - /dev/video12:/dev/video12
     volumes:
-      - /run/user/${PI_UID:-1000}:/run/user/${PI_UID:-1000} # the Wayland socket
+      - /run/user/${PI_UID:-1000}/${WAYLAND_DISPLAY:-wayland-0}:/run/user/${PI_UID:-1000}/${WAYLAND_DISPLAY:-wayland-0} # only the Wayland socket, not the PipeWire ones
       - tvremote-data:/data:ro
     environment:
       - XDG_RUNTIME_DIR=/run/user/${PI_UID:-1000}
