@@ -1189,6 +1189,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 </dialog>
 <div id="tourbox" class="hide" role="dialog" aria-live="polite" aria-labelledby="tourttl">
   <div class="tt"><b id="tourttl"></b><span class="sub" id="toursub"></span>
+    <button id="tourskip" type="button" style="min-height:36px;padding:0 12px;font-size:13px;background:none;color:var(--dim)">Skip tour</button>
     <button id="tourclose" type="button" class="iconbtn" aria-label="End the tour" title="End the tour"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <p id="tourtext"></p>
   <div class="row"><button id="tourback" type="button">Back</button><button id="tournext" type="button" class="go">Next</button></div>
@@ -2104,7 +2105,7 @@ async function tourShow() {
   tourClear();
   if (tourGrp && tourGrp !== (s.grp || '')) tourLeave();
   $('tourttl').textContent = s.t; $('toursub').textContent = (tourI + 1) + ' of ' + tourSteps.length;
-  $('tourback').disabled = !tourI; $('tournext').textContent = last ? 'Done' : 'Next';
+  $('tourback').disabled = !tourI; $('tournext').textContent = last ? 'Done' : 'Next'; $('tourskip').classList.toggle('hide', last);
   if (s.view && view() !== s.view) {
     location.hash = s.view === 'all' ? '#/' : s.view === 'settings' ? '#/settings' : '#/tv/' + encodeURIComponent(tourTv());
     await new Promise(r => setTimeout(r, 500));  // the screen draws itself
@@ -2139,7 +2140,7 @@ $('tourgo').onclick = () => {
 };
 $('tourback').onclick = () => { if (tourI) { tourI--; tourShow(); } };
 $('tournext').onclick = () => { if (tourI < tourSteps.length - 1) { tourI++; tourShow(); } else tourEnd(); };
-$('tourclose').onclick = tourEnd;
+$('tourclose').onclick = $('tourskip').onclick = tourEnd;
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && tourOpen()) tourEnd(); });
 // ---- Docker (admin): the containers on this Pi, with start / stop / restart / kill, logs and settings. Needs the engine's socket mounted. ----
 let dockerName = '', dockerTab = 'over', dockerInfo = null, dockerMe = '';
@@ -3056,7 +3057,7 @@ function firstTour(j) {
   if (seen) return;
   setTimeout(async () => {  // asked, not forced: a welcome with the choice
     if (tourOpen() || document.querySelector('dialog[open]') || !['all', 'tv'].includes(view())) return;
-    if (await confirmSheet('Welcome to TV Remote', 'Want a one-minute tour of what you can do here? You can replay it any time from Settings, then Help.', 'Start the tour', false, 'Not now')) $('tourgo').onclick();
+    if (await confirmSheet('Welcome to TV Remote', 'Want a one-minute tour of what you can do here? You can replay it any time from Settings, then Help.', 'Start the tour', false, 'Skip for now')) $('tourgo').onclick();
   }, 1800);
 }
 
