@@ -831,7 +831,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <label class="s-check" style="justify-content:space-between;margin-top:6px">Launcher on the TV between streams<input id="launchertoggle" type="checkbox" class="tg" role="switch"></label>
     <p class="sub" style="margin:2px 0 6px">Who is live, your favourites, groups and recents as tiles on the TV. Move around it with the pad on the remote (an IR receiver can be added later).</p>
     <div style="margin-top:10px"><b style="display:block;margin-bottom:6px;font-weight:600">Weather in the launcher&rsquo;s header</b>
-      <div class="s-out"><input id="weathercity" placeholder="City, e.g. Vancouver" aria-label="City for the weather" maxlength="80" autocapitalize="words" autocorrect="off"><select id="weatherunit" aria-label="Units" style="flex:none;width:auto"><option value="C">&deg;C</option><option value="F">&deg;F</option></select></div></div>
+      <input id="weathercity" type="text" placeholder="City, e.g. Vancouver" aria-label="City for the weather" maxlength="80" autocapitalize="words" autocorrect="off">
+      <select id="weatherunit" aria-label="Temperature units" style="margin-top:8px"><option value="C">Celsius (&deg;C)</option><option value="F">Fahrenheit (&deg;F)</option></select></div>
     <p class="sub" id="weathermsg" style="margin:2px 0 6px">Leave the city empty for no weather. Only the city's weather is looked up (from Open-Meteo); nothing else leaves the Pi.</p>
     <label class="s-check" style="justify-content:space-between;margin-top:6px">Warn on the TV when the Pi runs hot<input id="heattv" type="checkbox" class="tg" role="switch"></label>
       <p class="sub" style="margin:2px 0 0">A short line of text on the picture (from 78 °C, at most once a minute). It costs nothing to speak of.</p>
