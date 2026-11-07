@@ -107,6 +107,8 @@ def rules_xml():
                  '<action name="ResizeTo" width="1920" height="1080"/><action name="ToggleAlwaysOnTop"/></windowRule>')
     rules.append('    <windowRule identifier="tvr-chatbar"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="810"/>'
                  '<action name="ResizeTo" width="1440" height="270"/><action name="ToggleAlwaysOnTop"/></windowRule>')
+    # the TV's browser (docker/cog) never hides the mouse pointer itself: the compositor is told to when its window opens
+    rules.append('    <windowRule identifier="com.igalia.Cog"><action name="HideCursor"/></windowRule>')
     return '<?xml version="1.0"?>\n<labwc_config>\n  <windowRules>\n' + "\n".join(rules) + "\n  </windowRules>\n</labwc_config>\n"
 
 
