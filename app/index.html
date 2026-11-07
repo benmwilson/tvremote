@@ -426,7 +426,7 @@ details[open]>summary::after{transform:rotate(180deg)}
 #tourbox .tt{display:flex;align-items:center;gap:10px}#tourbox .tt b{flex:1;font-size:17px}#tourbox .sub{font-size:12px;color:var(--dim)}
 #tourbox p{margin:4px 0 12px;color:var(--dim);font-size:15px;line-height:1.45;min-height:3em}
 /* Settings tabs: one section at a time. A scrolling row of pills on the phone, a rail down the left on a desktop. */
-.stabs{position:sticky;top:0;z-index:20;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:8px 0 12px;margin:0 0 6px;background:var(--bg,#0b0e14)}
+.stabs{position:sticky;top:0;z-index:20;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:calc(8px + env(safe-area-inset-top)) 0 12px;margin:0 0 6px;background:var(--bg,#0b0e14)}
 .stabs::-webkit-scrollbar{display:none}
 .stabs button{flex:none;min-height:42px;padding:0 18px;border-radius:99px;background:var(--card);color:var(--dim);font-size:15px;font-weight:600}
 .stabs button[aria-selected=true]{background:var(--tv,#6bb2ff);color:#0b0e14}
@@ -2655,7 +2655,7 @@ function requestRow(r) {
     if (tvs === undefined) return;
     const res = await busy(form.querySelector('button'), () => api('/api/requests/' + r.id + '/approve', 'POST', {name: n.value, password: p.value, tvs}));
     if (res && res.ok) {
-      createdNote = {name: res.name, password: res.password || ''};  // shown at the top of the list until dismissed (the request itself is gone now)
+      if (res.password) createdNote = {name: res.name, password: res.password};  // only a made-up password is shown (once): one you typed needs no card, the request is simply gone
       loadPeople(); loadAccess();
     }
   };
