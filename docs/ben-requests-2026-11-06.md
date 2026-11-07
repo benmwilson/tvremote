@@ -32,9 +32,9 @@ Status: DONE = built and deployed, CODE = committed but not deployed yet, OPEN =
 - Multistream with chat, windows in mixed layouts (race): DONE.
 - mpv's own on-screen controller (seek bar, address as title) over the picture: DONE (`osc=no`).
 - "Switching stream" card when a multistream collapses to one: DONE (quiet path).
-- Warnings about the Pi/TV as a whole (heat) across the whole screen, not in one tile: DONE (`tv_banner`, window `tvr-banner`; labwc rules updated on the Pi, backups `rc.xml.bak-cursor` and `rc.xml.bak-banner`). Temperature warning threshold is 78 C: ASK whether to lower it.
+- Warnings about the Pi/TV as a whole (heat) not in one tile: DONE as coloured text on the picture (`tv_note`, on every window with several streams; a first version as a strip window was replaced because Ben wanted a see-through look; labwc backups `rc.xml.bak-cursor`, `.bak-banner`, `.bak-note`). Temperature warning threshold is 78 C: ASK whether to lower it.
 
-- Volume / mute / paused notices on the same strip for one full-screen stream, with a Settings choice (strip or classic text) and a test-warning button: DONE. Several streams keep text in the stream's own window.
+- Volume / mute / paused notices in the same coloured text for one full-screen stream, with a Settings choice (coloured or classic plain text) and a test-warning button: DONE. Several streams keep plain text in the stream's own window.
 - People options (make admin, reset password, sign out, remove) as one compact row of buttons: DONE.
 - Launcher shows one tile per streamer (xqc / buddha were doubled): DONE.
 - Open pages reload themselves after the app restarts (a stale tab ran an old script): DONE (takes effect from the next restart after this one).
