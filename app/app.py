@@ -723,7 +723,7 @@ def chat_lower_quality():
         _swapping.set()  # a quiet change: no "Refreshing the stream" text over the picture while the chat comes up
         try:
             with lock:
-                start_player(state["url"], CHAT_QUALITY, "quality")
+                start_player(state["url"], CHAT_QUALITY, "quiet")  # no "Switching quality" card: the chat is what is changing
         finally:
             _swapping.clear()
 
@@ -735,7 +735,7 @@ def chat_restore_quality():
         _swapping.set()
         try:
             with lock:
-                start_player(state["url"], q, "quality")
+                start_player(state["url"], q, "quiet")
         finally:
             _swapping.clear()
 
@@ -1059,9 +1059,10 @@ def start_player(url, quality=None, screen_kind="loading"):
             return
     except Exception as e:  # offline, or no address: start it the usual way (which shows the usual "not live" message)
         app.logger.info("Not changed in place (%s): starting a new player", e)
+    _pending["t"] = time.time()  # "starting" from the moment the old stream goes: the remote keeps its controls up through the restart instead of emptying
     # before the old stream stops, so a swap never shows the desktop
-    if wall.active():
-        screen("playing")  # the wall's background: every slot says which stream it is waiting for
+    if wall.active() or screen_kind == "quiet":
+        screen("playing")  # the wall's background: every slot says which stream it is waiting for. "quiet": no card at all (a chat starting or stopping)
     else:
         screen(screen_kind, fav_name(url) + ("  \u00b7  " + quality if screen_kind == "quality" and quality else ""), route(url)[0])
     stop_player()

@@ -215,7 +215,7 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #logout{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .sub.warn{color:var(--warn,#ffb062)}
 #chatcard{margin-top:12px;padding:6px 16px 12px 16px}
-#wallopencard,#browsecard{margin-top:12px;padding:8px 16px}#playsec{margin-top:6px}#chattabs{display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:3px 2px}#chattabs::-webkit-scrollbar{display:none}
+#wallopencard,#browsecard{margin-top:12px;padding:8px 16px}#launchcard{margin:12px 0;padding:14px 16px}#launchcard .pad .row{gap:10px;margin-top:10px}#launchcard .pad .row:first-child{margin-top:0}#playsec{margin-top:6px}#chattabs{display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:3px 2px}#chattabs::-webkit-scrollbar{display:none}
 #chattabs button{position:relative;flex:none;width:38px;min-width:0;min-height:0;height:38px;padding:0;border-radius:50%;background:none;box-shadow:0 0 0 2px transparent;transition:box-shadow .15s}
 #chattabs button .av{width:34px;height:34px;font-size:12px}
 #chattabs button[aria-pressed=true]{box-shadow:0 0 0 2px var(--site,var(--tv,#62b0ff))}#chattabs button[data-site=kick]{--site:#53fc18}#chattabs button[data-site=twitch]{--site:#a970ff}
@@ -1403,12 +1403,12 @@ const err = m => { $('err').textContent = m || ''; if (m) setTimeout(() => $('er
 // The tour's demo: while it runs and nothing real is playing, the page shows a made-up live stream (and, on the multistream steps, a made-up
 // multistream and chat), so every control can be explained as if it were live. Nothing in it can reach the TV: every write is refused.
 let tourDemoOn = false, tourDemoWall = false, realSt = {}, demoChatN = 0;
-const DEMO_WALL = () => ({layout: 'focus', max: 4, sound: [0], selected: 0, busy: false,
-  main: {i: 0, url: 'https://www.twitch.tv/anthonyz', name: 'anthonyz', source: 'Twitch', running: true, title: 'Grand Theft Auto V', quality: ''},
-  tiles: [{i: 1, url: 'https://kick.com/xqc', name: 'xqc', source: 'Kick', running: true, title: 'Just Chatting', quality: '720'},
-          {i: 2, url: 'https://kick.com/omie', name: 'omie', source: 'Kick', running: true, title: 'Grand Theft Auto V', quality: ''}]});
-const demoSt = () => ({running: true, target, title: 'Grand Theft Auto V RP | !socials', source: 'Twitch', url: 'https://www.twitch.tv/anthonyz', live: true, live_for: 7400,
-  game: 'Grand Theft Auto V', paused: false, position: null, duration: null, quality: '1080p60,best', volume: 60, muted: false, height: 1080, hwdec: 'v4l2m2m',
+const DEMO_WALL = () => ({layout: 'focus', max: 4, sound: [0], selected: 0, busy: false,  // made-up streamers (all Twitch, so no chat page is ever fetched for them)
+  main: {i: 0, url: 'https://www.twitch.tv/novaplays', name: 'novaplays', source: 'Twitch', running: true, title: 'Speedrun night: any% attempts', quality: ''},
+  tiles: [{i: 1, url: 'https://www.twitch.tv/pixelfox', name: 'pixelfox', source: 'Twitch', running: true, title: 'Cozy pixel art and chill', quality: '720'},
+          {i: 2, url: 'https://www.twitch.tv/cozykai', name: 'cozykai', source: 'Twitch', running: true, title: 'Co-op campaign with chat', quality: ''}]});
+const demoSt = () => ({running: true, target, title: 'Speedrun night: any% attempts | !socials', source: 'Twitch', url: 'https://www.twitch.tv/novaplays', live: true, live_for: 7400,
+  game: 'Retro Platformer', paused: false, position: null, duration: null, quality: '1080p60,best', volume: 60, muted: false, height: 1080, hwdec: 'v4l2m2m',
   drops: 1, buffering: false, chat_ok: true, chat: false, chat_pref: false, chat_tv: 0, wall: tourDemoWall ? DEMO_WALL() : null});
 const DEMO_CHAT = [['maple', '#ff7ac6', 'that first turn was clean'], ['jun_k', '#62b0ff', 'LETS GOOO'], ['pixel', '#53fc18', 'who is the other car'], ['rowan', '#ffb06b', 'chat is moving fast today'],
   ['tess', '#a970ff', 'GG'], ['bo', '#ff6b6b', 'clip that'], ['ivy', '#62b0ff', 'hello from the couch'], ['dax', '#53fc18', 'this is the best part']];
@@ -3230,7 +3230,7 @@ function chatAdd(row) {
 
 async function chatPoll() {  // Twitch
   if (!chatOpen || document.hidden || view() !== 'tv') return;
-  if (tourDemoOn) { const m = DEMO_CHAT[demoChatN++ % DEMO_CHAT.length]; chatAdd(chatRow(m[0], m[1], [{t: m[2]}])); $('chatsub').textContent = '#anthonyz'; return; }
+  if (tourDemoOn) { const m = DEMO_CHAT[demoChatN++ % DEMO_CHAT.length]; chatAdd(chatRow(m[0], m[1], [{t: m[2]}])); $('chatsub').textContent = '#novaplays'; return; }
   const r = await fetch('/api/chat/feed?target=' + encodeURIComponent(target || 'living') + '&i=' + chatTab + '&since=' + chatLast).then(x => x.json()).catch(() => null);
   if (!r) return;
   if (r.reset) { $('chatbox').replaceChildren(); chatLast = 0; }
