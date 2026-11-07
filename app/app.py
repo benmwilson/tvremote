@@ -514,7 +514,8 @@ def stop_player():
     p = state["proc"]
     state["proc"] = None  # first, so the watcher knows this end was on purpose
     if p and p.poll() is None:
-        app.logger.warning("Player stopped by: %s", " < ".join(f"{f.name}:{f.lineno}" for f in reversed(traceback.extract_stack(limit=7)[:-1])))
+        who = f"{request.remote_addr} {request.headers.get('User-Agent', '')[:60]} {request.headers.get('Referer', '')[-40:]}" if has_request_context() else "no request"
+        app.logger.warning("Player stopped by: %s | %s", " < ".join(f"{f.name}:{f.lineno}" for f in reversed(traceback.extract_stack(limit=7)[:-1])), who)
         try:
             os.killpg(p.pid, signal.SIGTERM)
             p.wait(3)
