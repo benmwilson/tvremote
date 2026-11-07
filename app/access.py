@@ -111,7 +111,7 @@ def _token_for(seed):
 MAX_DEVICES = 5
 
 
-def create_invite(hours, label, max_uses=1, now=None):
+def create_invite(hours, label, max_uses=1, now=None, tvs=None):
     """A new link token. `hours` is how long each guest's access lasts once the link is opened; `max_uses` is how many devices may open it
     (each one counts once, and the link stops working after that many)."""
     now = now or time.time()
@@ -122,7 +122,7 @@ def create_invite(hours, label, max_uses=1, now=None):
     with _lock:
         d = {k: {f: x for f, x in v.items() if f != "token"} for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now}  # also scrubs tokens saved by older versions
         d[_h(token)] = {"created": now, "redeem_by": now + REDEEM_WINDOW, "hours": hours, "label": (label or "").strip()[:30],
-                        "max_uses": max_uses, "uses": 0, "seed": seed}  # the token is not saved: its hash is the key, and the seed alone can't rebuild it
+                        "max_uses": max_uses, "uses": 0, "seed": seed, **({"tvs": list(tvs)} if tvs else {})}  # the token is not saved: its hash is the key, and the seed alone can't rebuild it
         _write("invites.json", d)
     return token
 

@@ -85,7 +85,26 @@ def claim_founder(name):
 def listing():
     d = _load()
     return [{"name": n, "role": role(n), "created": d[n].get("created"), "last_login": d[n].get("last_login"),
-             "founder": bool(d[n].get("founder"))} for n in sorted(d)]
+             "founder": bool(d[n].get("founder")), "tvs": d[n].get("tvs")} for n in sorted(d)]
+
+
+def tvs(name):
+    """The TV ids this account is limited to, or None for all of them (admins are never limited)."""
+    t = _load().get(name, {}).get("tvs")
+    return list(t) if isinstance(t, list) and t and role(name) != "admin" else None
+
+
+def set_tvs(name, tv_ids):
+    """Limit an account to these TV ids (None or empty: every TV)."""
+    with _lock:
+        d = _load()
+        if name not in d:
+            raise ValueError("No such account.")
+        if tv_ids:
+            d[name]["tvs"] = list(tv_ids)
+        else:
+            d[name].pop("tvs", None)
+        _write(d)
 
 
 def touch(name):
@@ -116,7 +135,7 @@ def _write(d):
     store.write_json(_file(), d, 0o600)  # hashes are for this app only
 
 
-def add(name, password, new_role=None, founder=False):
+def add(name, password, new_role=None, founder=False, tv_ids=None):
     """Create an account (or change its password, keeping its role unless one is given). Raises ValueError for a bad name,
     a short password or an unknown role."""
     name = (name or "").strip().lower()
@@ -129,9 +148,13 @@ def add(name, password, new_role=None, founder=False):
     salt = secrets.token_hex(16)
     with _lock:
         d = _load()
+        old_tvs = d.get(name, {}).get("tvs")
         d[name] = {"salt": salt, "hash": _hash(password, salt), "role": new_role or d.get(name, {}).get("role", "user"),
                    "created": d.get(name, {}).get("created") or time.time(), "last_login": d.get(name, {}).get("last_login"),
                    "founder": bool(founder) or bool(d.get(name, {}).get("founder"))}
+        keep = tv_ids or old_tvs  # a password change keeps the TVs the account was limited to
+        if keep:
+            d[name]["tvs"] = list(keep)
         _write(d)
     return name
 

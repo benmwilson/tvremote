@@ -252,6 +252,41 @@ def logout():
     return r
 
 
+TV_PATH = re.compile(r"/(play|api/(sleep|play|cmd|wall|move|status|watch|tv|qualities|launcher|launcher/key|roku|roku/\w+|tv/wake|groups/play|screen\.png))")
+PI_ONLY = ("/api/wall", "/api/launcher", "/api/launcher/key", "/api/groups/play")  # these always act on the Pi's TV
+
+
+def allowed_tvs():
+    """The TV ids the person making this request is limited to (a guest link's or an account's list), or None for every TV. Admins are never limited."""
+    if g.user == accounts.GUEST:
+        return sessions.session_tvs(request.cookies.get("tv_auth", ""))
+    return accounts.tvs(g.user) if g.user != accounts.OWNER else None
+
+
+def tvs_for(tid_list):
+    """The part of a list of TV ids this person may use."""
+    a = allowed_tvs()
+    return [t for t in tid_list if a is None or t in a]
+
+
+@app.before_request
+def tv_limit():
+    """A limited account or guest link can only use its own TVs: any request that names another (or defaults to one it can't use) is refused."""
+    a = allowed_tvs()
+    if a is None or not TV_PATH.fullmatch(request.path):
+        return None
+    if request.path == "/api/move":
+        d = request.get_json(silent=True) or {}
+        ids = {d.get("from"), d.get("to")}
+    elif request.path in PI_ONLY:
+        ids = {"living"}
+    else:
+        ids = {request.args.get("target") or "living"}
+    if not ids <= set(a):
+        return Response(json.dumps({"ok": False, "error": "You don't have access to that TV."}), 403, mimetype="application/json")
+    return None
+
+
 @app.get("/api/auth")
 def api_auth():
     info = {}
@@ -2936,8 +2971,8 @@ def api_targets():
     _viewed["t"] = time.time()
     out = []
     for c in cards.snapshot():
-        if not TV_ENABLED.get(c["id"], True):
-            continue  # switched off in setup (for instance no screen on the Pi)
+        if not TV_ENABLED.get(c["id"], True) or c["id"] not in tvs_for([c["id"]]):
+            continue  # switched off in setup (for instance no screen on the Pi), or not one this person may use
         kind, connection = KINDS.get(c["id"], ("tv", "Roku TV"))
         out.append({"name": LABELS[c["id"]], "kind": kind, "connection": connection, **{**c, "external": own_app_view(c.get("external"))},
                     "type": kind, "online": c["reachable"], "roku": bool(ROKU_IPS.get(c["id"]))})
@@ -3966,6 +4001,27 @@ def accounts_add():
     return accounts_list()
 
 
+def clean_tvs(v):
+    """A list of known TV ids from a request, or None (every TV) when it is missing, empty or names none we know."""
+    ids = [t for t in (v if isinstance(v, list) else []) if t in (*tvconfig.IDS, *TV_ONLY)]
+    return list(dict.fromkeys(ids)) or None
+
+
+@app.post("/api/accounts/tvs")
+def accounts_tvs():
+    """Limit an account to some TVs (or to all of them: send no list). Admins can't be limited."""
+    admin_only()
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name", ""))
+    if accounts.role(name) == "admin":
+        return jsonify(ok=False, error="Admins can use every TV."), 400
+    try:
+        accounts.set_tvs(name, clean_tvs(data.get("tvs")))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    return accounts_list()
+
+
 @app.patch("/api/accounts")
 def accounts_role():
     admin_only()
@@ -4053,7 +4109,7 @@ def request_approve(rid):
     if role == "admin" and not accounts.is_owner(g.user):
         return refuse()
     try:
-        accounts.add(name, password, role)
+        accounts.add(name, password, role, tv_ids=clean_tvs(data.get("tvs")))
     except ValueError as e:
         return jsonify(ok=False, error=str(e)), 400
     access.pop_request(rid)
@@ -4072,7 +4128,7 @@ def invite_create():
     admin_only()
     data = request.get_json(silent=True) or {}
     try:
-        token = access.create_invite(int(data.get("hours") or 24), data.get("label"), int(data.get("devices") or 1))
+        token = access.create_invite(int(data.get("hours") or 24), data.get("label"), int(data.get("devices") or 1), tvs=clean_tvs(data.get("tvs")))
     except (TypeError, ValueError):
         return jsonify(ok=False, error="Pick how long access lasts."), 400
     return jsonify(ok=True, url=request.host_url + "join/" + token)
@@ -4170,7 +4226,7 @@ def join(token):
         return page("Link expired", "<h1>Link expired</h1><p>This link was already used or has expired. Ask for a new one.</p>", 410)
     seconds = inv["hours"] * 3600
     r = redirect("/", 303)
-    r.set_cookie("tv_auth", new_session(accounts.GUEST, seconds, {"label": inv["label"], "since": time.time(), "entry": inv["entry"]}), max_age=seconds, httponly=True, samesite="Lax")
+    r.set_cookie("tv_auth", new_session(accounts.GUEST, seconds, {"label": inv["label"], "since": time.time(), "entry": inv["entry"], **({"tvs": inv["tvs"]} if inv.get("tvs") else {})}), max_age=seconds, httponly=True, samesite="Lax")
     return r
 
 
