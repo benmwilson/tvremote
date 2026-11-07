@@ -35,13 +35,15 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 .game.solo{left:16px}
 .chip{position:absolute;top:10px;border-radius:8px;padding:2px 10px;font-size:16px;background:#000a}
 .live{left:10px;background:var(--live)}.view{right:10px}
+#note{position:absolute;left:50%;top:44px;transform:translateX(-50%);z-index:9;background:#e0243a;color:#fff;border-radius:16px;padding:14px 32px;font-size:30px;font-weight:800;box-shadow:0 6px 24px #0008}
+#note[hidden]{display:none}
 .empty[hidden]{display:none}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:var(--dim)}
 </style></head><body>
 <div id="head"><img src="/logo.svg" alt=""><span class="brand">TV Remote</span><span id="others"></span><span class="grow"></span>
   <div id="wx"><span id="wxi"></span><div><div class="t" id="wxt"></div><div class="s" id="wxs"></div></div></div>
   <div id="clock"><div class="time" id="ct"></div><div class="date" id="cd"></div></div></div>
-<div id="rows"></div><div class="empty" id="empty" hidden>Nothing here yet. Add favourites on your phone.</div>
+<div id="note" hidden></div><div id="rows"></div><div class="empty" id="empty" hidden>Nothing here yet. Add favourites on your phone.</div>
 <script>
 const K = new URLSearchParams(location.search).get('k') || '';
 const report = m => { try { fetch('/tv/log?k=' + encodeURIComponent(K) + '&m=' + encodeURIComponent(String(m).slice(0, 300))); } catch (e) {} };
@@ -122,6 +124,7 @@ function draw(d) {
     while (strip.children.length > r.tiles.length) strip.lastChild.remove();
   });
   document.getElementById('empty').hidden = d.rows.length > 0;
+  const nt = document.getElementById('note'); nt.textContent = d.note || ''; nt.hidden = !d.note;
   cur = {row: d.row, col: d.col}; focus();
 }
 async function tick() { try { draw(await (await fetch(q('/tv/data'), {cache: 'no-store'})).json()); } catch (e) {} }

@@ -317,3 +317,13 @@ class Showing(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlainErrorTests(unittest.TestCase):
+    def test_a_raw_yt_dlp_error_becomes_one_short_readable_line(self):
+        import shell
+        raw = "ERROR: [generic] CqkGpyDt1_6P53tPxsUvsxICZnE7omsHmAAiYQc1xag3h1KFhEodbFDa7NpLaveSxdpXbmgTzTCIC: Unable to download webpage: HTTP Error 404"
+        self.assertEqual(shell.plain_error(raw), "Unable to download webpage: HTTP Error 404")
+        self.assertEqual(shell.plain_error("Unsupported URL: https://example.com/x"), "That link isn't one the TV can play")
+        self.assertLessEqual(len(shell.plain_error("word " * 40)), 61)
+        self.assertNotIn("CqkG", shell.screen("error", raw))

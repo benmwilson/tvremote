@@ -104,6 +104,12 @@ def youtube_search(query, count=10):
         return ydl.sanitize_info(info)
 
 
+def youtube_list(url, count=30):
+    """`yt-dlp --flat-playlist -J --playlist-end <count> <url>` as a dict: a channel tab or a playlist, no video pages fetched."""
+    with _yt(extract_flat=True, noplaylist=False, playlistend=int(count)) as ydl:
+        return ydl.sanitize_info(ydl.extract_info(url, download=False))
+
+
 def warm():
     """Do the one-time work in the background at startup, so the first tap is not the one that pays for it: load streamlink and its Kick and
     Twitch plugins, and yt-dlp's YouTube code. Never raises."""

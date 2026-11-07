@@ -124,6 +124,16 @@ def clean(s):
     return re.sub(r"[𐀀-􏿿‍️☀-➿]", "", s or "").strip()
 
 
+def plain_error(raw):
+    """Why a stream couldn't play, in a line a person can read on the TV: no addresses, no yt-dlp prefixes or long ids (they ran off the screen), at most 60 characters."""
+    s = re.sub(r"https?://\S+", "", clean(raw))
+    s = re.sub(r"^(ERROR:\s*)?(\[[^\]]*\]\s*)?", "", s.strip())
+    if re.search(r"unsupported url", s, re.I):
+        return "That link isn't one the TV can play"
+    s = " ".join(w for w in s.split() if len(w) < 25).strip(" :")  # a long unbroken word is an id or a token
+    return (s[:60].rstrip() + "\u2026") if len(s) > 60 else s
+
+
 def clock12(now):
     """12-hour time; the colon blinks with the seconds (hidden, not removed, so the digits never shift)."""
     colon = ":" if now.second % 2 == 0 else r"{\alpha&HFF&}:{\alpha&H00&}"
@@ -152,6 +162,7 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=(), accent=None):
         head += "." * n + r"\h" * (3 - n)  # hard spaces keep the line the same width
     if kind == "error":  # what went wrong is the title, the details under it
         lines = [r"{\fs84\b1\c&H%s&}%s" % (colour, head)]
+        detail = plain_error(detail)
         if detail:
             lines.append(r"{\fs44\b0\c&H%s&}%s" % (TEXT, esc(detail)))
     else:  # loading, quality, refresh, offline, ended: the channel's name large (else the app's), what is happening under it, like the transition card

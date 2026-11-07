@@ -715,12 +715,18 @@ class ShellFlow(unittest.TestCase):
         self.assertIsNone(server.state["source"])
 
     def test_a_player_that_dies_shows_why(self):
+        server.state["url"] = "https://example.com/video.mp4"  # not a Kick or Twitch channel: a 404 here is just a bad link
         self.watch(1, "HTTP error 404 Not Found")
         self.assertEqual(self.home.shown[-1], ("error", "That link wasn't found (404)"))
 
     def test_a_channel_that_is_not_live_says_so(self):
         server.state["url"] = "https://kick.com/capped"
         self.watch(1, "error: No playable streams found on this URL: https://kick.com/capped")
+        self.assertEqual(self.home.shown[-1], ("offline", "capped"))
+
+    def test_a_channel_whose_stream_address_404s_went_offline(self):
+        server.state["url"] = "https://kick.com/capped"
+        self.watch(1, "ERROR: [generic] CqkGpyDt1_6P53tPxsUvsxICZnE7: HTTP error 404 Not Found")
         self.assertEqual(self.home.shown[-1], ("offline", "capped"))
 
     def test_a_stream_that_finishes_shows_ended(self):

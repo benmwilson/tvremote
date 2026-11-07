@@ -1823,16 +1823,42 @@ async function search(q) {
   const box = $('results');
   box.innerHTML = '';
   if (!Array.isArray(r) || !r.length) { box.textContent = 'No results. Try different words.'; return {ok: false}; }
-  r.forEach(v => {
-    const b = el('button', 'res');
-    const img = document.createElement('img'); img.src = v.thumb; img.loading = 'lazy'; img.alt = '';
-    const d = el('div');
-    const c = el('small', null, [v.channel, v.live ? 'LIVE' : v.duration ? fmt(v.duration) : ''].filter(Boolean).join(' · '));
-    d.append(el('div', null, v.title), c); b.append(img, d);
-    b.onclick = () => play(v.url);
-    box.appendChild(b);
-  });
+  r.forEach(v => box.appendChild(resCard(v)));
   return {ok: true, noWait: true};  // results are showing: nothing is starting yet
+}
+function resCard(v) {  // one video, live stream or short as a tappable card (search results and YouTube channel / playlist lists)
+  const b = el('button', 'res');
+  const img = document.createElement('img'); img.src = v.thumb; img.loading = 'lazy'; img.alt = '';
+  const d = el('div');
+  const c = el('small', null, [v.channel, v.live ? 'LIVE' : v.duration ? fmt(v.duration) : '', v.views != null ? Number(v.views).toLocaleString() + ' views' : ''].filter(Boolean).join(' · '));
+  d.append(el('div', null, v.title), c); b.append(img, d);
+  b.onclick = () => play(v.url);
+  return b;
+}
+// A pasted YouTube channel or playlist link opens a list of its videos instead of playing: Videos / Live / Shorts tabs for a channel.
+const ytListLink = t => /^https?:\/\/([\w-]+\.)?youtube\.com\/(@[^/?#]+|channel\/|c\/|user\/|playlist\?)/.test(t);
+async function showYtList(url, tab) {
+  const box = $('results'); box.textContent = 'Loading…';
+  const r = await api('/api/youtube/list?u=' + encodeURIComponent(url) + '&tab=' + (tab || 'videos'));
+  box.innerHTML = '';
+  if (!r || !r.ok) { box.textContent = (r && r.error) || 'Couldn’t load that. Try again.'; return {ok: false}; }
+  const head = el('div', 'ytlist');
+  head.style.cssText = 'display:flex;align-items:center;gap:12px;margin:4px 0 8px';
+  if (r.avatar) { const a = document.createElement('img'); a.src = r.avatar; a.alt = ''; a.style.cssText = 'width:44px;height:44px;border-radius:50%'; head.append(a); }
+  const t = el('div'); t.append(el('b', null, r.kind === 'channel' ? (r.channel || r.title) : r.title));
+  if (r.subscribers) t.append(el('small', null, ' ' + Intl.NumberFormat('en', {notation: 'compact'}).format(r.subscribers) + ' subscribers'));
+  head.append(t); box.append(head);
+  if (r.kind === 'channel') {
+    const tabs = el('div'); tabs.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+    [['videos', 'Videos'], ['streams', 'Live'], ['shorts', 'Shorts']].forEach(([k, label]) => {
+      const b = el('button', null, label); b.setAttribute('aria-pressed', String(r.tab === k));
+      b.onclick = () => showYtList(url, k); tabs.append(b);
+    });
+    box.append(tabs);
+  }
+  if (!r.entries.length) box.append(el('p', 'sub', 'Nothing here.'));
+  r.entries.forEach(v => box.appendChild(resCard(v)));
+  return {ok: true, noWait: true};
 }
 
 // The cards that ask "which one?" when a name is on both Kick and Twitch: its logo, whether they are live there, and how many watch.
@@ -1862,6 +1888,7 @@ async function go() {
   if (!t) return null;
   $('playpick').classList.add('hide'); $('results').innerHTML = '';
   const isLink = /https?:\/\//.test(t);
+  if (isLink && ytListLink(t)) return showYtList(t, 'videos');
   if (site === 'youtube' && !isLink) return search(t);
   if (site === 'auto' && !isLink) {
     if (!/^[\w-]{2,25}$/.test(t)) return search(t);  // words, not a channel name: look on YouTube

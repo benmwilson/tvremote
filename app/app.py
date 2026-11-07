@@ -52,6 +52,7 @@ import kick
 import twitch
 import twitchads
 import tvpreview
+import ytbrowse
 import dockerctl
 import emotes
 import mpvipc
@@ -175,7 +176,7 @@ SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/se
 # What a one-time-link guest may do: use the TVs and see the pages that show them. Everything else (including any route added
 # later) is refused, so a new endpoint is closed to guests until it is listed here on purpose.
 GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
-             "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
+             "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/youtube/list", "/api/favourites", "/api/kick",
              "/vendor/hls.min.js", "/api/shell", "/api/stats", "/api/browse", "/api/twitch/avatars", "/api/emotes", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch", "/api/detect"}  # /api/watch checks the guest setting itself
 GUEST_POST = {"/api/launcher/key", "/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/api/roku/launch", "/logout"}
 
@@ -723,7 +724,8 @@ def _watch(proc):
         return
     raw = last_error()
     name = fav_name(state["url"] or "")
-    if raw and re.search(r"No playable streams|offline", raw, re.I):
+    gone = bool(raw and is_channel(state["url"] or "") and re.search(r"HTTP.?error 404|Not Found", raw, re.I))  # a Kick or Twitch channel whose stream address 404s went offline (the launcher can tap a stale "live" card)
+    if raw and (gone or re.search(r"No playable streams|offline", raw, re.I)):
         if not livewatch.snapshot().get(state["url"], {}).get("last_live"):
             forget(state["url"])  # never seen live: a typo or a channel that doesn't exist. One that has been live is just offline for now: keep it.
         screen("offline", name)
@@ -2617,9 +2619,9 @@ def tv_browser_loop():
         try:
             if tv_browser_wanted():
                 open(flag, "a").close()
-                if time.time() - last_poke > 15:  # the launcher is up: keep who is live, viewers and thumbnails about two minutes fresh
+                if time.time() - last_poke > 6:  # the launcher is up: keep who is live, viewers and thumbnails about half a minute fresh
                     last_poke = time.time()
-                    livewatch.poke(stale=100)
+                    livewatch.poke(stale=25)
             elif os.path.exists(flag):
                 os.unlink(flag)
         except OSError:
@@ -2677,7 +2679,7 @@ def tv_data():
                             for m in (t.get("members") or [])[:4]] or None  # a group card shows up to four faces
             tiles.append(t)
         rows.append({"title": r["title"], "tiles": tiles})
-    return jsonify(rows=rows, row=st[1], col=st[2])
+    return jsonify(rows=rows, row=st[1], col=st[2], note=_launch_note["text"] if time.time() < _launch_note["until"] else "")
 
 
 @app.get("/tv/info")
@@ -2786,6 +2788,9 @@ def api_launcher():
     return jsonify(ok=True, rows=st[0], row=st[1], col=st[2])
 
 
+_launch_note = {"text": "", "until": 0.0}  # a line the launcher page shows for a few seconds (a card that turned out to be offline)
+
+
 @app.post("/api/launcher/key")
 def api_launcher_key():
     """A key for the launcher from the phone's pad (anyone allowed to control the TVs). Only while the launcher is what the TV shows."""
@@ -2801,6 +2806,14 @@ def api_launcher_key():
         refused = guest_link_refused(ev["play"])
         if refused:
             return jsonify(ok=False, error=refused), 403
+        if is_channel(ev["play"]):  # the card may be stale: look once more, and say so on the TV instead of starting a stream that fails
+            try:
+                livewatch.refresh_one(ev["play"])
+            except Exception:
+                pass  # could not check: go ahead and let the player say what happened
+            if livewatch.snapshot().get(ev["play"], {}).get("live") is False:
+                _launch_note.update(text=f"{fav_name(ev['play'])} is offline", until=time.time() + 5)
+                return jsonify(ok=True, event={"offline": ev["play"]})
         play_async(None, ev["play"], None)
     elif ev and ev.get("group"):
         if g.user == accounts.GUEST:
@@ -3216,6 +3229,27 @@ def api_search():
         "url": e.get("url") or f"https://www.youtube.com/watch?v={e.get('id')}",
         "thumb": f"https://i.ytimg.com/vi/{e.get('id')}/mqdefault.jpg",
     } for e in entries if e.get("id")])
+
+
+def _youtube_fetch(address, count):
+    try:
+        return inproc.youtube_list(address, count)
+    except Exception as e:
+        app.logger.info("yt-dlp library failed (%s): using the command", e)
+        out = subprocess.run(["yt-dlp", "--flat-playlist", "-J", "--playlist-end", str(count), address], capture_output=True, text=True, timeout=45).stdout
+        return json.loads(out)
+
+
+@app.get("/api/youtube/list")
+def api_youtube_list():
+    """A YouTube channel's videos, live streams or shorts, or a playlist, as tappable cards (see ytbrowse.py)."""
+    u = request.args.get("u", "")
+    if ytbrowse.kind(u) not in ("channel", "playlist"):
+        return jsonify(ok=False, error="That is not a YouTube channel or playlist."), 400
+    try:
+        return jsonify(ok=True, **ytbrowse.listing(u, request.args.get("tab", "videos"), fetch=_youtube_fetch))
+    except (OSError, ValueError, subprocess.TimeoutExpired):  # ValueError: the command's output was not JSON
+        return jsonify(ok=False, error="Couldn't load that from YouTube."), 502
 
 
 DEBUG_PROPS = ["hwdec-current", "video-codec", "width", "height", "container-fps", "estimated-vf-fps",

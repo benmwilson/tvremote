@@ -168,3 +168,17 @@ class KeyEndpointTests(unittest.TestCase):
                 r = server.api_launcher_key()
         self.assertTrue(r.get_json()["ok"])
         play.assert_called_once_with(None, "https://kick.com/omie", None)
+
+    def test_a_select_on_a_card_that_went_offline_says_so_and_starts_nothing(self):
+        from unittest import mock
+        import app as server
+        pad = launcher.Launcher(launcher.build_rows([item("capped", True)], [], []))
+        fake_live = mock.Mock()
+        fake_live.snapshot.return_value = {"https://kick.com/capped": {"live": False}}
+        with mock.patch.object(server, "launcher_on", return_value=True), mock.patch.object(server, "LAUNCHER", pad),                 mock.patch.object(server, "launcher_state", return_value=None), mock.patch.object(server, "HOME", mock.Mock(kind="idle")),                 mock.patch.object(server, "tgt", return_value=None), mock.patch.object(server, "play_async") as play,                 mock.patch.object(server, "livewatch", fake_live), mock.patch.object(server, "guest_link_refused", return_value=None):
+            with server.app.test_request_context("/api/launcher/key", method="POST", json={"key": "select"}):
+                server.g.user = "ben"
+                r = server.api_launcher_key()
+        fake_live.refresh_one.assert_called_once_with("https://kick.com/capped")
+        play.assert_not_called()
+        self.assertIn("offline", server._launch_note["text"])
