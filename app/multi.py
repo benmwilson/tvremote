@@ -237,15 +237,21 @@ class Wall:
                     return
                 self._kill(t)
                 i = self.extras.index(t) + 1
-            try:
-                made = self._command(i, t)  # outside the lock: it can take seconds
-            except Exception as e:
-                t["error"] = str(e)[:120]
-                return
-            with self.lock:
-                if gen != self._gen or t not in self.extras:
+            for _ in range(4):
+                with self.lock:
+                    seen = (self.geo, self.count())  # the layout this command is built for
+                try:
+                    made = self._command(i, t)  # outside the lock: it can take seconds
+                except Exception as e:
+                    t["error"] = str(e)[:120]
                     return
-                self._launch(self.extras.index(t) + 1, t, *made)
+                with self.lock:
+                    if gen != self._gen or t not in self.extras:
+                        return
+                    if (self.geo, self.count()) == seen:
+                        self._launch(self.extras.index(t) + 1, t, *made)
+                        return
+                # the chat strip came up (or went) while the command was being built: this window would sit in the wrong layout, so build it again
         for k, t in enumerate(wanted):
             threading.Thread(target=one, args=(k, t), daemon=True).start()
 

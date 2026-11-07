@@ -1,4 +1,5 @@
 import sys
+import time
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -69,6 +70,28 @@ class WallTest(unittest.TestCase):
         args, width = w.main_args()
         self.assertIn("--wayland-app-id=tvr-grid2-1", args)
         self.assertEqual(width, 928)
+
+    def test_a_window_is_built_again_when_the_chat_strip_comes_up_while_its_command_is_slow(self):
+        launched = []
+        w = wall()
+        w.add("https://kick.com/b", "https://kick.com/a")
+        real = w._command
+        flips = []
+
+        def slow_command(i, t):
+            made = real(i, t)
+            if not flips:  # the chat strip comes up during the first build, as it does while a stream address is being fetched
+                flips.append(1)
+                w.chat = True
+            return made
+        w._command = slow_command
+        w._launch = lambda i, t, cmd, source, player: launched.append(w.geo)
+        w.start_windows(pause=0)
+        for _ in range(100):
+            if launched:
+                break
+            time.sleep(0.02)
+        self.assertEqual(launched, ["cgrid"])  # one launch, built for the layout that is on screen now (never the old "grid")
 
     def test_swap_puts_the_other_stream_on_the_big_tile(self):
         w = wall()
