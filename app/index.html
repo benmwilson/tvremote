@@ -332,11 +332,11 @@ body.chatfull{overflow:hidden}
 .s-row{display:flex;align-items:center;gap:12px;padding:12px 0}.s-row~.s-row,#kickrow:not(.hide)+.s-row{border-top:1px solid var(--line)}.s-row:first-child{padding-top:2px}.s-row:last-child{padding-bottom:2px}#kickrow:not(.hide)+.s-row{margin-top:10px}
 .s-more{width:44px;height:44px;flex:0 0 auto;background:none;color:var(--dim);font-size:22px;padding:0}
 .made{padding:4px 0 10px;border-bottom:1px solid var(--line);margin-bottom:6px}.made .who{justify-content:space-between}.made .s-out input{flex:1;min-width:0}
-.pmenu{display:flex;flex-direction:column;gap:6px;margin:2px 0 12px 56px;padding:8px;border-radius:16px;background:var(--card2)}
-.pmenu .pm{display:flex;align-items:center;justify-content:flex-start;gap:14px;width:100%;min-height:54px;padding:8px 12px;text-align:left;background:none;border-radius:12px}
-.pmenu .pm:hover{background:var(--line)}.pmenu .pm .ic{width:20px;height:20px;color:var(--dim)}.pmenu .pm .pt{display:block}.pmenu .pm b{display:block;font-size:15px}.pmenu .pm small{display:block;margin-top:1px;color:var(--dim);font-size:12.5px;font-weight:400}
-.pmenu .pm.s-danger{margin-top:4px;border-top:1px solid var(--line);border-radius:0 0 12px 12px}.pmenu .pm.s-danger b,.pmenu .pm.s-danger .ic{color:var(--bad)}
-.pmenu form{display:flex;gap:8px;padding:4px 4px 8px}.pmenu form input{flex:1;min-width:0;font-size:16px;min-height:44px}.pmenu form.hide{display:none}
+.pmenu{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 14px 56px}
+.pmenu .pm{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:10px;background:none;box-shadow:inset 0 0 0 1px var(--line);font-size:14px;font-weight:600;color:var(--fg,#eef1f6)}
+.pmenu .pm:hover{background:var(--card2)}.pmenu .pm .ic{width:18px;height:18px;color:var(--dim)}
+.pmenu .pm.s-danger{margin-left:auto;color:var(--bad);box-shadow:inset 0 0 0 1px rgba(255,107,107,.45)}.pmenu .pm.s-danger .ic{color:var(--bad)}
+.pmenu form{flex:1 0 100%;display:flex;gap:8px}.pmenu form input{flex:1;min-width:0;font-size:16px;min-height:44px}.pmenu form.hide{display:none}
 .s-row.open{background:var(--card2);border-radius:14px;padding-left:8px;padding-right:8px}
 .who{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.who b{font-size:16px}.pill.you{background:var(--line);color:var(--fg)}
 .s-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 0 14px 56px}.s-actions button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 12px;font-size:15px}.s-actions .ic{width:18px;height:18px;flex:none}
@@ -1364,7 +1364,7 @@ const cmd = (action, value, extra) => api('/api/cmd', 'POST', {action, value, ..
 const fmt = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
 
-let recentFor = '';
+let recentFor = '', bootId = '';
 // The mute button flips the moment it is tapped (like the TV's volume buttons) and sends the state it wants, one after another; until the Pi has caught up,
 // a status that arrives from before the tap can't flip it back.
 let muteLocal = null, muteChain = Promise.resolve(), muteSeq = 0;
@@ -1501,6 +1501,10 @@ async function poll() {
     // instead of dropping the whole card back to Stop only. A different stream, or an error, shows as itself.
     if (s.running) lastRun = {...s, at: Date.now()};
     else if (s.starting && !s.error && lastRun && lastRun.url === s.url && Date.now() - lastRun.at < 45000) { Object.assign(s, lastRun, {running: true, starting: false, buffering: true, error: null}); delete s.at; }
+    if (s.boot) {  // the app restarted (an update): an open page would be running the old script against the new app, so load the new one when it is safe to
+      if (bootId && s.boot !== bootId && !document.querySelector('dialog[open]') && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '')) { location.reload(); return; }
+      if (!bootId) bootId = s.boot;
+    }
     st = s; render();
     if (watchTv && !$('watchcard').classList.contains('hide')) {  // the picture on the phone ends when the stream on the TV does
       if (!s.running && !s.starting) closeWatch('The stream ended, so the player closed.');
@@ -2397,12 +2401,12 @@ function personRow(u) {
       if (r && r.ok !== false) { openPerson = null; loadSettings(); }
     };
     const act = (icon, label, hint, fn, cls) => {
-      const b = mk('button', {type: 'button', class: 'pm ' + (cls || ''), onclick: fn});
-      b.innerHTML = ic(icon) + '<span class="pt"><b>' + label + '</b><small>' + hint + '</small></span>';
+      const b = mk('button', {type: 'button', class: 'pm ' + (cls || ''), onclick: fn, title: hint});  // the explanation is the tooltip: the row stays one line
+      b.innerHTML = ic(icon) + '<span>' + label + '</span>';
       return b;
     };
     const remove = act('x', 'Remove', 'Deletes the account and its favourites', async () => {
-      if (remove.dataset.sure !== '1') { remove.dataset.sure = '1'; remove.querySelector('b').textContent = 'Tap again to delete'; return; }
+      if (remove.dataset.sure !== '1') { remove.dataset.sure = '1'; remove.querySelector('span').textContent = 'Tap again to delete'; return; }
       await api('/api/accounts', 'DELETE', {name: u.name}); openPerson = null; loadSettings();
     }, 's-danger');
     out.push(mk('div', {class: 'pmenu'},

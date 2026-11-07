@@ -1955,7 +1955,7 @@ def api_status():
         d, tid = pi_status(), "living"
     if not d.get("running") and not d.get("starting") and not d.get("error"):
         d["external"] = own_app_view(external_now(tid))
-    return jsonify({**d, "sleep_at": _sleep.get(tid)})
+    return jsonify({**d, "sleep_at": _sleep.get(tid), "boot": BOOT_ID})
 
 
 PHONE_QUALITIES = (360, 480, 720, 1080)
@@ -2569,6 +2569,9 @@ def launcher_state():
         except Exception as e:
             app.logger.warning("Launcher contents: %s", e)
     return (LAUNCHER.rows, LAUNCHER.row, LAUNCHER.col)
+
+
+BOOT_ID = secrets.token_hex(4)  # new at every start: an open page that sees it change reloads itself, so it never runs an older script against a newer app
 
 
 TV_PATHS = ("/tv", "/tv/data", "/tv/focus", "/tv/info", "/tv/img", "/tv/log")
