@@ -332,11 +332,16 @@ body.chatfull{overflow:hidden}
 .s-row{display:flex;align-items:center;gap:12px;padding:12px 0}.s-row~.s-row,#kickrow:not(.hide)+.s-row{border-top:1px solid var(--line)}.s-row:first-child{padding-top:2px}.s-row:last-child{padding-bottom:2px}#kickrow:not(.hide)+.s-row{margin-top:10px}
 .s-more{width:44px;height:44px;flex:0 0 auto;background:none;color:var(--dim);font-size:22px;padding:0}
 .made{padding:4px 0 10px;border-bottom:1px solid var(--line);margin-bottom:6px}.made .who{justify-content:space-between}.made .s-out input{flex:1;min-width:0}
-.pmenu{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 14px 56px}
-.pmenu .pm{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:10px;background:none;box-shadow:inset 0 0 0 1px var(--line);font-size:14px;font-weight:600;color:var(--fg,#eef1f6)}
-.pmenu .pm:hover{background:var(--card2)}.pmenu .pm .ic{width:18px;height:18px;color:var(--dim)}
-.pmenu .pm.s-danger{margin-left:auto;color:var(--bad);box-shadow:inset 0 0 0 1px rgba(255,107,107,.45)}.pmenu .pm.s-danger .ic{color:var(--bad)}
-.pmenu form{flex:1 0 100%;display:flex;gap:8px}.pmenu form input{flex:1;min-width:0;font-size:16px;min-height:44px}.pmenu form.hide{display:none}
+/* an action sheet (Apple HIG action sheet, Material list sheet): who it is about, full-width rows (icon, label, one line of what it does), the destructive one apart */
+.alist{border-radius:14px;background:var(--card2,var(--line));overflow:hidden;margin:0 0 12px}
+.arow{display:flex;align-items:center;gap:14px;width:100%;min-height:58px;padding:8px 16px;border-radius:0;background:none;color:var(--fg,#eef1f6);text-align:left}
+.arow+.arow{border-top:1px solid var(--line)}
+.arow .ic{flex:none;width:22px;height:22px;color:var(--dim)}
+.arow .t{flex:1;min-width:0}.arow .t b{display:block;font-size:16px;font-weight:600}.arow .t small{display:block;margin-top:2px;color:var(--dim);font-size:13px;line-height:1.35;font-weight:400}
+.arow .v{flex:none;color:var(--dim);font-size:14px;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.arow .chev{flex:none;color:var(--dim);font-size:24px;line-height:1}
+.arow.danger,.arow.danger .ic,.arow.danger .t small{color:var(--bad)}.arow.danger .t small{opacity:.8}
+#actsheet .sh .avatar{flex:none}#actsheet .sh .ab{flex:none;width:44px;min-height:44px;padding:0;font-size:26px;background:none}
+#actsheet .s-form{padding-bottom:4px}
 .s-row.open{background:var(--card2);border-radius:14px;padding-left:8px;padding-right:8px}
 .who{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.who b{font-size:16px}.pill.you{background:var(--line);color:var(--fg)}
 .s-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 0 14px 56px}.s-actions button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 12px;font-size:15px}.s-actions .ic{width:18px;height:18px;flex:none}
@@ -1157,6 +1162,13 @@ body:has(dialog.sheet[open]){overflow:hidden}
   <div class="sh"><div class="grow"><b id="confirmttl"></b></div></div>
   <div class="sb"><p id="confirmtext" style="margin:0 0 18px;color:var(--dim);font-size:15px;line-height:1.45"></p>
     <div class="row"><button id="confirmno" type="button" autofocus>Cancel</button><button id="confirmyes" type="button" class="go"></button></div></div>
+</dialog>
+
+<dialog id="actsheet" class="sheet" aria-labelledby="actttl">
+  <div class="sh"><button id="actback" class="ab hide" type="button" aria-label="Back">&lsaquo;</button><div class="avatar" id="actav" aria-hidden="true"></div>
+    <div class="grow"><b id="actttl"></b><span class="sub" id="actsub"></span></div>
+    <button class="sclose" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="sb" id="actbody"></div>
 </dialog>
 
 <div id="scrim" class="hide"></div>
@@ -2443,48 +2455,62 @@ function renderProfile() {
 function personRow(u) {
   const mine = u.name === me.user || (u.owner && me.owner);
   const canAct = !u.owner && !u.founder && !mine && (me.owner || u.role !== 'admin');
-  const facts = [u.favs + (u.favs === 1 ? ' favourite' : ' favourites'), u.last_login ? 'logged in ' + seen(u.last_login) : 'never logged in', u.tvs ? tvNames(u.tvs) : null].filter(Boolean).join(' · ');
-  const lastDid = u.last && u.last.text !== 'Logged in' ? u.last.text + ' · ' + ago(u.last.ts) : null;
-  const row = mk('div', {class: 's-row' + (canAct && openPerson === u.name ? ' open' : '')},
+  const facts = [u.favs + (u.favs === 1 ? ' favourite' : ' favourites'), u.last_login ? 'logged in ' + seen(u.last_login) : 'never logged in', u.tvs ? tvNames(u.tvs) : null].filter(Boolean).join(' \u00b7 ');
+  const lastDid = u.last && u.last.text !== 'Logged in' ? u.last.text + ' \u00b7 ' + ago(u.last.ts) : null;
+  const row = mk('div', {class: 's-row'},
     mk('div', {class: 'avatar', 'aria-hidden': 'true'}, u.name.slice(0, 1)),
     mk('div', {class: 'grow'}, mk('div', {class: 'who'}, mk('b', {}, u.name), mk('span', {class: 'pill ' + (u.owner || u.founder ? 'owner' : u.role)}, u.owner || u.founder ? 'owner' : u.role),
       mine && !u.owner ? mk('span', {class: 'pill you'}, 'you') : null), mk('span', {class: 'sub'}, facts), lastDid ? mk('span', {class: 'sub'}, 'Last: ' + lastDid) : null),
-    canAct ? mk('button', {class: 's-more', 'aria-label': 'Actions for ' + u.name, 'aria-expanded': String(openPerson === u.name),
-      onclick: () => { openPerson = openPerson === u.name ? null : u.name; renderPeople(); }}, '⋯') : null);
-  const out = [row];
-  if (canAct && openPerson === u.name) {
-    const reset = mk('form', {class: 'hide'}, mk('input', {type: 'password', placeholder: 'New password (6+)', autocomplete: 'new-password', 'aria-label': 'New password for ' + u.name}), mk('button', {class: 'go'}, 'Set'));
-    reset.onsubmit = async e => {
-      e.preventDefault();
-      const r = await busy(reset.querySelector('button'), () => api('/api/accounts', 'POST', {name: u.name, password: reset.querySelector('input').value}));
-      if (r && r.ok !== false) { openPerson = null; loadSettings(); }
-    };
-    const tvForm = mk('div', {class: 'hide s-form'});
-    const act = (icon, label, hint, fn, cls) => {
-      const b = mk('button', {type: 'button', class: 'pm ' + (cls || ''), onclick: fn, title: hint});  // the explanation is the tooltip: the row stays one line
-      b.innerHTML = ic(icon) + '<span>' + label + '</span>';
-      return b;
-    };
-    const remove = act('x', 'Remove', 'Deletes the account and its favourites', async () => {
-      if (remove.dataset.sure !== '1') { remove.dataset.sure = '1'; remove.querySelector('span').textContent = 'Tap again to delete'; return; }
-      await api('/api/accounts', 'DELETE', {name: u.name}); openPerson = null; loadSettings();
-    }, 's-danger');
-    out.push(mk('div', {class: 'pmenu'},
-      act('sliders', u.role === 'admin' ? 'Make a user' : 'Make an admin', u.role === 'admin' ? 'Takes away management of people, TVs and settings' : 'Can manage users, guest links, TVs and settings',
-        async () => { await api('/api/accounts', 'PATCH', {name: u.name, role: u.role === 'admin' ? 'user' : 'admin'}); loadSettings(); }),
-      act('pencil', 'Reset password', 'Sets a new password for them', () => { reset.classList.toggle('hide'); const i = reset.querySelector('input'); if (!reset.classList.contains('hide')) i.focus(); }),
-      reset,
-      ...(u.role === 'admin' || targets.length < 2 ? [] : [act('tv', 'TVs', 'Choose which TVs they can use', () => {
-        if (!tvForm.classList.toggle('hide')) {
-          const p = tvPicker(u.tvs), save = mk('button', {class: 'go', type: 'button'}, 'Save');
-          save.onclick = async () => { const v = p.value(); if (v === undefined) return; const r = await busy(save, () => api('/api/accounts/tvs', 'POST', {name: u.name, tvs: v})); if (r && r.ok !== false) { openPerson = null; loadPeople(); } };
-          tvForm.replaceChildren(p.el, save);
-        }
-      }), tvForm]),
-      act('logout', 'Sign out everywhere', 'Ends every session they have open', async e => { await busy(e.currentTarget, () => api('/api/accounts/signout', 'POST', {name: u.name})); }),
-      remove));
-  }
-  return out;
+    canAct ? mk('button', {class: 's-more', 'aria-label': 'Actions for ' + u.name, 'aria-haspopup': 'dialog', onclick: () => openPersonSheet(u)}, '\u22ef') : null);
+  if (canAct) { row.style.cursor = 'pointer'; row.onclick = e => { if (!e.target.closest('button')) openPersonSheet(u); }; }  // the whole row opens it, not just the dots
+  return [row];
+}
+// A person's actions are an action sheet, not buttons crammed into the row: who it is about, a vertical list (what each does under its name), the
+// destructive one in a group of its own. Forms (a password, the TVs) replace the list inside the sheet, with a back arrow.
+function openPersonSheet(u) {
+  const d = $('actsheet'), body = $('actbody'), back = $('actback'), isAdmin = u.role === 'admin';
+  $('actav').textContent = u.name.slice(0, 1); $('actttl').textContent = u.name;
+  const close = () => { if (d.open) d.close(); };
+  const done = () => { close(); loadPeople(); };
+  const row = (icon, label, hint, fn, opt) => {
+    opt = opt || {};
+    const b = mk('button', {type: 'button', class: 'arow' + (opt.danger ? ' danger' : ''), onclick: fn});
+    b.innerHTML = ic(icon);
+    b.append(mk('span', {class: 't'}, mk('b', {}, label), hint ? mk('small', {}, hint) : null), opt.value ? mk('span', {class: 'v'}, opt.value) : null, opt.drill ? mk('span', {class: 'chev', 'aria-hidden': 'true'}, '\u203a') : null);
+    return b;
+  };
+  const passwordForm = () => {
+    const i = mk('input', {type: 'password', placeholder: 'New password (6+)', autocomplete: 'new-password', 'aria-label': 'New password for ' + u.name, style: 'font-size:16px;min-height:48px'});
+    const go = mk('button', {class: 'go', type: 'button'}, 'Set password');
+    go.onclick = async () => { const r = await busy(go, () => api('/api/accounts', 'POST', {name: u.name, password: i.value})); if (r && r.ok !== false) done(); };
+    addReveal(i); setTimeout(() => i.focus(), 60);
+    return mk('div', {class: 's-form'}, i, go);
+  };
+  const tvForm = () => {
+    const p = tvPicker(u.tvs), save = mk('button', {class: 'go', type: 'button'}, 'Save');
+    save.onclick = async () => { const v = p.value(); if (v === undefined) return; const r = await busy(save, () => api('/api/accounts/tvs', 'POST', {name: u.name, tvs: v})); if (r && r.ok !== false) done(); };
+    return mk('div', {class: 's-form'}, p.el, save);
+  };
+  const showForm = (title, build) => { back.classList.remove('hide'); $('actsub').textContent = title; body.replaceChildren(build()); };
+  const showList = () => {
+    back.classList.add('hide');
+    $('actsub').textContent = [u.role, u.last_login ? 'logged in ' + seen(u.last_login) : 'never logged in', u.tvs ? tvNames(u.tvs) : null].filter(Boolean).join(' \u00b7 ');
+    const tvOk = !isAdmin && targets.length > 1;
+    body.replaceChildren(
+      mk('div', {class: 'alist'},
+        row('sliders', isAdmin ? 'Make a user' : 'Make an admin', isAdmin ? 'Takes away managing people, TVs and settings' : 'Can manage users, guest links, TVs and settings',
+          async e => { await busy(e.currentTarget, () => api('/api/accounts', 'PATCH', {name: u.name, role: isAdmin ? 'user' : 'admin'})); done(); }),
+        row('pencil', 'Reset password', 'Set a new password for them', () => showForm('Reset password', passwordForm), {drill: true}),
+        ...(tvOk ? [row('tv', 'TVs', 'Which TVs they can use', () => showForm('Which TVs they can use', tvForm), {drill: true, value: u.tvs ? tvNames(u.tvs) : 'All'})] : []),
+        row('logout', 'Sign out everywhere', 'Ends every session they have open', async e => { await busy(e.currentTarget, () => api('/api/accounts/signout', 'POST', {name: u.name})); close(); })),
+      mk('div', {class: 'alist'}, row('x', 'Remove account', 'Deletes it and its favourites', async () => {
+        close();
+        if (!await confirmSheet('Remove ' + u.name + '?', 'Their account and favourites are deleted. This cannot be undone.', 'Remove', true)) return;
+        await api('/api/accounts', 'DELETE', {name: u.name}); loadPeople();
+      }, {danger: true})));
+  };
+  back.onclick = showList;
+  showList(); d.showModal();
 }
 const roleRank = u => u.owner || u.founder ? 0 : u.role === 'admin' ? 1 : 2;
 function renderPeople() { $('people').replaceChildren(...[...people].sort((a, b) => roleRank(a) - roleRank(b) || a.name.localeCompare(b.name)).flatMap(personRow)); }
