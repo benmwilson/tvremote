@@ -365,9 +365,9 @@ class Shell:
         self._lau = False
         if kind == "idle":
             data = self._launcher()
-            if data is not None:  # the launcher instead of the clock: drawn once, redrawn when a key moves the focus
+            if data is not None:  # the launcher is drawn by the TV's browser (docker/cog): this window only shows its plain background under it, so the Ready screen never flashes first
                 self._lau = True
-                return [(pos, pos + FOREVER, t) for t in launcher_pieces(*data)]
+                return []  # the old tiles, drawn here as subtitles, are retired: [(pos, pos + FOREVER, t) for t in launcher_pieces(*data)]
         if kind == "idle":  # one event per wall-clock second, so the colon blinks in step with the real seconds
             now = self._clock()
             frac, base = now.microsecond / 1e6, now.replace(microsecond=0)
@@ -392,7 +392,7 @@ class Shell:
         path = ASS_FILES[self._n % 2]
         self._n += 1
         try:
-            self._write(path, ass_file(events, self.accent, self.kind != "wall" and not self._lau, qr_pieces(self._qr(), self._qr_caption()) if self.kind == "idle" else ()))
+            self._write(path, ass_file(events, self.accent, self.kind != "wall" and not self._lau, qr_pieces(self._qr(), self._qr_caption()) if self.kind == "idle" and not self._lau else ()))
         except OSError:
             return
         r = self._ipc(SOCK, ["sub-add", path, "select"])

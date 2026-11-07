@@ -123,7 +123,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .row3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:14px}
 .pair{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 .row3.single .pair{grid-template-columns:minmax(0,1fr)}
-.tvoff{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:12px 14px;border-radius:14px;background:rgba(255,176,98,.12);border:1px solid rgba(255,176,98,.35)}
+.tvoff{display:flex;align-items:center;gap:14px;margin:0 0 14px;padding:2px 0 2px 14px;border-left:4px solid var(--tv,#6bb2ff)}  /* a quiet row with the TV's own colour bar, like its card on the home page */
 /* TV off and nothing playing: the "off" message is the whole card, not a banner above an empty "Nothing playing" */
 /* Watch on phone: a player that stays at the top while you scroll to the controls and the chat */
 .watch{position:sticky;top:8px;z-index:6;padding:10px;box-shadow:0 10px 28px rgba(0,0,0,.5);margin-top:12px}
@@ -137,11 +137,10 @@ body.no-marquee .ftitle.mq{text-overflow:ellipsis}body.no-marquee .ftitle.mq>spa
 .wstream.loading{pointer-events:none}.wstream.loading::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:40%;background:var(--tv,var(--fg));animation:slide 1.2s ease-in-out infinite}
 .now.offidle>:not(.tvoff){display:none!important}
 #view-tv.tvonly #now,#view-tv.tvonly #watchcard,#view-tv.tvonly #chatcard,#view-tv.tvonly #wallopencard,#view-tv.tvonly #playsec{display:none!important}
-.now.offidle .tvoff{flex-direction:column;text-align:center;gap:6px;margin:0;padding:26px 18px 22px;background:linear-gradient(160deg,rgba(255,176,98,.16),rgba(255,176,98,.05));border-color:rgba(255,176,98,.28)}
-.now.offidle .tvoff>.ic{width:46px;height:46px;padding:12px;border-radius:50%;background:rgba(255,176,98,.16);color:#ffb062;box-sizing:content-box;margin-bottom:6px}
-.now.offidle .tvoff b{font-size:22px}.now.offidle .tvoff .sub{display:block;margin:2px auto 14px;max-width:30ch;line-height:1.45}
-.now.offidle .tvoff button{width:100%;min-height:54px;font-size:17px;border-radius:14px}
-.tvoff b{display:block}.tvoff .grow{min-width:0}.tvoff button{flex:none;min-height:44px;padding:0 16px;background:var(--tv,#6bb2ff);color:#0b0e14;font-weight:700}
+.now.offidle .tvoff{margin:0}
+.tvoff b{display:block;font-size:17px}.tvoff .sub{display:block;margin-top:2px;line-height:1.4}.tvoff>.ic{flex:none;width:22px;height:22px;color:var(--dim)}.tvoff .grow{min-width:0}
+.tvoff button{flex:none;min-height:44px;padding:0 18px;border-radius:10px;background:transparent;color:var(--tv,#6bb2ff);box-shadow:inset 0 0 0 2px var(--tv,#6bb2ff);font-weight:700}
+.tvoff button:active{background:var(--tv,#6bb2ff);color:#0b0e14}
 .now.off .pp,.now.off .vol{opacity:.55}
 #tvctl.off button:not([data-k=PowerOn]){opacity:.4;pointer-events:none}
 select{-webkit-appearance:none;appearance:none;min-height:52px;padding:0 42px 0 16px;width:100%;font-size:15px;text-overflow:ellipsis;background:var(--card2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238c97a9' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 16px center / 16px}
@@ -831,7 +830,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <p class="sub" id="pihelp"></p>
       <label class="s-check" style="justify-content:space-between;margin-top:6px">Launcher on the TV between streams<input id="launchertoggle" type="checkbox" class="tg" role="switch"></label>
     <p class="sub" style="margin:2px 0 6px">Who is live, your favourites, groups and recents as tiles on the TV. Move around it with the pad on the remote (an IR receiver can be added later).</p>
-    <label class="s-check" style="justify-content:space-between;margin-top:6px">Weather in the launcher's header<span class="s-out" style="gap:6px"><input id="weathercity" type="text" placeholder="City, e.g. Vancouver" maxlength="80" style="width:170px"><select id="weatherunit" aria-label="Units"><option value="C">&deg;C</option><option value="F">&deg;F</option></select></span></label>
+    <div style="margin-top:10px"><b style="display:block;margin-bottom:6px;font-weight:600">Weather in the launcher&rsquo;s header</b>
+      <div class="s-out"><input id="weathercity" placeholder="City, e.g. Vancouver" aria-label="City for the weather" maxlength="80" autocapitalize="words" autocorrect="off"><select id="weatherunit" aria-label="Units" style="flex:none;width:auto"><option value="C">&deg;C</option><option value="F">&deg;F</option></select></div></div>
     <p class="sub" id="weathermsg" style="margin:2px 0 6px">Leave the city empty for no weather. Only the city's weather is looked up (from Open-Meteo); nothing else leaves the Pi.</p>
     <label class="s-check" style="justify-content:space-between;margin-top:6px">Warn on the TV when the Pi runs hot<input id="heattv" type="checkbox" class="tg" role="switch"></label>
       <p class="sub" style="margin:2px 0 0">A short line of text on the picture (from 78 °C, at most once a minute). It costs nothing to speak of.</p>
