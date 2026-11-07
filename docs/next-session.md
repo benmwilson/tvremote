@@ -16,6 +16,9 @@ Read `docs/ben-requests-2026-11-06.md` too: every request Ben made that night, w
 ## Not seen on a real phone or TV yet (check first)
 The People options row, the group card info line ("All 3 live ..."), the suggested-group card, the Watch player on a phone and desktop playback of a live stream, mute button taps, city suggestions, the coloured volume and paused look on the TV, the auto-reload after the next restart, the favourite spinner on the tapped section.
 
+## TODO for Ben (later): Plex
+Plex titles are deployed but off. Put `PLEX_TOKEN=` and `PLEX_URL=http://<plex-server-ip>:32400` in the Pi's `~/tvremote/.env`, then `docker compose up -d` (token: Plex web > a title > Get Info > View XML > X-Plex-Token in the address). The URL is required on purpose (no LAN discovery: the token must not go to a host found by broadcast). Also on: the living-room Roku (.141) is in `NOWPLAYING_IPS`; the hover preview (`app/tvpreview.py`) is live but not yet seen on the TV.
+
 ## Open, in order
 1. **Live hover preview** (agreed, not built): one preview after about 1.5 s on a live card, 320x184, muted, hls.js (bundled) capped to the box (tested: 0 dropped frames, the Pi stays near 68 C). It needs a NEW multi-session HLS relay in the app (playlist rewritten, segments through key-guarded `/tv/...` routes with an allow-list of upstream URLs) so the browser never talks to the internet; Twitch goes through `twitchads` first. The existing `hlsproxy` is single-session (Chromecast only) and `twitchads` only serves playlists.
 2. **Ask Ben:** the heat warning threshold (now 78 C); turn the living-room title listener on?; Plex titles (needs the server address and token); show which HDMI input a Roku TV is on even while its own app runs (offered).
