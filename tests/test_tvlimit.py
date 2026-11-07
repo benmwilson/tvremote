@@ -70,6 +70,20 @@ class TvLimitTests(unittest.TestCase):
         self.assertNotEqual(g.get("/api/sleep?target=bedroom").status_code, 403)
         self.assertEqual(access.invites_pending(), [])  # (used up: one device)
 
+    def test_creating_an_account_limited_to_a_tv_keeps_the_limit_and_a_bad_list_is_refused(self):
+        r = self.admin.post("/api/accounts", json={"name": "ivy", "password": "pass-word1", "role": "user", "tvs": ["bedroom"]})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(accounts.tvs("ivy"), ["bedroom"])
+        self.assertEqual(self.admin.post("/api/accounts", json={"name": "bob", "password": "pass-word1", "tvs": ["nonsense"]}).status_code, 400)
+        self.assertFalse(accounts.exists("bob"))  # refused, not made with every TV
+        self.assertEqual(self.admin.post("/api/invites", json={"hours": 1, "tvs": ["nonsense"]}).status_code, 400)
+
+    def test_a_tv_lookup_outside_the_path_list_is_still_refused(self):
+        accounts.add("sam", "pass-word1", "user", tv_ids=["bedroom"])
+        c = self.login("sam")
+        self.assertEqual(c.get("/api/chat/feed?target=living").status_code, 403)
+        self.assertEqual(c.get("/api/roku?target=living").status_code, 403)
+
     def test_an_approved_request_can_be_limited(self):
         rid = access.add_request("Kim", "hi", "1.2.3.4")
         r = self.admin.post(f"/api/requests/{rid}/approve", json={"tvs": ["bedroom"], "password": "kim-pass1"}).get_json()

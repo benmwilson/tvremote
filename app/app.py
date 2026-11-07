@@ -97,6 +97,7 @@ def tgt():
 
 
 def target_for(t):
+    deny_tv(t)
     if t == "living":
         return None
     if t in TV_ONLY:  # never fall back to the Pi: nothing is plugged in here
@@ -252,7 +253,16 @@ def logout():
     return r
 
 
-TV_PATH = re.compile(r"/(play|api/(sleep|play|cmd|wall|move|status|watch|tv|qualities|launcher|launcher/key|roku|roku/\w+|tv/wake|groups/play|screen\.png))")
+TV_PATH = re.compile(r"/(play|api/(sleep|play|cmd|wall|move|status|watch|tv|qualities|launcher|launcher/key|roku|roku/\w+|tv/wake|groups/play|chat/feed|screen\.png))")
+
+
+def deny_tv(tid):
+    """Stop the request when this person may not use TV `tid` (called wherever a TV is looked up: the path list in tv_limit() is the first line, this the second)."""
+    if not has_request_context():
+        return  # background work (not a person's request) is never limited
+    a = allowed_tvs()
+    if a is not None and tid not in a:
+        abort(Response(json.dumps({"ok": False, "error": "You don't have access to that TV."}), 403, mimetype="application/json"))
 PI_ONLY = ("/api/wall", "/api/launcher", "/api/launcher/key", "/api/groups/play")  # these always act on the Pi's TV
 
 
@@ -3087,6 +3097,7 @@ def api_targets_test():
 
 
 def roku_ip():
+    deny_tv(request.args.get("target") or "living")
     return ROKU_IPS.get(request.args.get("target") or "living")  # None for a TV we don't know
 
 
@@ -3994,7 +4005,7 @@ def accounts_add():
     if not may_change(target, own_password=data.get("role") in (None, "admin")):
         return refuse()
     try:
-        name = accounts.add(data.get("name"), data.get("password"), data.get("role"))
+        name = accounts.add(data.get("name"), data.get("password"), data.get("role"), tv_ids=clean_tvs(data.get("tvs")) if data.get("role") != "admin" else None)
     except ValueError as e:
         return jsonify(ok=False, error=str(e)), 400
     drop_user_sessions(name)  # a new password signs that account out everywhere
@@ -4003,8 +4014,12 @@ def accounts_add():
 
 def clean_tvs(v):
     """A list of known TV ids from a request, or None (every TV) when it is missing, empty or names none we know."""
+    if not v:
+        return None
     ids = [t for t in (v if isinstance(v, list) else []) if t in (*tvconfig.IDS, *TV_ONLY)]
-    return list(dict.fromkeys(ids)) or None
+    if not ids:
+        raise ValueError("Pick TVs from the list.")  # asking for a limit and naming no real TV must not turn into "every TV"
+    return list(dict.fromkeys(ids))
 
 
 @app.post("/api/accounts/tvs")
@@ -4017,7 +4032,7 @@ def accounts_tvs():
         return jsonify(ok=False, error="Admins can use every TV."), 400
     try:
         accounts.set_tvs(name, clean_tvs(data.get("tvs")))
-    except ValueError as e:
+    except ValueError as e:  # (also: an unknown name, or a list of no known TV)
         return jsonify(ok=False, error=str(e)), 400
     return accounts_list()
 
@@ -4128,7 +4143,11 @@ def invite_create():
     admin_only()
     data = request.get_json(silent=True) or {}
     try:
-        token = access.create_invite(int(data.get("hours") or 24), data.get("label"), int(data.get("devices") or 1), tvs=clean_tvs(data.get("tvs")))
+        tvs = clean_tvs(data.get("tvs"))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    try:
+        token = access.create_invite(int(data.get("hours") or 24), data.get("label"), int(data.get("devices") or 1), tvs=tvs)
     except (TypeError, ValueError):
         return jsonify(ok=False, error="Pick how long access lasts."), 400
     return jsonify(ok=True, url=request.host_url + "join/" + token)
