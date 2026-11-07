@@ -74,12 +74,13 @@ class LiveWatch:
                 del self._data[url]
         self._save()
 
-    def poke(self):
-        """Someone is looking at the list: refresh in the background if anything is stale. Returns the thread or None."""
+    def poke(self, stale=None):
+        """Someone is looking at the list: refresh in the background if anything is older than `stale` seconds (default: self.stale). Returns the thread or None."""
         if self._thread and self._thread.is_alive():
             return None
         now = self._clock()
-        if not any(now - (self._data.get(u) or {}).get("checked", 0) > self.stale for u in self.urls()):
+        limit = self.stale if stale is None else stale
+        if not any(now - (self._data.get(u) or {}).get("checked", 0) > limit for u in self.urls()):
             return None
         self._thread = threading.Thread(target=self.refresh_now, daemon=True)
         self._thread.start()

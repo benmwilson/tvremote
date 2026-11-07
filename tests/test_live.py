@@ -103,6 +103,14 @@ class Politeness(unittest.TestCase):
         t.join(2)
         self.assertEqual(len(calls), 2)
 
+    def test_poke_can_ask_for_fresher_data(self):
+        w, calls, clock, _ = make([{"live": True}])
+        w.poke().join(2)
+        clock.t += 120
+        self.assertIsNone(w.poke())              # 120 s old is fresh enough by the default (180 s)
+        w.poke(stale=100).join(2)                # the launcher asks for 100 s
+        self.assertEqual(len(calls), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

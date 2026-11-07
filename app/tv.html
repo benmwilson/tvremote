@@ -8,6 +8,7 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 #head img{width:60px;height:60px;border-radius:14px}
 #head .brand{font-size:34px;font-weight:800;letter-spacing:.3px}
 #head .grow{flex:1}
+#others{display:flex;gap:10px;margin-left:12px}#others span{font-size:18px;color:var(--dim);background:#ffffff0d;border-radius:14px;padding:6px 14px}
 #wx{display:none;align-items:center;gap:14px;padding:8px 20px;border-radius:18px;background:#ffffff0d}
 #wx svg{width:46px;height:46px}
 #wx .t{font-size:40px;font-weight:800;line-height:1}
@@ -37,7 +38,7 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 .empty[hidden]{display:none}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:var(--dim)}
 </style></head><body>
-<div id="head"><img src="/logo.svg" alt=""><span class="brand">TV Remote</span><span class="grow"></span>
+<div id="head"><img src="/logo.svg" alt=""><span class="brand">TV Remote</span><span id="others"></span><span class="grow"></span>
   <div id="wx"><span id="wxi"></span><div><div class="t" id="wxt"></div><div class="s" id="wxs"></div></div></div>
   <div id="clock"><div class="time" id="ct"></div><div class="date" id="cd"></div></div></div>
 <div id="rows"></div><div class="empty" id="empty" hidden>Nothing here yet. Add favourites on your phone.</div>
@@ -115,6 +116,7 @@ function clock() {
 async function info() {
   try {
     const j = await (await fetch(q('/tv/info'), {cache: 'no-store'})).json(); off = j.offset || 0; clock();
+    const oth = document.getElementById('others'); oth.replaceChildren(...(j.others || []).map(o => { const e = el('span', null, o.name + ' · ' + o.app); return e; }));
     const w = j.weather, box = document.getElementById('wx'); box.style.display = w ? 'flex' : 'none';
     if (w) {
       document.getElementById('wxi').innerHTML = '<svg viewBox="0 0 48 48">' + ICON[iconFor(w.code, w.day)] + '</svg>';
@@ -123,5 +125,5 @@ async function info() {
     }
   } catch (e) {}
 }
-tick(); info(); setInterval(tick, 2000); setInterval(focusTick, 150); setInterval(info, 300000); setInterval(clock, 10000);
+tick(); info(); setInterval(tick, 2000); setInterval(focusTick, 150); setInterval(info, 60000); setInterval(clock, 10000);
 </script></body></html>

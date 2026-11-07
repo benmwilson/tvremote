@@ -14,6 +14,7 @@ import signal
 import subprocess
 import threading
 import time
+import traceback
 import zlib
 import hashlib
 import urllib.request
@@ -513,6 +514,7 @@ def stop_player():
     p = state["proc"]
     state["proc"] = None  # first, so the watcher knows this end was on purpose
     if p and p.poll() is None:
+        app.logger.warning("Player stopped by: %s", " < ".join(f"{f.name}:{f.lineno}" for f in reversed(traceback.extract_stack(limit=7)[:-1])))
         try:
             os.killpg(p.pid, signal.SIGTERM)
             p.wait(3)
@@ -2577,10 +2579,14 @@ def tv_browser_loop():
             f.write(TV_KEY)
     except OSError:
         return  # a read-only disk: no browser, the mpv home screen carries on
+    last_poke = 0.0
     while True:
         try:
             if tv_browser_wanted():
                 open(flag, "a").close()
+                if time.time() - last_poke > 15:  # the launcher is up: keep who is live, viewers and thumbnails about two minutes fresh
+                    last_poke = time.time()
+                    livewatch.poke(stale=100)
             elif os.path.exists(flag):
                 os.unlink(flag)
         except OSError:
@@ -2600,8 +2606,9 @@ def tv_viewer_ok():
     return True
 
 
-def _tv_img_id(url):
-    i = hashlib.sha256(url.encode()).hexdigest()[:16]
+def _tv_img_id(url, bucket=0):
+    """An id for a picture address. `bucket` changes it over time (stream thumbnails use a two-minute one), so the browser fetches a new picture."""
+    i = hashlib.sha256(f"{bucket}|{url}".encode()).hexdigest()[:16]
     _tv_imgs[i] = url
     if len(_tv_imgs) > 400:
         _tv_imgs.pop(next(iter(_tv_imgs)))
@@ -2628,7 +2635,7 @@ def tv_data():
             t = dict(t)
             if t.get("thumb") and thumbs < TV_THUMBS:
                 thumbs += 1
-                t["thumb"] = "/tv/img?id=" + _tv_img_id(t["thumb"])
+                t["thumb"] = "/tv/img?id=" + _tv_img_id(t["thumb"], int(time.time() // 120))
             else:
                 t["thumb"] = None
             if t.get("avatar"):
@@ -2645,7 +2652,9 @@ def tv_info():
     """The clock's time zone (the Pi's, or the weather place's) and the weather, for the page's header."""
     tv_viewer_ok()
     w = weather.current(settings.get("weather"), settings.get("weather_unit", "C"))
-    return jsonify(offset=(w or {}).get("offset", time.localtime().tm_gmtoff), weather=w)
+    # which other TVs are in use by their own app (the app's name only: this screen is in a room, so never what is being watched)
+    others = [{"name": LABELS.get(c["id"], c["id"]), "app": c["external"]["app"]} for c in cards.snapshot() if (c.get("external") or {}).get("app")]
+    return jsonify(offset=(w or {}).get("offset", time.localtime().tm_gmtoff), weather=w, others=others)
 
 
 @app.get("/tv/focus")
@@ -2663,7 +2672,7 @@ def tv_img():
     if not url or not url.startswith("https://"):
         abort(404)
     hit = _tv_img_cache.get(url)
-    if not hit or time.time() - hit[0] > 600:
+    if not hit or time.time() - hit[0] > 100:
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "tvremote"}), timeout=6) as r:
                 ctype = r.headers.get("Content-Type", "")
@@ -2675,7 +2684,7 @@ def tv_img():
         if len(_tv_img_cache) > 120:
             _tv_img_cache.pop(next(iter(_tv_img_cache)))
         hit = _tv_img_cache[url] = (time.time(), body, ctype)
-    return Response(hit[1], mimetype=hit[2], headers={"Cache-Control": "max-age=600"})
+    return Response(hit[1], mimetype=hit[2], headers={"Cache-Control": "max-age=100"})
 
 
 @app.get("/api/launcher")

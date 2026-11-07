@@ -50,6 +50,15 @@ class TvPageTests(unittest.TestCase):
         self.assertEqual((d["row"], d["col"]), (0, 2))
         self.assertNotIn("https://img", str(d)); self.assertNotIn("https://av", str(d))  # the browser is never given a real picture address
 
+    def test_a_thumbnail_gets_a_new_id_every_two_minutes_so_the_browser_refetches(self):
+        tiles = [tile("a", "https://img/a.jpg")]
+        ids = []
+        for now in (960.0, 1070.0, 1300.0):  # buckets of 120 s: 8, 8, 10
+            with mock.patch.object(server, "launcher_state", return_value=([{"title": "x", "tiles": tiles}], 0, 0)), mock.patch.object(server.time, "time", return_value=now):
+                ids.append(self.c.get("/tv/data?k=" + server.TV_KEY).get_json()["rows"][0]["tiles"][0]["thumb"])
+        self.assertEqual(ids[0], ids[1])
+        self.assertNotEqual(ids[1], ids[2])
+
     def test_only_pictures_from_the_last_data_can_be_fetched(self):
         self.assertEqual(self.c.get("/tv/img?id=nothere&k=" + server.TV_KEY).status_code, 404)
         i = server._tv_img_id("http://insecure/x.jpg")
