@@ -2579,7 +2579,7 @@ _launcher_at = {"t": 0.0}
 
 
 def launcher_on():
-    return settings.get("launcher", True) is not False  # the launcher is the TV's idle screen now (the old Ready screen is the fallback only if it is switched off)
+    return True  # the launcher is the TV's idle screen (there is no switch any more: an old saved "off" must not bring the Ready screen back)
 
 
 def launcher_rows():
