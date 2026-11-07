@@ -22,7 +22,7 @@ Status: DONE = built and deployed, CODE = committed but not deployed yet, OPEN =
 - Living room card: shows the TV's own app and position ("On the TV: YouTube 9:12"), title and channel for admins on the bedroom TV: DONE. Living room title listener is off (`NOWPLAYING_IPS`): ASK before turning on.
 - Titles for Plex / Prime / Netflix: OPEN (the Roku only reports the app and position; Plex needs the server address and token).
 - Desktop TV cards same height and aligned: DONE.
-- "TV is off" panel restyled: DONE. Chat card avatars inline, ring not clipped: DONE. Group card info line below the chips: DONE. Suggested group card ("Save as group") restyled: CODE.
+- "TV is off" panel restyled: DONE. Chat card avatars inline, ring not clipped: DONE. Group card info line below the chips: DONE. Suggested group card ("Save as group") restyled: DONE.
 - Favourite taps broken by the spinner code, spinner only on the tapped section: DONE.
 - Mute button instant and ordered: DONE. Watch on phone full screen, "Watch on this computer" with bundled hls.js, closes when the stream ends: DONE.
 - Removed "It costs nothing to speak of" text: DONE.
@@ -30,11 +30,17 @@ Status: DONE = built and deployed, CODE = committed but not deployed yet, OPEN =
 ## Playback on the Pi
 - Streams silent (PipeWire remembered a mute): DONE.
 - Multistream with chat, windows in mixed layouts (race): DONE.
-- mpv's own on-screen controller (seek bar, address as title) over the picture: CODE (`osc=no` in config/mpv.conf; needs a rebuild).
-- "Switching stream" card when a multistream collapses to one: CODE (quiet path).
-- Warnings about the Pi/TV as a whole (heat) across the whole screen, not in one tile: CODE (`tv_banner`, window `tvr-banner`). NEEDS the new labwc rule on the Pi: copy `config/labwc-rc.xml` to `~/.config/labwc/rc.xml` and `kill -HUP $(pgrep -x labwc)` (ASK Ben first). Temperature warning threshold is 78 C: ASK whether to lower it.
+- mpv's own on-screen controller (seek bar, address as title) over the picture: DONE (`osc=no`).
+- "Switching stream" card when a multistream collapses to one: DONE (quiet path).
+- Warnings about the Pi/TV as a whole (heat) across the whole screen, not in one tile: DONE (`tv_banner`, window `tvr-banner`; labwc rules updated on the Pi, backups `rc.xml.bak-cursor` and `rc.xml.bak-banner`). Temperature warning threshold is 78 C: ASK whether to lower it.
+
+- Volume / mute / paused notices on the same strip for one full-screen stream, with a Settings choice (strip or classic text) and a test-warning button: DONE. Several streams keep text in the stream's own window.
+- People options (make admin, reset password, sign out, remove) as one compact row of buttons: DONE.
+- Launcher shows one tile per streamer (xqc / buddha were doubled): DONE.
+- Open pages reload themselves after the app restarts (a stale tab ran an old script): DONE (takes effect from the next restart after this one).
 
 ## Still open
-- Multistream sheet in the first browser tab: "Live now, suggested" adds did not seem to work. The add itself works (the API accepted it); the open tab's view was stale after a restart. Re-test after the next deploy; if it still fails, find why the sheet does not refresh.
+- Multistream sheet "Live now, suggested" adds: re-tested on a fresh page, four streams added quickly, all worked. The failure was a stale tab after a restart (see the auto-reload above).
+- Live hover preview in the launcher: needs a new multi-session HLS relay (playlist + segments through the app, so the TV's browser never talks to the internet); design in this log's history: one preview after 1.5 s on a live card, 320x184, hls.js (bundled). NOT built.
 - Offered, not asked for: always show which HDMI input a Roku TV is on, even while its own app runs.
 - Parked from earlier: IR receiver, YouTube everywhere, app.py split.
