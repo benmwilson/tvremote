@@ -247,8 +247,8 @@ body.chatfull{overflow:hidden}
 #emotegrid .en{padding:10px 2px;color:var(--dim);font-size:14px}
 #kickfull[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14}
 #chatcount{text-align:right;margin:4px 2px 0;font-size:12px}
-.chatrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.chatrow .chathead{flex:1;min-width:0}
-.chatrow #chattabs{flex:0 1 auto;padding:4px;margin:-4px 0}  /* several streams: their pictures sit in the title row between the name and the buttons; the padding leaves room for the selected ring, which the scroll area would clip */
+.chatrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.chatrow .chathead{flex:1 0 auto;min-width:96px;width:auto}  /* never squeezed below its icon and name: the pictures used to overlap "Chat" and push the icon out of the card */
+.chatrow #chattabs{order:5;flex:1 0 100%;padding:6px 4px 2px;margin:0}  /* several streams: their pictures get a row of their own under the title and buttons, so any number fits; the padding leaves room for the selected ring, which the scroll area would clip */  /* several streams: their pictures sit in the title row between the name and the buttons; the padding leaves room for the selected ring, which the scroll area would clip */
 .chatbtn{flex:none;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;box-sizing:border-box;display:grid;place-items:center;border-radius:12px;background:var(--card2);color:var(--dim);text-decoration:none;border:0}
 .chatbtn[aria-pressed=true]{color:var(--tv,#62b0ff);box-shadow:inset 0 0 0 2px var(--tv,#62b0ff)}
 .chatbtn .ic{width:20px;height:20px}.chatbtn .chev{margin:0}.chatbtn[aria-expanded=true] .chev.r{transform:rotate(90deg)}
@@ -426,6 +426,7 @@ details[open]>summary::after{transform:rotate(180deg)}
 #tourbox .tt{display:flex;align-items:center;gap:10px}#tourbox .tt b{flex:1;font-size:17px}#tourbox .sub{font-size:12px;color:var(--dim)}
 #tourbox p{margin:4px 0 12px;color:var(--dim);font-size:15px;line-height:1.45;min-height:3em}
 body.touring{padding-bottom:260px}
+body.touring dialog.sheet[open]{z-index:55}body.touring dialog.sheet .sb{padding-bottom:300px}  /* a sheet the tour opens stays below the tour box, with room to scroll its last rows clear of it */
 .tour-hl{outline:3px solid var(--tv,#6bb2ff)!important;outline-offset:4px;border-radius:14px;animation:tourpulse 1.4s ease-in-out infinite}
 @keyframes tourpulse{50%{outline-offset:8px}}
 .s-wide{display:block;width:100%;min-height:52px;margin-top:10px}
@@ -1002,6 +1003,14 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button id="watchlive" type="button" class="hide" style="margin-top:8px;width:100%">Back to live</button>
   </div>
   <p class="sub" id="watchnote" style="margin:8px 2px 0"></p>
+</div>
+<div class="card hide" id="launchcard">
+  <div class="chathead" style="cursor:default"><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg><span class="grow"><b>Launcher</b><span class="sub" style="display:block">Move around the TV&rsquo;s launcher. OK plays what is highlighted; rest on a live card to preview it.</span></span></div>
+  <div class="pad" style="margin-top:10px">
+    <div class="row"><span style="flex:1"></span><button data-k="Up" aria-label="Up"><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button><span style="flex:1"></span></div>
+    <div class="row"><button data-k="Left" aria-label="Left"><svg class="ic" aria-hidden="true"><use href="#i-left"/></svg></button><button data-k="Select" class="go">OK</button><button data-k="Right" aria-label="Right"><svg class="ic" aria-hidden="true"><use href="#i-right"/></svg></button></div>
+    <div class="row"><span style="flex:1"></span><button data-k="Down" aria-label="Down"><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></button><span style="flex:1"></span></div>
+  </div>
 </div>
 <div class="card hide" id="chatcard">
   <div class="chatrow">
@@ -2017,18 +2026,27 @@ const TOUR = [
   {t: 'TV controls', x: 'Volume, mute, power and the TV\u2019s HDMI inputs, for the TV you opened.', view: 'tv', sel: '#tvctl'},
   {t: 'TV apps', x: 'Open the TV\u2019s own apps (YouTube, Netflix and so on) from here.', view: 'tv', sel: '#appsopen', when: 'Only TVs with a Roku have apps.'},
   {t: 'Browse live channels', x: 'See who is live on Kick and Twitch. Search, filter and sort, then play one or add it to the multistream.', view: 'tv', sel: '#browsecard'},
-  {t: 'Multistream', x: 'Watch up to four streams at once on the Pi\u2019s screen. Open it, add streams, and use Enlarge to make one big.', view: 'tv', sel: '#wallopencard', needsPlay: true, when: 'Only on the Pi\u2019s screen.'},
-  {t: 'Chat', x: 'Read the chat of the Twitch or Kick channel that is playing. Link your account in Settings to type in Twitch chat, or show the chat on the TV.', view: 'tv', sel: '#chatcard', needsPlay: true, when: 'It appears while a Twitch or Kick channel plays.'},
+  {t: 'Launcher', x: 'While nothing plays, the TV shows the launcher: your live favourites, groups and recents. The arrows move around it, OK plays what is highlighted, and resting on a live card for a moment previews it.', view: 'tv', sel: '#launchcard', when: 'It shows here while the launcher is on the Pi\u2019s screen.'},
+  {t: 'Multistream', x: 'Watch up to four streams at once on the Pi\u2019s screen. This sheet opens from the Multistream button. Type a channel name or link and tap Add, or tap a live suggestion. The first stream you add starts playing by itself.', view: 'tv', sel: '#walladdbox', when: 'Only the Pi\u2019s screen can show several streams.', grp: 'wall'},
+  {t: 'Layouts: Grid and Focus', x: 'Two buttons at the top of the sheet pick the layout. Grid shows every stream in an equal tile. Focus is the stage layout: one big stream with the others small underneath it, and the big one has the sound.', view: 'tv', sel: '#walllayout', when: 'The layout buttons appear once two streams are on screen.', grp: 'wall'},
+  {t: 'A stream\u2019s buttons', x: 'Every stream has its own row. Tap its name to choose it: the Controlling tag shows which stream the main controls (pause, volume, chat) act on. The speaker turns its sound on or off, and any number can be heard at once. The quality menu sets its picture size. Replace puts a different stream in that window. Enlarge (Focus layout only) swaps it with the big window. Full screen ends the multistream and keeps only that stream. The X takes it off the screen.', view: 'tv', sel: '#walltiles .wtile', when: 'Add a stream or two and these appear on each row.', grp: 'wall'},
+  {t: 'Sync, groups and heat', x: 'The arrows button at the top lines the streams up in time when they show the same event. Save these as a group keeps a set to start together later from Favourites. If the Pi runs hot it lowers the pictures to 480p by itself and says so.', view: 'tv', sel: '#wallsync', when: 'Sync appears once two streams are on screen.', grp: 'wall'},
+  {t: 'Chat', x: 'Read the chat of the Twitch or Kick channel that is playing, right here. With several streams, tap a picture in its header to read that one. The TV button puts the chat on the TV (the picture moves over to make room), the arrow-out button opens it on the site, and the arrow opens or closes this view. Link your account in Settings to type, pick emotes and send.', view: 'tv', sel: '#chatcard', needsPlay: true, when: 'It appears while a Twitch or Kick channel plays.', grp: 'chat'},
   {t: 'Link your accounts', x: 'Link Kick or Twitch here to chat as yourself.', view: 'settings', sel: '#platforms', noGuest: true, when: 'Guests can\u2019t link accounts.'},
   {t: 'Help and Home Screen', x: 'More answers live here. To use this like an app, add it to your Home Screen (Safari: Share, Add to Home Screen. Chrome on Android: menu, Install app).', view: 'settings', sel: '#help'},
   {t: 'That\u2019s it', x: 'Tap Take the tour any time to see this again.', view: 'settings', sel: '#tourgo'}];
-let tourI = 0, tourHome = '', tourEl = null, tourSeq = 0, tourSteps = TOUR;
+let tourI = 0, tourHome = '', tourEl = null, tourSeq = 0, tourSteps = TOUR, tourGrp = '';
+// a step that talks about a sheet or a card opens it (grp), and the next step that is not in the same group closes it again
+const TOUR_OPEN = {wall: () => { const w = $('wallcard'); if (!w.open) w.show(); }, chat: () => { chatOpen = true; chatShow(); }};  // show(), not showModal(): the tour box stays above and usable
+const TOUR_CLOSE = {wall: () => { if ($('wallcard').open) $('wallcard').close(); }, chat: () => { chatOpen = false; chatShow(); }};
+const tourLeave = () => { if (tourGrp && TOUR_CLOSE[tourGrp]) TOUR_CLOSE[tourGrp](); tourGrp = ''; };
 const tourOpen = () => !$('tourbox').classList.contains('hide');
 function tourTv() { const t = targets.find(x => x.id === target) || targets.find(x => x.kind === 'pi' || x.kind === 'chromecast') || targets[0]; return t ? t.id : ''; }
 function tourClear() { if (tourEl) { tourEl.classList.remove('tour-hl'); tourEl = null; } }
 async function tourShow() {
   const seq = ++tourSeq, s = tourSteps[tourI], last = tourI === tourSteps.length - 1;
   tourClear();
+  if (tourGrp && tourGrp !== (s.grp || '')) tourLeave();
   $('tourttl').textContent = s.t; $('toursub').textContent = (tourI + 1) + ' of ' + tourSteps.length;
   $('tourback').disabled = !tourI; $('tournext').textContent = last ? 'Done' : 'Next';
   if (s.view && view() !== s.view) {
@@ -2044,12 +2062,14 @@ async function tourShow() {
     const w = setInterval(() => { if (seq !== tourSeq || !tourOpen()) clearInterval(w); else if (st.running || st.wall) { clearInterval(w); tourShow(); } }, 1000);  // it carries on by itself once a stream plays
     return;
   }
+  if (s.grp && cur.kind === 'pi' || s.grp === 'chat') { tourGrp = s.grp; if (TOUR_OPEN[s.grp]) TOUR_OPEN[s.grp](); await new Promise(r => setTimeout(r, 350)); if (seq !== tourSeq || !tourOpen()) return; }  // let the sheet or card draw
   const e = s.sel ? document.querySelector(s.sel) : null, on = !!(e && e.getClientRects().length);
   $('tourtext').textContent = on || !s.when ? s.x : s.x + ' (' + s.when + ')';
   if (on) { tourEl = e; e.classList.add('tour-hl'); e.scrollIntoView({block: 'center', behavior: 'smooth'}); }
+  if (window.scrollY < 2) window.scrollTo({top: 2, behavior: 'smooth'});  // a step with nothing to scroll to left the browser's bottom bar showing, and the box sat above it: any scroll tucks it away like the other steps
 }
 function tourEnd() {
-  tourSeq++; tourClear();
+  tourSeq++; tourClear(); tourLeave();
   $('tourbox').classList.add('hide'); document.body.classList.remove('touring');
   if (view() !== (tourHome === '#/settings' ? 'settings' : tourHome.startsWith('#/tv/') ? 'tv' : 'all') || tourHome !== location.hash) location.hash = tourHome || '#/';
 }
@@ -3418,6 +3438,8 @@ const wallPut = async url => {
 };
 function renderWall() {
   const cur = targets.find(t => t.id === target) || {};
+  // the launcher's pad sits near the top while the launcher is what the TV shows (the same condition the arrow buttons use to steer it instead of the Roku)
+  $('launchcard').classList.toggle('hide', !(cur.kind === 'pi' && shellInfo && shellInfo.launcher && shellInfo.running && !st.running && !st.starting && !st.wall));
   const show = cur.kind === 'pi';  // always on the Pi's screen (the first stream added just starts playing); never hidden while a window restarts: the sheet must stay open
   $('wallopencard').classList.toggle('hide', !show);
   if (!show) { if ($('wallcard').open) $('wallcard').close(); return; }
