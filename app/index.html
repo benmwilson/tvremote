@@ -246,7 +246,7 @@ body.chatfull{overflow:hidden}
 #kickfull[aria-pressed=true]{background:var(--tv,#6bb2ff);color:#0b0e14}
 #chatcount{text-align:right;margin:4px 2px 0;font-size:12px}
 .chatrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.chatrow .chathead{flex:1;min-width:0}
-.chatrow #chattabs{order:10;flex:1 0 100%;padding:4px 2px 0}  /* several streams: their pictures get a row of their own under the title and buttons */
+.chatrow #chattabs{flex:0 1 auto;padding:4px;margin:-4px 0}  /* several streams: their pictures sit in the title row between the name and the buttons; the padding leaves room for the selected ring, which the scroll area would clip */
 .chatbtn{flex:none;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;box-sizing:border-box;display:grid;place-items:center;border-radius:12px;background:var(--card2);color:var(--dim);text-decoration:none;border:0}
 .chatbtn[aria-pressed=true]{color:var(--tv,#62b0ff);box-shadow:inset 0 0 0 2px var(--tv,#62b0ff)}
 .chatbtn .ic{width:20px;height:20px}.chatbtn .chev{margin:0}.chatbtn[aria-expanded=true] .chev.r{transform:rotate(90deg)}
