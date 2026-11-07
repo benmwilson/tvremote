@@ -14,7 +14,7 @@ from helpers import founder_client  # noqa: E402
 
 
 def tile(name, thumb=None, avatar=None):
-    return {"id": name, "kind": "stream", "name": name, "url": "https://kick.com/" + name, "live": True, "thumb": thumb, "avatar": avatar, "members": [1]}
+    return {"id": name, "kind": "stream", "name": name, "url": "https://kick.com/" + name, "live": True, "thumb": thumb, "avatar": avatar, "members": None}
 
 
 class TvPageTests(unittest.TestCase):
@@ -46,7 +46,7 @@ class TvPageTests(unittest.TestCase):
         out = d["rows"][0]["tiles"]
         self.assertEqual(sum(1 for t in out if t["thumb"]), server.TV_THUMBS)
         self.assertTrue(all(t["avatar"].startswith("/tv/img?id=") for t in out))
-        self.assertTrue(all("members" not in t for t in out))
+        self.assertTrue(all(t["members"] is None for t in out))
         self.assertEqual((d["row"], d["col"]), (0, 2))
         self.assertNotIn("https://img", str(d)); self.assertNotIn("https://av", str(d))  # the browser is never given a real picture address
 
@@ -72,6 +72,15 @@ class TvPageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+    def test_a_group_tile_carries_up_to_four_faces_as_ids(self):
+        mem = [{"name": f"m{i}", "avatar": f"https://av/{i}.jpg"} for i in range(6)]
+        g = {"id": "g1", "kind": "group", "name": "a, b", "url": None, "live": False, "avatar": None, "thumb": None, "members": mem}
+        with mock.patch.object(server, "launcher_state", return_value=([{"title": "Groups", "tiles": [g]}], 0, 0)):
+            t = self.c.get("/tv/data?k=" + server.TV_KEY).get_json()["rows"][0]["tiles"][0]
+        self.assertEqual(len(t["members"]), 4)
+        self.assertTrue(all(m["avatar"].startswith("/tv/img?id=") for m in t["members"]))
 
 
 class BrowserFlagTests(unittest.TestCase):
@@ -143,3 +152,4 @@ class WeatherTests(unittest.TestCase):
         weather._cache[(1.0, 2.0, "C")] = (time.time() - 9999, {"temp": 3})
         with mock.patch.object(weather, "_get", side_effect=OSError):
             self.assertEqual(weather.current(place, "C"), {"temp": 3})
+

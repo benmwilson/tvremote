@@ -3,6 +3,11 @@
 <style>
 :root{--bg:#0b0e14;--card:#151a26;--fg:#e8ecf4;--dim:#8d97ab;--ring:#4da3ff;--live:#e0243a}
 html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-gradient(1200px 500px at 15% -10%,#16264a 0%,transparent 70%),radial-gradient(900px 500px at 100% 0%,#1d1840 0%,transparent 65%),var(--bg);color:var(--fg);font:600 22px system-ui,sans-serif}
+/* two soft colour patches drifting very slowly: each is one pre-drawn gradient moved as a layer, so it costs the Pi next to nothing */
+.glow{position:absolute;width:1300px;height:1300px;border-radius:50%;pointer-events:none;will-change:transform;z-index:0}
+.g1{left:-500px;top:-700px;background:radial-gradient(circle,#2a4a9a55 0%,transparent 65%);animation:d1 70s ease-in-out infinite alternate}
+.g2{right:-600px;top:-300px;background:radial-gradient(circle,#4a2a9a40 0%,transparent 65%);animation:d2 90s ease-in-out infinite alternate}
+@keyframes d1{to{transform:translate(520px,260px)}}@keyframes d2{to{transform:translate(-460px,360px)}}
 #head{position:absolute;left:40px;right:40px;top:26px;height:84px;display:flex;align-items:center;gap:20px;z-index:3}
 #head img{width:60px;height:60px;border-radius:14px}
 #head .brand{font-size:34px;font-weight:800;letter-spacing:.3px}
@@ -14,7 +19,7 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 #clock{text-align:right;line-height:1.1}
 #clock .time{font-size:56px;font-weight:800;letter-spacing:1px}
 #clock .date{font-size:20px;color:var(--dim)}
-#rows{position:absolute;left:40px;top:120px;width:1840px;transition:transform .3s ease}
+#rows{z-index:1;position:absolute;left:40px;top:120px;width:1840px;transition:transform .3s ease}
 .row{height:350px;position:relative;overflow:hidden}
 .row h2{margin:0 0 0 22px;font-size:26px;color:var(--dim);font-weight:700}
 .strip{display:flex;gap:22px;transition:transform .25s ease;padding:16px 24px 24px 22px}
@@ -24,6 +29,7 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 .card .ph{width:330px;height:186px;display:flex;align-items:center;justify-content:center}
 .av{width:64px;height:64px;border-radius:50%;object-fit:cover;background:#2a3350;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800}
 .card .ph .av{width:110px;height:110px;font-size:46px}
+.stack{display:flex;align-items:center}.stack .av{width:92px;height:92px;font-size:38px;border:4px solid var(--card);margin-left:-26px}.stack .av:first-child{margin-left:0}
 .card .small{position:absolute;left:12px;top:154px;border:3px solid var(--card)}
 .name{position:absolute;left:86px;top:196px;right:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:23px}
 .name.solo{left:16px}
@@ -34,6 +40,7 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 .empty[hidden]{display:none}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:var(--dim)}
 </style></head><body>
+<div class="glow g1"></div><div class="glow g2"></div>
 <div id="head"><img src="/logo.svg" alt=""><span class="brand">TV Remote</span><span class="grow"></span>
   <div id="wx"><span id="wxi"></span><div><div class="t" id="wxt"></div><div class="s" id="wxs"></div></div></div>
   <div id="clock"><div class="time" id="ct"></div><div class="date" id="cd"></div></div></div>
@@ -52,7 +59,9 @@ function card(t) {
   const c = el('div', 'card');
   if (t.thumb) { const i = el('img', 't'); i.src = q(t.thumb); c.append(i); if (t.live) c.append(el('span', 'chip live', 'LIVE')); if (t.viewers != null) c.append(el('span', 'chip view', num(t.viewers))); c.append(avatar(t, 'small'), el('div', 'name', t.name), el('div', 'game', t.game || t.title || ''));
   } else {
-    const ph = el('div', 'ph'); ph.append(avatar(t)); c.append(ph);
+    const ph = el('div', 'ph');
+    if (t.kind === 'group' && t.members && t.members.length) { const st = el('div', 'stack'); t.members.forEach(m => st.append(avatar(m))); ph.append(st); } else ph.append(avatar(t));
+    c.append(ph);
     if (t.live) c.append(el('span', 'chip live', 'LIVE'));
     c.append(el('div', 'name solo', t.name), el('div', 'game solo', t.game || t.title || (t.kind === 'group' ? 'Group' : '')));
   }
