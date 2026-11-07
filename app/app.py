@@ -15,6 +15,8 @@ import subprocess
 import threading
 import time
 import zlib
+import hashlib
+import urllib.request
 from urllib.parse import quote, urlparse
 
 from flask import Flask, Response, abort, copy_current_request_context, g, has_request_context, jsonify, send_file, redirect, request, send_from_directory
@@ -136,6 +138,8 @@ def guard():
     if re.fullmatch(r"/cast/[\w-]+/(live\.m3u8|seg)|/watch/[\w-]+\.m3u8|/logo\.svg|/icon-\d+\.png|/manifest\.json|/request|/join/[\w-]+", request.path):
         return None
     if request.remote_addr == "127.0.0.1" and request.path == "/api/status":  # container healthcheck
+        return None
+    if request.path in TV_PATHS and tv_key_ok():  # the TV's own browser: it holds this run's key (never the IP: a proxy would make everyone look local)
         return None
     if request.path in ("/login", "/logout"):
         return None
@@ -2529,6 +2533,87 @@ def launcher_state():
         except Exception as e:
             app.logger.warning("Launcher contents: %s", e)
     return (LAUNCHER.rows, LAUNCHER.row, LAUNCHER.col)
+
+
+TV_PATHS = ("/tv", "/tv/data", "/tv/img")
+TV_KEY = secrets.token_urlsafe(16)  # new at every start; only the browser the app opens on the TV is given it
+TV_THUMBS = 6  # tiles with a stream picture; the rest are cards with the profile picture (the Pi's browser can't draw many)
+_tv_imgs = {}   # id -> picture address, from the last /tv/data (only these can be fetched through /tv/img)
+_tv_img_cache = {}  # address -> (time, bytes, type)
+
+
+def tv_key_ok():
+    return hmac.compare_digest(request.args.get("k", ""), TV_KEY)
+
+
+def tv_viewer_ok():
+    """The TV's browser (with the key), or a logged-in admin looking at the page from a phone or PC."""
+    if tv_key_ok():
+        return True
+    admin_only()
+    return True
+
+
+def _tv_img_id(url):
+    i = hashlib.sha256(url.encode()).hexdigest()[:16]
+    _tv_imgs[i] = url
+    if len(_tv_imgs) > 400:
+        _tv_imgs.pop(next(iter(_tv_imgs)))
+    return i
+
+
+@app.get("/tv")
+def tv_page():
+    tv_viewer_ok()
+    return send_file(os.path.join(BASE, "tv.html"), mimetype="text/html", max_age=0)
+
+
+@app.get("/tv/data")
+def tv_data():
+    """The launcher's rows for the TV's page. Picture addresses become ids that /tv/img can fetch; only the first TV_THUMBS tiles keep a stream picture."""
+    tv_viewer_ok()
+    st = launcher_state()
+    if st is None:
+        return jsonify(rows=[], row=0, col=0)
+    thumbs, rows = 0, []
+    for r in st[0]:
+        tiles = []
+        for t in r["tiles"]:
+            t = dict(t)
+            if t.get("thumb") and thumbs < TV_THUMBS:
+                thumbs += 1
+                t["thumb"] = "/tv/img?id=" + _tv_img_id(t["thumb"])
+            else:
+                t["thumb"] = None
+            if t.get("avatar"):
+                t["avatar"] = "/tv/img?id=" + _tv_img_id(t["avatar"])
+            t.pop("members", None)
+            tiles.append(t)
+        rows.append({"title": r["title"], "tiles": tiles})
+    return jsonify(rows=rows, row=st[1], col=st[2])
+
+
+@app.get("/tv/img")
+def tv_img():
+    """A picture the page asked for by id: fetched here (https only, images only, small) so the TV's browser never talks to the internet itself."""
+    tv_viewer_ok()
+    url = _tv_imgs.get(request.args.get("id", ""))
+    if not url or not url.startswith("https://"):
+        abort(404)
+    hit = _tv_img_cache.get(url)
+    if not hit or time.time() - hit[0] > 600:
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "tvremote"}), timeout=6) as r:
+                ctype = r.headers.get("Content-Type", "")
+                body = r.read(2_000_001)
+        except OSError:
+            abort(502)
+        if not ctype.startswith("image/") or len(body) > 2_000_000:
+            abort(502)
+        if len(_tv_img_cache) > 120:
+            _tv_img_cache.pop(next(iter(_tv_img_cache)))
+        hit = _tv_img_cache[url] = (time.time(), body, ctype)
+    return Response(hit[1], mimetype=hit[2], headers={"Cache-Control": "max-age=600"})
 
 
 @app.get("/api/launcher")

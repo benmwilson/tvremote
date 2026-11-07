@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>TV home</title>
+<style>
+:root{--bg:#0b0e14;--card:#151a26;--fg:#e8ecf4;--dim:#8d97ab;--ring:#4da3ff;--live:#e0243a}
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--fg);font:600 22px system-ui,sans-serif}
+#rows{position:absolute;left:60px;top:60px;width:1800px;transition:transform .3s ease}
+.row{height:330px;position:relative;overflow:hidden}
+.row h2{margin:0 0 14px;font-size:26px;color:var(--dim);font-weight:700}
+.strip{display:flex;gap:22px;transition:transform .3s ease;padding:10px 0 0 10px}
+.card{flex:0 0 330px;height:258px;background:var(--card);border-radius:18px;position:relative;transition:transform .2s,box-shadow .2s;overflow:hidden}
+.card.f{transform:scale(1.07);box-shadow:0 0 0 4px var(--ring),0 20px 40px #000a;z-index:2}
+.card img.t{width:330px;height:186px;object-fit:cover;display:block}
+.card .ph{width:330px;height:186px;display:flex;align-items:center;justify-content:center}
+.av{width:64px;height:64px;border-radius:50%;object-fit:cover;background:#2a3350;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800}
+.card .ph .av{width:110px;height:110px;font-size:46px}
+.card .small{position:absolute;left:12px;top:154px;border:3px solid var(--card)}
+.name{position:absolute;left:86px;top:196px;right:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:23px}
+.name.solo{left:16px}
+.game{position:absolute;left:86px;top:226px;right:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:17px;color:var(--dim)}
+.game.solo{left:16px}
+.chip{position:absolute;top:10px;border-radius:8px;padding:2px 10px;font-size:16px;background:#000a}
+.live{left:10px;background:var(--live)}.view{right:10px}
+.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:var(--dim)}
+</style></head><body>
+<div id="rows"></div><div class="empty" id="empty" hidden>Nothing here yet. Add favourites on your phone.</div>
+<script>
+const K = new URLSearchParams(location.search).get('k') || '';
+const q = p => p + (p.includes('?') ? '&' : '?') + 'k=' + encodeURIComponent(K);
+let sig = '', cur = {row: 0, col: 0};
+const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+const num = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n);
+function avatar(t, cls) {
+  if (t.avatar) { const i = el('img', 'av ' + (cls || '')); i.src = q(t.avatar); return i; }
+  return el('div', 'av ' + (cls || ''), (t.name || '?').trim().charAt(0).toUpperCase());
+}
+function card(t) {
+  const c = el('div', 'card');
+  if (t.thumb) { const i = el('img', 't'); i.src = q(t.thumb); c.append(i); if (t.live) c.append(el('span', 'chip live', 'LIVE')); if (t.viewers != null) c.append(el('span', 'chip view', num(t.viewers))); c.append(avatar(t, 'small'), el('div', 'name', t.name), el('div', 'game', t.game || t.title || ''));
+  } else {
+    const ph = el('div', 'ph'); ph.append(avatar(t)); c.append(ph);
+    if (t.live) c.append(el('span', 'chip live', 'LIVE'));
+    c.append(el('div', 'name solo', t.name), el('div', 'game solo', t.game || t.title || (t.kind === 'group' ? 'Group' : '')));
+  }
+  return c;
+}
+function focus() {
+  document.querySelectorAll('.card.f').forEach(c => c.classList.remove('f'));
+  const rows = document.querySelectorAll('.row');
+  const r = rows[cur.row]; if (!r) return;
+  const strip = r.querySelector('.strip'), cards = strip.children, c = cards[cur.col];
+  if (c) c.classList.add('f');
+  strip.style.transform = 'translateX(' + -Math.max(0, cur.col - 4) * 352 + 'px)';
+  document.getElementById('rows').style.transform = 'translateY(' + -Math.max(0, cur.row - 2) * 330 + 'px)';
+}
+function draw(d) {
+  const s = JSON.stringify(d.rows);
+  if (s !== sig) {
+    sig = s; const box = document.getElementById('rows'); box.replaceChildren();
+    d.rows.forEach(r => { const row = el('div', 'row'); row.append(el('h2', null, r.title)); const st = el('div', 'strip'); r.tiles.forEach(t => st.append(card(t))); row.append(st); box.append(row); });
+    document.getElementById('empty').hidden = d.rows.length > 0;
+  }
+  cur = {row: d.row, col: d.col}; focus();
+}
+async function tick() { try { draw(await (await fetch(q('/tv/data'), {cache: 'no-store'})).json()); } catch (e) {} }
+tick(); setInterval(tick, 1000);
+</script></body></html>
