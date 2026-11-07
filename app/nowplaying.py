@@ -120,6 +120,7 @@ def sync(tv_id, ip, app):
     """Called when the TV's open app is known (None when it is on an input, home or off): start, keep or stop its listener."""
     allowed = [x.strip() for x in os.environ.get("TVREMOTE_NOWPLAYING_IPS", "").split(",") if x.strip()]
     if allowed and ip not in allowed:
+        _tv_ip.pop(tv_id, None)  # an old mapping must not outlive the allowlist
         return  # listen only to the TVs named here (empty: every TV)
     _tv_ip[tv_id] = ip  # after the allowlist: Plex titles are read only for the TVs named there too
     with _lock:
