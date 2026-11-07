@@ -189,6 +189,12 @@ class PausedOverlay(unittest.TestCase):
         with mock.patch.object(server, "mpv", fake_mpv), mock.patch.object(server, "prop", lambda n: props.get(n)):
             return self.client.post("/api/cmd", json={"action": "pause"})
 
+    def test_mute_buttons_send_the_wanted_state_and_unmuting_overwrites_a_remembered_mute(self):
+        with mock.patch.object(server.mpvipc, "set_mute", return_value={"error": "success"}) as sm, mock.patch.object(server, "osd_volume"):
+            self.assertEqual(self.client.post("/api/cmd", json={"action": "mute_on"}).status_code, 200)
+            self.assertEqual(self.client.post("/api/cmd", json={"action": "mute_off"}).status_code, 200)
+        self.assertEqual([c.args[1] for c in sm.call_args_list], [True, False])
+
     def test_pausing_shows_the_symbol_for_as_long_as_it_is_paused(self):
         self.assertEqual(self.pause(True).status_code, 200)
         shown = [c for c in self.sent if c[0] == "show-text"]

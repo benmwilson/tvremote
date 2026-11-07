@@ -1406,6 +1406,8 @@ def api_play():
 COMMANDS = {
     "pause": lambda v: ["cycle", "pause"],
     "mute": lambda v: ["cycle", "mute"],
+    "mute_on": lambda v: ["set_property", "mute", True],    # the remote's mute button sends the state it wants, so quick taps can't get out of step
+    "mute_off": lambda v: ["set_property", "mute", False],
     "volume": lambda v: ["set_property", "volume", max(0.0, min(130.0, float(v)))],
     "volume_delta": lambda v: ["add", "volume", float(v)],
     "seek": lambda v: ["seek", float(v), "relative"],
@@ -1485,13 +1487,15 @@ def api_cmd():
         cmd = fn(data.get("value", 0))
     except (TypeError, ValueError):
         return jsonify(ok=False, error="Bad value"), 400
-    on_wall = wall.active() and action in ("volume", "volume_delta", "mute", "unmute")
-    if on_wall and action in ("mute", "unmute"):  # the stream the card controls: its sound on or off (the same switch as its speaker)
-        wall.set_sound(wall.selected, action == "unmute" or wall.selected not in wall.sound, SOCK)
+    on_wall = wall.active() and action in ("volume", "volume_delta", "mute", "unmute", "mute_on", "mute_off")
+    if on_wall and action in ("mute", "unmute", "mute_on", "mute_off"):  # the stream the card controls: its sound on or off (the same switch as its speaker)
+        wall.set_sound(wall.selected, action in ("unmute", "mute_off") or (action == "mute" and wall.selected not in wall.sound), SOCK)
         osd_volume(sel_info()[3])
         return jsonify(ok=True)
     if on_wall:  # the level of the stream the card controls only: with several heard at once, each has its own
         r = mpvipc.send(sel_info()[3], cmd)
+    elif action in ("mute_on", "mute_off"):
+        r = mpvipc.set_mute(sel_info()[3], action == "mute_on")  # unmuting also overwrites a mute the sound server remembers
     else:
         sock = sel_info()[3]
         r = mpv(cmd) if sock == SOCK else mpvipc.send(sock, cmd)  # pause, seek...: the stream the card shows
@@ -1510,7 +1514,7 @@ def api_cmd():
         if data.get("final") or time.time() - _vol_saved["t"] > 2:  # a drag sends many: write the file when it ends, or every few seconds
             _vol_saved["t"] = time.time()
             save_settings()
-    if ok and action in ("volume", "volume_delta", "mute", "unmute"):
+    if ok and action in ("volume", "volume_delta", "mute", "unmute", "mute_on", "mute_off"):
         osd_volume(sel_info()[3])  # in the window of the stream being controlled
     return jsonify(ok=ok)
 

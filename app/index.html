@@ -1356,6 +1356,17 @@ const fmt = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
 
 let recentFor = '';
+// The mute button flips the moment it is tapped (like the TV's volume buttons) and sends the state it wants, one after another; until the Pi has caught up,
+// a status that arrives from before the tap can't flip it back.
+let muteLocal = null, muteChain = Promise.resolve(), muteSeq = 0;
+const mutedNow = () => muteLocal && muteLocal.until > Date.now() ? muteLocal.v : !!st.muted;
+function paintMute() { const m = mutedNow(); setBtn($('mute'), m ? 'mute' : 'volume', ''); $('mute').setAttribute('aria-label', m ? 'Unmute' : 'Mute'); }
+function muteTap() {
+  const want = !mutedNow(), n = ++muteSeq;
+  muteLocal = {v: want, until: Date.now() + 2500};
+  paintMute();
+  muteChain = muteChain.then(() => cmd(want ? 'mute_on' : 'mute_off')).then(() => { if (n === muteSeq) poll(); });
+}
 function render() {
   const run = st.running;
   if (st.url && st.url !== recentFor) { recentFor = st.url; loadRecents(); }  // a new stream started (from here or the Shortcut): it is a recent one now
@@ -1436,8 +1447,7 @@ function render() {
     : 'Pick something below, or open a favourite.';
   $('extpp').classList.toggle('hide', !extCtl);
   setBtn($('extpp'), ext && ext.paused ? 'play' : 'pause', ext && ext.paused ? 'Paused' : '');
-  setBtn($('mute'), st.muted ? 'mute' : 'volume', '');
-  $('mute').setAttribute('aria-label', st.muted ? 'Unmute' : 'Mute');
+  paintMute();
   if (!dragging && st.volume != null) { $('vol').value = st.volume; $('volv').textContent = Math.round(st.volume); }
   $('vol').style.setProperty('--p', $('vol').value + '%');
   const saved = isSaved(st.url);
@@ -1850,6 +1860,7 @@ async function go() {
 
 document.addEventListener('click', e => {
   const b = e.target.closest('button[data-a]');
+  if (b && b.id === 'mute') { muteTap(); return; }
   if (b) { busy(b, () => cmd(b.dataset.a, b.dataset.v)).then(poll); return; }
   const s = e.target.closest('#site button');
   if (s) { site = s.dataset.s; document.querySelectorAll('#site button').forEach(x => x.classList.toggle('on', x === s)); }
@@ -2136,7 +2147,7 @@ for (const id of ['tvnudge']) {  // the Roku volume slider shows a ruler while a
   ['pointerup', 'pointercancel', 'touchend', 'touchcancel', 'change'].forEach(ev => e.addEventListener(ev, () => e.classList.remove('ruler')));
 }
 $('vol').oninput = () => { dragging = true;
-  if (st.muted && +$('vol').value > (st.volume || 0)) { st.muted = false; cmd('mute'); } // dragging up while muted unmutes (once)
+  if (mutedNow() && +$('vol').value > (st.volume || 0)) { st.muted = false; muteLocal = {v: false, until: Date.now() + 2500}; paintMute(); cmd('mute_off'); } // dragging up while muted unmutes (once)
   $('volv').textContent = $('vol').value; $('vol').style.setProperty('--p', $('vol').value + '%'); sendVol($('vol').value); };
 $('vol').onchange = () => { dragging = false; sendVol($('vol').value, true); };
 
@@ -3842,7 +3853,7 @@ document.addEventListener('keydown', e => {
   else if (k === 'ArrowLeft' && !e.shiftKey) { e.preventDefault(); cmd('seek', -10).then(poll); }
   else if (k === 'ArrowUp') { e.preventDefault(); cmd('volume_delta', 5).then(poll); }
   else if (k === 'ArrowDown') { e.preventDefault(); cmd('volume_delta', -5).then(poll); }
-  else if (k === 'm' || k === 'M') { cmd('mute').then(poll); }
+  else if (k === 'm' || k === 'M') { muteTap(); }
 });
 window.addEventListener('hashchange', healthWatch);
 window.addEventListener('hashchange', show);
