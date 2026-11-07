@@ -3845,6 +3845,12 @@ document.addEventListener('click', async e => {
   const b = e.target.closest('button[data-k]');
   if (!b) return;
   const k = b.dataset.k;
+  const lk = {Up: 'up', Down: 'down', Left: 'left', Right: 'right', Select: 'select'}[k];
+  const cur = targets.find(t => t.id === target) || {};
+  if (lk && cur.kind === 'pi' && shellInfo && shellInfo.launcher && shellInfo.running && !st.running && !st.starting && !st.wall) {  // the launcher is on the TV: the arrows and OK move it (and OK plays), not the Roku
+    api('/api/launcher/key', 'POST', {key: lk});
+    return;
+  }
   if (k === 'VolumeUp' || k === 'VolumeDown') { if (volHeld) { volHeld = false; return; } volTap(k); return; }  // (the click that ends a hold is not another press)
   if (b.id === 'tvmute' && muteHeld) { muteHeld = false; return; }  // that was a press-and-hold (a correction), not a tap
   if (b.id === 'tvpower') { if (pwHeld) { pwHeld = false; return; } delete pwOver[target]; }  // a tap acts on what is shown, then waits for the TV
