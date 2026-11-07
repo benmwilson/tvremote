@@ -2559,7 +2559,7 @@ def launcher_state():
     return (LAUNCHER.rows, LAUNCHER.row, LAUNCHER.col)
 
 
-TV_PATHS = ("/tv", "/tv/data", "/tv/focus", "/tv/info", "/tv/img")
+TV_PATHS = ("/tv", "/tv/data", "/tv/focus", "/tv/info", "/tv/img", "/tv/log")
 TV_KEY = secrets.token_urlsafe(16)  # new at every start; only the browser the app opens on the TV is given it
 TV_THUMBS = 6  # tiles with a stream picture; the rest are cards with the profile picture (the Pi's browser can't draw many)
 _tv_imgs = {}   # id -> picture address, from the last /tv/data (only these can be fetched through /tv/img)
@@ -2658,6 +2658,14 @@ def tv_info():
     return jsonify(offset=(w or {}).get("offset", time.localtime().tm_gmtoff), weather=w, others=others)
 
 
+@app.get("/tv/log")
+def tv_log():
+    """A script error on the TV's page, written to the app's log (nobody can open a console on the TV)."""
+    tv_viewer_ok()
+    app.logger.warning("TV page: %s", request.args.get("m", "")[:300])
+    return ("", 204)
+
+
 @app.get("/tv/focus")
 def tv_focus():
     """Just where the focus ring is: the TV's page asks for this several times a second."""
@@ -2732,11 +2740,30 @@ def api_shell():
     return jsonify(s)
 
 
+@app.get("/api/weather/search")
+def api_weather_search():
+    """Cities matching what the admin has typed, for the weather box's suggestions."""
+    admin_only()
+    return jsonify(places=weather.search(request.args.get("q", "")))
+
+
 @app.post("/api/shell")
 def api_shell_set():
     """Turn the TV's home screen on or off (off shows the Pi desktop again). The app and this remote keep running."""
     admin_only()  # the switch lives in the admin part of Settings; it also stops what is playing
     body = request.get_json(silent=True) or {}
+    if "weather_place" in body:  # a suggestion the admin picked: {name, lat, lon}
+        p = body["weather_place"] if isinstance(body["weather_place"], dict) else {}
+        try:
+            lat, lon, name = float(p["lat"]), float(p["lon"]), str(p["name"]).strip()[:80]
+            ok = -90 <= lat <= 90 and -180 <= lon <= 180 and name
+        except (KeyError, TypeError, ValueError):
+            ok = False
+        if not ok:
+            return jsonify(ok=False, error="That place isn't valid."), 400
+        settings["weather"] = {"name": name, "lat": round(lat, 3), "lon": round(lon, 3)}
+        save_settings()
+        return jsonify(shell_state())
     if "weather_city" in body or "weather_unit" in body:  # the weather in the launcher's header: a city name (blank turns it off) and °C or °F
         if "weather_unit" in body:
             settings["weather_unit"] = "F" if body["weather_unit"] == "F" else "C"
@@ -3380,7 +3407,7 @@ def _on_screen():
 
 def _dress(members):
     snap = livewatch.snapshot()
-    return [{**m, "live": snap.get(m["url"], {}).get("live")} for m in members]
+    return [{**m, "live": snap.get(m["url"], {}).get("live"), "game": snap.get(m["url"], {}).get("game")} for m in members]
 
 
 @app.get("/api/groups")
@@ -3899,6 +3926,15 @@ def invite_create():
         token = access.create_invite(int(data.get("hours") or 24), data.get("label"), int(data.get("devices") or 1))
     except (TypeError, ValueError):
         return jsonify(ok=False, error="Pick how long access lasts."), 400
+    return jsonify(ok=True, url=request.host_url + "join/" + token)
+
+
+@app.get("/api/invites/<iid>/link")
+def invite_link(iid):
+    admin_only()
+    token = access.invite_token(iid)
+    if not token:
+        return jsonify(ok=False, error="That link can't be shown again."), 404
     return jsonify(ok=True, url=request.host_url + "join/" + token)
 
 

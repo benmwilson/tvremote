@@ -44,6 +44,9 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 <div id="rows"></div><div class="empty" id="empty" hidden>Nothing here yet. Add favourites on your phone.</div>
 <script>
 const K = new URLSearchParams(location.search).get('k') || '';
+const report = m => { try { fetch('/tv/log?k=' + encodeURIComponent(K) + '&m=' + encodeURIComponent(String(m).slice(0, 300))); } catch (e) {} };
+window.onerror = (m, s, l, c) => report(m + ' @' + l + ':' + c);
+window.addEventListener('unhandledrejection', e => report('rejected: ' + e.reason));
 const q = p => p + (p.includes('?') ? '&' : '?') + 'k=' + encodeURIComponent(K);
 let cur = {row: 0, col: 0};
 const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
@@ -123,7 +126,7 @@ async function info() {
       document.getElementById('wxt').textContent = w.temp + '°' + w.unit;
       document.getElementById('wxs').textContent = 'H ' + w.hi + '°  L ' + w.lo + '° · ' + w.place.split(',')[0];
     }
-  } catch (e) {}
+  } catch (e) { report('info: ' + e); }
 }
 tick(); info(); setInterval(tick, 2000); setInterval(focusTick, 150); setInterval(info, 60000); setInterval(clock, 10000);
 </script></body></html>

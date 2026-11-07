@@ -14,20 +14,28 @@ def _get(url):
         return json.load(r)
 
 
-def geocode(city):
-    """{"name", "lat", "lon"} for a city name, or None when it is not found or Open-Meteo can't be reached."""
-    city = (city or "").strip()[:80]
-    if not city:
-        return None
+def search(text, count=6):
+    """Up to `count` places matching what was typed, best first: [{"name", "lat", "lon"}] ([] when nothing matches or Open-Meteo can't be reached)."""
+    text = (text or "").strip()[:80]
+    if len(text) < 2:
+        return []
     try:
-        rows = _get("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&name=" + urllib.parse.quote(city)).get("results") or []
+        rows = _get("https://geocoding-api.open-meteo.com/v1/search?language=en&count=%d&name=%s" % (count, urllib.parse.quote(text))).get("results") or []
     except (OSError, ValueError):
-        return None
-    if not rows:
-        return None
-    r = rows[0]
-    place = ", ".join(x for x in (r.get("name"), r.get("admin1"), r.get("country_code")) if x)
-    return {"name": place, "lat": round(float(r["latitude"]), 3), "lon": round(float(r["longitude"]), 3)}
+        return []
+    out = []
+    for r in rows:
+        try:
+            out.append({"name": ", ".join(x for x in (r.get("name"), r.get("admin1"), r.get("country_code")) if x),
+                        "lat": round(float(r["latitude"]), 3), "lon": round(float(r["longitude"]), 3)})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def geocode(city):
+    """{"name", "lat", "lon"} for a city name (the best match), or None when it is not found or Open-Meteo can't be reached."""
+    return (search(city, 1) or [None])[0]
 
 
 def current(place, unit="C"):

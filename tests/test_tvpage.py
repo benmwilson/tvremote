@@ -163,3 +163,35 @@ class WeatherTests(unittest.TestCase):
         with mock.patch.object(weather, "_get", side_effect=OSError):
             self.assertEqual(weather.current(place, "C"), {"temp": 3})
 
+
+
+class CitySearchTests(unittest.TestCase):
+    def test_search_lists_matches_best_first_and_ignores_short_text(self):
+        import weather
+        rows = {"results": [{"name": "Springfield", "admin1": "Illinois", "country_code": "US", "latitude": 39.8, "longitude": -89.65},
+                            {"name": "Springfield", "admin1": "Missouri", "country_code": "US", "latitude": 37.2, "longitude": -93.3}, {"bad": 1}]}
+        with mock.patch.object(weather, "_get", return_value=rows) as g:
+            out = weather.search("Spring")
+        self.assertEqual([p["name"] for p in out], ["Springfield, Illinois, US", "Springfield, Missouri, US"])
+        self.assertIn("count=6", g.call_args[0][0])
+        with mock.patch.object(weather, "_get") as g:
+            self.assertEqual(weather.search("S"), [])
+            g.assert_not_called()
+        with mock.patch.object(weather, "_get", side_effect=OSError):
+            self.assertEqual(weather.search("Vancouver"), [])
+
+    def test_a_picked_place_is_saved_only_when_valid(self):
+        import accounts, shutil, tempfile
+        d = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, d, True)
+        with mock.patch.dict(os.environ, {"TVREMOTE_DATA": d}), mock.patch.object(server, "DATA", d), mock.patch.object(server, "SETTINGS_FILE", os.path.join(d, "settings.json")), mock.patch.object(server.time, "sleep"):
+            owner = founder_client(server)
+            r = owner.post("/api/shell", json={"weather_place": {"name": "Calgary, Alberta, CA", "lat": 51.05, "lon": -114.07}})
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.get_json()["weather_place"], "Calgary, Alberta, CA")
+            for bad in ({"name": "x", "lat": 99, "lon": 0}, {"name": "", "lat": 1, "lon": 1}, {"lat": 1, "lon": 1}, "text"):
+                self.assertEqual(owner.post("/api/shell", json={"weather_place": bad}).status_code, 400)
+            self.assertEqual(server.settings["weather"]["name"], "Calgary, Alberta, CA")
+            server.settings.pop("weather", None)
+            with mock.patch.object(server.weather, "search", return_value=[{"name": "A", "lat": 1.0, "lon": 2.0}]):
+                self.assertEqual(owner.get("/api/weather/search?q=Al").get_json(), {"places": [{"name": "A", "lat": 1.0, "lon": 2.0}]})
+            self.assertEqual(server.app.test_client().get("/api/weather/search?q=Al").status_code in (401, 403, 302, 303), True)

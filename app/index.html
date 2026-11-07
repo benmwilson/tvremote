@@ -440,6 +440,7 @@ body.touring{padding-bottom:260px}
 .s-cap+.s-row{padding-top:6px}
 #view-settings input::placeholder{color:var(--dim);opacity:.9}
 .s-out+.sub{margin-top:8px}
+.wsug{display:grid;gap:2px;margin-top:6px}.wsug:empty{display:none}.wsug button{text-align:left;min-height:44px;padding:0 14px;border-radius:10px;background:var(--card2,rgba(255,255,255,.05));font-weight:500}.wsug .sub{padding:8px 14px}
 
 
 #view-setup{padding-bottom:24px}
@@ -831,11 +832,12 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <label class="s-check" style="justify-content:space-between;margin-top:6px">Launcher on the TV between streams<input id="launchertoggle" type="checkbox" class="tg" role="switch"></label>
     <p class="sub" style="margin:2px 0 6px">Who is live, your favourites, groups and recents as tiles on the TV. Move around it with the pad on the remote (an IR receiver can be added later).</p>
     <div style="margin-top:10px"><b style="display:block;margin-bottom:6px;font-weight:600">Weather in the launcher&rsquo;s header</b>
-      <input id="weathercity" type="text" placeholder="City, e.g. Vancouver" aria-label="City for the weather" maxlength="80" autocapitalize="words" autocorrect="off">
+      <input id="weathercity" type="text" placeholder="Start typing a city" aria-label="City for the weather" maxlength="80" autocapitalize="words" autocorrect="off" autocomplete="off">
+      <div id="weathersug" class="wsug" role="listbox" aria-label="Matching cities"></div>
       <select id="weatherunit" aria-label="Temperature units" style="margin-top:8px"><option value="C">Celsius (&deg;C)</option><option value="F">Fahrenheit (&deg;F)</option></select></div>
     <p class="sub" id="weathermsg" style="margin:2px 0 6px">Leave the city empty for no weather. Only the city's weather is looked up (from Open-Meteo); nothing else leaves the Pi.</p>
     <label class="s-check" style="justify-content:space-between;margin-top:6px">Warn on the TV when the Pi runs hot<input id="heattv" type="checkbox" class="tg" role="switch"></label>
-      <p class="sub" style="margin:2px 0 0">A short line of text on the picture (from 78 °C, at most once a minute). It costs nothing to speak of.</p>
+      <p class="sub" style="margin:2px 0 0">A short line of text on the picture (from 78 °C, at most once a minute).</p>
     </div>
     <h3 class="shead hide" id="qrhead">QR code on the TV</h3>
     <div class="card s-form hide" id="qrbox">
@@ -1531,6 +1533,13 @@ function avatarGroup(members, big) {
 const groupLive = g => g.members.filter(m => m.live === true).length;
 const groupSites = g => [...new Set(g.members.map(m => m.source || 'Other'))].map(src => el('span', 'badge ' + src, src));  // the sites its streamers are on, like a solo streamer's badge
 const groupWho = g => g.members.map(m => m.name).join(', ');
+// The line under a group's chips, like "live for 3 h · Grand Theft Auto V" on a single streamer: how many are live and what they are playing.
+function groupLine(g) {
+  const on = g.members.filter(m => m.live === true), n = g.members.length;
+  if (!on.length) return g.members.some(m => m.live === false) ? 'Nobody is live right now' : '';
+  const games = [...new Set(on.map(m => m.game).filter(Boolean))];
+  return [on.length === n ? 'All ' + n + ' live' : on.length + ' of ' + n + ' live', games.length === 1 ? games[0] : games.length > 1 ? games.length + ' different games' : null].filter(Boolean).join(' · ');
+}
 async function playGroup(g) {  // replaces what is on the TV, so ask when something is playing
   if ((st.running || st.starting || st.wall) && !(await confirmSheet('Play ' + g.name + '?', 'This replaces what is on the TV now with ' + g.members.length + ' streams in multistream.', 'Play group'))) return;
   const r = await api('/api/groups/play', 'POST', g.id ? {id: g.id} : {urls: g.members.map(m => m.url)});
@@ -1546,7 +1555,7 @@ function drawGroups() {
     x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Delete group ' + g.name);
     x.onclick = async e => { e.stopPropagation(); if (await confirmSheet('Delete ' + g.name + '?', 'The group goes away. The streams stay in your favourites.', 'Delete', true)) { await api('/api/groups', 'DELETE', {id: g.id}); loadGroups(); } };
     head.append(avatarGroup(g.members, true), el('b', null, g.name));
-    b.append(head, el('span', 'gmembers', groupWho(g)), ...groupSites(g), ...(live ? [el('span', 'badge live', live + ' LIVE')] : []), x);
+    b.append(head, ...groupSites(g), ...(live ? [el('span', 'badge live', live + ' LIVE')] : []), el('span', 'sub livenote', groupLine(g)), x);
     b.querySelectorAll('.badge').forEach(e => { e.style.marginTop = '8px'; });
     b.onclick = () => playGroup(g);
     b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
@@ -1676,7 +1685,7 @@ function renderQuick() {
     if (it.group) {  // a saved group: its pictures stacked, its name, how many are live
       const b = el(style === 'cards' ? 'div' : 'div', style === 'cards' ? 'fav' : 'wstream'), n = groupLive(it);
       b.setAttribute('role', 'button'); b.tabIndex = 0; b.dataset.url = it.url; b.setAttribute('aria-label', 'Play group ' + it.name);
-      if (style === 'cards') { const head = el('div', 'fhead'); head.append(avatarGroup(it.members, true), el('b', null, it.name)); b.append(head, ...groupSites(it), el('span', 'badge live', n + ' LIVE'), el('span', 'sub livenote', groupWho(it))); }
+      if (style === 'cards') { const head = el('div', 'fhead'); head.append(avatarGroup(it.members, true), el('b', null, it.name)); b.append(head, ...groupSites(it), el('span', 'badge live', n + ' LIVE'), el('span', 'sub livenote', groupLine(it))); }
       else { const tags = el('span', 'wtags'); tags.append(...groupSites(it), el('span', 'badge live', n + ' LIVE')); b.append(avatarGroup(it.members), el('span', 'wn', it.name), tags); }
       b.onclick = () => playGroup(it);
       b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
@@ -2159,8 +2168,11 @@ function renderQrPick(s) {
     if (on === key) { const c = mk('span', {class: 'qc'}); c.innerHTML = ic('check'); b.append(c); }
     b.disabled = !!off; return b;
   };
+  const guests = ((typeof access === 'object' && access && access.invites) || []).map(g => row(g.id, 'qr', 'Guest link' + (g.label ? ': ' + g.label : ''),
+    g.can_qr ? (g.uses ? 'Partly used' : 'Not opened yet') + ' · expires in ' + inFuture(g.redeem_by) : 'Made before this was possible, so it can’t be shown',
+    async () => { const r = await api('/api/invites/' + g.id + '/link'); if (r && r.ok) qrSet({qr: true, qr_guest: r.url}); }, !g.can_qr));
   box.replaceChildren(row('off', 'x', 'Nothing', 'No QR code on the idle screen', () => qrSet({qr: false, qr_guest: ''})),
-    row('remote', 'qr', 'The remote', 'Scan to open this remote', () => qrSet({qr: true, qr_guest: ''})));
+    row('remote', 'qr', 'The remote', 'Scan to open this remote', () => qrSet({qr: true, qr_guest: ''})), ...guests);
 }
 function renderShell() {
   const s = shellInfo;
@@ -2206,7 +2218,23 @@ const qrSet = async body => { const r = await api('/api/shell', 'POST', body); i
 $('qrmode').onchange = () => qrSet({qr_mode: $('qrmode').value});
 $('launchertoggle').onchange = () => qrSet({launcher: $('launchertoggle').checked});
 const weatherSet = async body => { const r = await api('/api/shell', 'POST', body); if (r && r.ok !== false) { shellInfo = r; renderShell(); } };  // a refused city (r.ok false) shows its message and leaves the page as it was
-$('weathercity').onchange = () => weatherSet({weather_city: $('weathercity').value});
+// Typing lists matching cities; tapping one saves that exact place. Enter takes the first match, and emptying the box turns the weather off.
+let wTimer = 0, wPlaces = [];
+const wPick = async p => { $('weathersug').replaceChildren(); wPlaces = []; $('weathercity').value = p.name; await weatherSet({weather_place: p}); };
+$('weathercity').oninput = () => {
+  clearTimeout(wTimer);
+  const q = $('weathercity').value.trim();
+  if (q.length < 2) { $('weathersug').replaceChildren(); wPlaces = []; return; }
+  wTimer = setTimeout(async () => {
+    const r = await api('/api/weather/search?q=' + encodeURIComponent(q));
+    if (q !== $('weathercity').value.trim() || !r || !r.places) return;  // the box moved on while this was loading
+    wPlaces = r.places;
+    $('weathersug').replaceChildren(...(wPlaces.length ? wPlaces.map(p => { const b = mk('button', {type: 'button', role: 'option'}, p.name); b.onpointerdown = e => e.preventDefault(); b.onclick = () => wPick(p); return b; })
+      : [mk('span', {class: 'sub'}, 'No city found')]));
+  }, 300);
+};
+$('weathercity').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); if (wPlaces[0]) wPick(wPlaces[0]); else if ($('weathercity').value.trim()) weatherSet({weather_city: $('weathercity').value}); } };
+$('weathercity').onchange = () => { if (!$('weathercity').value.trim()) { $('weathersug').replaceChildren(); weatherSet({weather_city: ''}); } };
 $('weatherunit').onchange = () => weatherSet({weather_unit: $('weatherunit').value});
 $('scuse').onclick = () => { const n = $('scname').value.trim(); if (n) { $('shortcuturl').value = 'shortcuts://run-shortcut?name=' + encodeURIComponent(n); qrSet({shortcut_url: $('shortcuturl').value}); } };
 $('installurl').onchange = () => qrSet({install_url: $('installurl').value});
@@ -2422,6 +2450,7 @@ function renderAccess() {
     ...access.invites.map(i => mk('div', {class: 's-row', 'data-t': String(i.created || 0)}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✉'),
       mk('div', {class: 'grow'}, mk('b', {}, i.label || 'Unopened link'), ' ', mk('span', {class: 'pill'}, i.uses ? 'partly used' : 'not opened'),
         mk('span', {class: 'sub'}, (i.max_uses > 1 ? 'Opened on ' + (i.uses || 0) + ' of ' + i.max_uses + ' devices · ' : '') + hoursText(i.hours) + ' of access each · link expires in ' + inFuture(i.redeem_by))),
+      ...(i.can_qr ? [iBtn('qr', 'Show this link as a QR code', async () => { const r = await api('/api/invites/' + i.id + '/link'); if (r && r.ok) showQr(r.url, i.label || 'Guest link'); })] : []),  // links made before they could be rebuilt have no button
       iBtn('x', 'Revoke this link', async () => {
         if (!await confirmSheet('Revoke this link?', 'It stops working. Nobody who has not opened it yet will be able to.', 'Revoke', true)) return;
         await api('/api/invites/' + i.id, 'DELETE'); loadAccess();

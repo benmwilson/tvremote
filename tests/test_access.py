@@ -178,15 +178,26 @@ class AccessTest(unittest.TestCase):
         self.assertIsNone(access.redeem_invite(t2))
         self.assertFalse(access.revoke_invite("short"))  # ids must be the full 8 characters
 
-    def test_the_token_is_never_saved(self):
+    def test_the_token_is_never_saved_but_an_unopened_link_can_be_rebuilt(self):
         t = access.create_invite(1, "qr")
-        self.assertNotIn(t, open(access._path("invites.json")).read())
-        self.assertTrue(all("token" not in row for row in access.invites_pending()))
+        self.assertNotIn(t, open(access._path("invites.json")).read())  # the file holds the hash and a seed, never the link
+        self.assertTrue(all("token" not in row and "seed" not in row for row in access.invites_pending()))
+        iid = access.invites_pending()[-1]["id"]
+        self.assertTrue(access.invites_pending()[-1]["can_qr"])
+        self.assertEqual(access.invite_token(iid), t)  # derived again from the seed and the separate key file
+        self.assertIsNone(access.invite_token("short"))
+        key = open(access._path("invite.key"), "rb").read()
+        os.remove(access._path("invite.key"))  # without the key file the seed in invites.json rebuilds nothing useful
+        self.assertNotEqual(access.invite_token(iid), t)
+        open(access._path("invite.key"), "wb").write(key)
+        access.redeem_invite(t)  # a one-device link is gone once opened
+        self.assertIsNone(access.invite_token(iid))
 
     def test_which_guest_link_is_on_the_tv_is_found_from_its_url(self):
         t = access.create_invite(1, "tv")
         iid = access.invites_pending()[-1]["id"]
         self.assertEqual(access.invite_id_for_url("http://pi:8765/join/" + t), iid)
+        self.assertTrue(access.invites_pending()[-1]["can_qr"])
         self.assertIsNone(access.invite_id_for_url("http://pi:8765/"))
         access.redeem_invite(t)
         self.assertIsNone(access.invite_id_for_url("http://pi:8765/join/" + t))  # used up: no longer "the one on the TV"

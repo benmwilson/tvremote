@@ -1,7 +1,11 @@
 """Letting people in without handing out the password: requests for access (an admin approves one into an account) and
 one-time guest links (opening one starts a timed session that can control the TVs and nothing else).
-Invite tokens are stored hashed, so the file can't be used to get in. Files live in /data and are readable only by the app."""
+Invite tokens are never saved. Each one is derived (HMAC) from a random seed saved with the invite and a secret key kept in a separate file, and only
+the token's hash is the lookup key, so invites.json alone can't be used to get in. An admin can still show an unopened link's QR code again: the app
+derives the token again from the seed and the key. Files live in /data and are readable only by the app."""
+import base64
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -79,6 +83,27 @@ def _h(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def _key():
+    """The secret the invite tokens are derived with (its own file, so a copy of invites.json is not enough to rebuild a link)."""
+    path = _path("invite.key")
+    try:
+        with open(path, "rb") as f:
+            k = f.read()
+        if len(k) >= 32:
+            return k
+    except OSError:
+        pass
+    k = secrets.token_bytes(32)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(k)
+    return k
+
+
+def _token_for(seed):
+    return base64.urlsafe_b64encode(hmac.new(_key(), b"invite|" + seed.encode(), hashlib.sha256).digest()[:24]).decode().rstrip("=")
+
+
 MAX_DEVICES = 5
 
 
@@ -88,11 +113,12 @@ def create_invite(hours, label, max_uses=1, now=None):
     now = now or time.time()
     hours = max(1, min(int(hours), 24 * 30))
     max_uses = max(1, min(int(max_uses or 1), MAX_DEVICES))
-    token = secrets.token_urlsafe(24)
+    seed = secrets.token_hex(8)
+    token = _token_for(seed)
     with _lock:
         d = {k: {f: x for f, x in v.items() if f != "token"} for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now}  # also scrubs tokens saved by older versions
         d[_h(token)] = {"created": now, "redeem_by": now + REDEEM_WINDOW, "hours": hours, "label": (label or "").strip()[:30],
-                        "max_uses": max_uses, "uses": 0}  # the token is never saved: only its hash is the key, so the file cannot open a link
+                        "max_uses": max_uses, "uses": 0, "seed": seed}  # the token is not saved: its hash is the key, and the seed alone can't rebuild it
         _write("invites.json", d)
     return token
 
@@ -138,7 +164,7 @@ def clear_used(uid=None):
 
 def invites_pending(now=None):
     now = now or time.time()
-    return [{"id": k[:8], **{f: x for f, x in v.items() if f != "token"}} for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now]
+    return [{"id": k[:8], **{f: x for f, x in v.items() if f not in ("token", "seed")}, "can_qr": bool(v.get("seed"))} for k, v in _read("invites.json", {}).items() if v["redeem_by"] > now]  # never the token or its seed: only invite_token() hands a link out, one at a time
 
 
 def revoke_invite(iid):
@@ -157,3 +183,13 @@ def invite_id_for_url(url):
     token = (url or "").rsplit("/join/", 1)[-1] if "/join/" in (url or "") else ""
     return k[:8] if token and (k := _h(token)) in _read("invites.json", {}) else None
 
+
+def invite_token(iid):
+    """The token of an unopened invite (by the id the list shows), for showing its QR code again. None when it is gone, expired, or was made before
+    links could be rebuilt."""
+    if len(iid or "") < 8:
+        return None
+    for k, v in _read("invites.json", {}).items():
+        if k.startswith(iid) and v.get("seed") and v["redeem_by"] > time.time():
+            return _token_for(v["seed"])
+    return None
