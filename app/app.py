@@ -55,6 +55,7 @@ import emotes
 import mpvipc
 import multi
 import nowplaying
+import weather
 import pihealth
 from multi import cap
 import roku
@@ -2366,7 +2367,7 @@ SHELL_SHOT = "/tmp/tvremote-shell.png"
 def shell_state():
     running = bool(HOME and HOME.running())
     return {"enabled": bool(settings.get("shell")), "running": running, "qr": settings.get("qr", True) is not False,
-            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "install_url": settings.get("install_url", ""), "launcher": launcher_on(), "qr_guest": bool(qr_guest["url"]), "qr_guest_id": access.invite_id_for_url(qr_guest["url"]),
+            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "install_url": settings.get("install_url", ""), "launcher": launcher_on(), "weather_place": (settings.get("weather") or {}).get("name", ""), "weather_unit": settings.get("weather_unit", "C"), "qr_guest": bool(qr_guest["url"]), "qr_guest_id": access.invite_id_for_url(qr_guest["url"]),
             "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None,
             "props": HOME.props() if running and hasattr(HOME, "props") else None}  # what the window is doing, for debugging
 
@@ -2555,7 +2556,7 @@ def launcher_state():
     return (LAUNCHER.rows, LAUNCHER.row, LAUNCHER.col)
 
 
-TV_PATHS = ("/tv", "/tv/data", "/tv/focus", "/tv/img")
+TV_PATHS = ("/tv", "/tv/data", "/tv/focus", "/tv/info", "/tv/img")
 TV_KEY = secrets.token_urlsafe(16)  # new at every start; only the browser the app opens on the TV is given it
 TV_THUMBS = 6  # tiles with a stream picture; the rest are cards with the profile picture (the Pi's browser can't draw many)
 _tv_imgs = {}   # id -> picture address, from the last /tv/data (only these can be fetched through /tv/img)
@@ -2638,6 +2639,14 @@ def tv_data():
     return jsonify(rows=rows, row=st[1], col=st[2])
 
 
+@app.get("/tv/info")
+def tv_info():
+    """The clock's time zone (the Pi's, or the weather place's) and the weather, for the page's header."""
+    tv_viewer_ok()
+    w = weather.current(settings.get("weather"), settings.get("weather_unit", "C"))
+    return jsonify(offset=(w or {}).get("offset", time.localtime().tm_gmtoff), weather=w)
+
+
 @app.get("/tv/focus")
 def tv_focus():
     """Just where the focus ring is: the TV's page asks for this several times a second."""
@@ -2717,6 +2726,21 @@ def api_shell_set():
     """Turn the TV's home screen on or off (off shows the Pi desktop again). The app and this remote keep running."""
     admin_only()  # the switch lives in the admin part of Settings; it also stops what is playing
     body = request.get_json(silent=True) or {}
+    if "weather_city" in body or "weather_unit" in body:  # the weather in the launcher's header: a city name (blank turns it off) and °C or °F
+        if "weather_unit" in body:
+            settings["weather_unit"] = "F" if body["weather_unit"] == "F" else "C"
+        if "weather_city" in body:
+            city = str(body["weather_city"] or "").strip()
+            if city:
+                place = weather.geocode(city)
+                if not place:
+                    return jsonify(ok=False, error="Couldn't find that city (or the weather service can't be reached)."), 400
+                settings["weather"] = place
+            else:
+                settings.pop("weather", None)
+        save_settings()
+        if len(body) == 1 or set(body) <= {"weather_city", "weather_unit"}:
+            return jsonify(shell_state())
     if "launcher" in body:  # the launcher as the TV's home screen between streams
         settings["launcher"] = bool(body["launcher"])
         save_settings()

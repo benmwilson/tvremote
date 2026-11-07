@@ -2,8 +2,19 @@
 <html lang="en"><head><meta charset="utf-8"><title>TV home</title>
 <style>
 :root{--bg:#0b0e14;--card:#151a26;--fg:#e8ecf4;--dim:#8d97ab;--ring:#4da3ff;--live:#e0243a}
-html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--fg);font:600 22px system-ui,sans-serif}
-#rows{position:absolute;left:40px;top:40px;width:1840px;transition:transform .3s ease}
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-gradient(1200px 500px at 15% -10%,#16264a 0%,transparent 70%),radial-gradient(900px 500px at 100% 0%,#1d1840 0%,transparent 65%),var(--bg);color:var(--fg);font:600 22px system-ui,sans-serif}
+#head{position:absolute;left:40px;right:40px;top:26px;height:84px;display:flex;align-items:center;gap:20px;z-index:3}
+#head img{width:60px;height:60px;border-radius:14px}
+#head .brand{font-size:34px;font-weight:800;letter-spacing:.3px}
+#head .grow{flex:1}
+#wx{display:none;align-items:center;gap:14px;padding:8px 20px;border-radius:18px;background:#ffffff0d}
+#wx svg{width:46px;height:46px}
+#wx .t{font-size:40px;font-weight:800;line-height:1}
+#wx .s{font-size:16px;color:var(--dim);line-height:1.3}
+#clock{text-align:right;line-height:1.1}
+#clock .time{font-size:56px;font-weight:800;letter-spacing:1px}
+#clock .date{font-size:20px;color:var(--dim)}
+#rows{position:absolute;left:40px;top:120px;width:1840px;transition:transform .3s ease}
 .row{height:350px;position:relative;overflow:hidden}
 .row h2{margin:0 0 0 22px;font-size:26px;color:var(--dim);font-weight:700}
 .strip{display:flex;gap:22px;transition:transform .25s ease;padding:16px 24px 24px 22px}
@@ -23,6 +34,9 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:var(--b
 .empty[hidden]{display:none}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:var(--dim)}
 </style></head><body>
+<div id="head"><img src="/logo.svg" alt=""><span class="brand">TV Remote</span><span class="grow"></span>
+  <div id="wx"><span id="wxi"></span><div><div class="t" id="wxt"></div><div class="s" id="wxs"></div></div></div>
+  <div id="clock"><div class="time" id="ct"></div><div class="date" id="cd"></div></div></div>
 <div id="rows"></div><div class="empty" id="empty" hidden>Nothing here yet. Add favourites on your phone.</div>
 <script>
 const K = new URLSearchParams(location.search).get('k') || '';
@@ -51,7 +65,7 @@ function focus() {
   const strip = r.querySelector('.strip'), cards = strip.children, c = cards[cur.col];
   if (c) c.classList.add('f');
   strip.style.transform = 'translateX(' + -Math.max(0, cur.col - 4) * 352 + 'px)';
-  document.getElementById('rows').style.transform = 'translateY(' + -Math.max(0, cur.row - 2) * 350 + 'px)';
+  document.getElementById('rows').style.transform = 'translateY(' + -Math.max(0, cur.row - 1) * 350 + 'px)';
 }
 function draw(d) {
   const s = JSON.stringify(d.rows);
@@ -64,5 +78,34 @@ function draw(d) {
 }
 async function tick() { try { draw(await (await fetch(q('/tv/data'), {cache: 'no-store'})).json()); } catch (e) {} }
 async function focusTick() { try { const f = await (await fetch(q('/tv/focus'), {cache: 'no-store'})).json(); if (f.row !== cur.row || f.col !== cur.col) { cur = f; focus(); } } catch (e) {} }
-tick(); setInterval(tick, 2000); setInterval(focusTick, 150);
+// the header: the clock follows the Pi's (or the weather place's) time zone, the weather comes from the app (never from the internet directly)
+let off = 0;
+const ICON = {
+  sun: '<circle cx="24" cy="24" r="9" fill="#ffc83d"/><g stroke="#ffc83d" stroke-width="3" stroke-linecap="round"><path d="M24 4v6M24 38v6M4 24h6M38 24h6M10 10l4 4M34 34l4 4M10 38l4-4M34 14l4-4"/></g>',
+  moon: '<path d="M32 30A14 14 0 0 1 18 10a14 14 0 1 0 14 20z" fill="#cfd8ff"/>',
+  cloud: '<path d="M14 36h20a8 8 0 0 0 0-16 11 11 0 0 0-21 3 7 7 0 0 0 1 13z" fill="#aab6cf"/>',
+  rain: '<path d="M14 30h20a8 8 0 0 0 0-16 11 11 0 0 0-21 3 7 7 0 0 0 1 13z" fill="#8c9ab8"/><g stroke="#5aa9ff" stroke-width="3" stroke-linecap="round"><path d="M17 35l-2 7M25 35l-2 7M33 35l-2 7"/></g>',
+  snow: '<path d="M14 30h20a8 8 0 0 0 0-16 11 11 0 0 0-21 3 7 7 0 0 0 1 13z" fill="#aab6cf"/><g fill="#fff"><circle cx="16" cy="39" r="2.5"/><circle cx="25" cy="42" r="2.5"/><circle cx="34" cy="39" r="2.5"/></g>',
+  storm: '<path d="M14 28h20a8 8 0 0 0 0-16 11 11 0 0 0-21 3 7 7 0 0 0 1 13z" fill="#7d8aa8"/><path d="M26 28l-6 9h5l-3 8 9-11h-5z" fill="#ffc83d"/>',
+  fog: '<g stroke="#aab6cf" stroke-width="4" stroke-linecap="round"><path d="M8 18h32M12 26h28M8 34h32"/></g>'
+};
+const iconFor = (c, day) => c === 0 ? (day ? 'sun' : 'moon') : c <= 2 ? (day ? 'sun' : 'moon') : c === 3 ? 'cloud' : c <= 48 ? 'fog' : c <= 67 || (c >= 80 && c <= 82) ? 'rain' : c <= 77 || c === 85 || c === 86 ? 'snow' : 'storm';
+function clock() {
+  const d = new Date(Date.now() + off * 1000);  // read with the UTC getters: the offset is already added
+  const h = d.getUTCHours(), m = String(d.getUTCMinutes()).padStart(2, '0');
+  document.getElementById('ct').textContent = (h % 12 || 12) + ':' + m + ' ' + (h < 12 ? 'AM' : 'PM');
+  document.getElementById('cd').textContent = d.toLocaleDateString('en-CA', {weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC'});
+}
+async function info() {
+  try {
+    const j = await (await fetch(q('/tv/info'), {cache: 'no-store'})).json(); off = j.offset || 0; clock();
+    const w = j.weather, box = document.getElementById('wx'); box.style.display = w ? 'flex' : 'none';
+    if (w) {
+      document.getElementById('wxi').innerHTML = '<svg viewBox="0 0 48 48">' + ICON[iconFor(w.code, w.day)] + '</svg>';
+      document.getElementById('wxt').textContent = w.temp + '°' + w.unit;
+      document.getElementById('wxs').textContent = 'H ' + w.hi + '°  L ' + w.lo + '° · ' + w.place.split(',')[0];
+    }
+  } catch (e) {}
+}
+tick(); info(); setInterval(tick, 2000); setInterval(focusTick, 150); setInterval(info, 300000); setInterval(clock, 10000);
 </script></body></html>

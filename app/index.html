@@ -831,6 +831,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <p class="sub" id="pihelp"></p>
       <label class="s-check" style="justify-content:space-between;margin-top:6px">Launcher on the TV between streams<input id="launchertoggle" type="checkbox" class="tg" role="switch"></label>
     <p class="sub" style="margin:2px 0 6px">Who is live, your favourites, groups and recents as tiles on the TV. Move around it with the pad on the remote (an IR receiver can be added later).</p>
+    <label class="s-check" style="justify-content:space-between;margin-top:6px">Weather in the launcher's header<span class="s-out" style="gap:6px"><input id="weathercity" type="text" placeholder="City, e.g. Vancouver" maxlength="80" style="width:170px"><select id="weatherunit" aria-label="Units"><option value="C">&deg;C</option><option value="F">&deg;F</option></select></span></label>
+    <p class="sub" id="weathermsg" style="margin:2px 0 6px">Leave the city empty for no weather. Only the city's weather is looked up (from Open-Meteo); nothing else leaves the Pi.</p>
     <label class="s-check" style="justify-content:space-between;margin-top:6px">Warn on the TV when the Pi runs hot<input id="heattv" type="checkbox" class="tg" role="switch"></label>
       <p class="sub" style="margin:2px 0 0">A short line of text on the picture (from 78 °C, at most once a minute). It costs nothing to speak of.</p>
     </div>
@@ -2173,6 +2175,8 @@ function renderShell() {
   if (document.activeElement !== $('shortcuturl')) $('shortcuturl').value = s.shortcut_url || '';
   $('qrshortcut').classList.toggle('hide', mode !== 'shortcut'); $('scname-wrap').classList.toggle('hide', mode !== 'shortcut'); $('qrinstall').classList.toggle('hide', mode !== 'install'); if (document.activeElement !== $('installurl')) $('installurl').value = s.install_url || '';
   $('launchertoggle').checked = !!s.launcher;
+  if (document.activeElement !== $('weathercity')) $('weathercity').value = s.weather_place || '';
+  $('weatherunit').value = s.weather_unit || 'C';
   $('qropts').classList.toggle('hide', s.qr === false || !!s.qr_guest);  // these only matter while the remote's own code is the one on the TV
   $('qrhelp').textContent = mode === 'install'
     ? (s.install_url ? 'Scanning on an iPhone offers to add the shortcut.' : 'Paste the shortcut iCloud link above. Until then the QR code opens this remote.')
@@ -2198,6 +2202,9 @@ async function loadShell() {
 const qrSet = async body => { const r = await api('/api/shell', 'POST', body); if (r) { shellInfo = r; renderShell(); } return r; };
 $('qrmode').onchange = () => qrSet({qr_mode: $('qrmode').value});
 $('launchertoggle').onchange = () => qrSet({launcher: $('launchertoggle').checked});
+const weatherSet = async body => { const r = await api('/api/shell', 'POST', body); if (r && r.ok !== false) { shellInfo = r; renderShell(); } };  // a refused city (r.ok false) shows its message and leaves the page as it was
+$('weathercity').onchange = () => weatherSet({weather_city: $('weathercity').value});
+$('weatherunit').onchange = () => weatherSet({weather_unit: $('weatherunit').value});
 $('scuse').onclick = () => { const n = $('scname').value.trim(); if (n) { $('shortcuturl').value = 'shortcuts://run-shortcut?name=' + encodeURIComponent(n); qrSet({shortcut_url: $('shortcuturl').value}); } };
 $('installurl').onchange = () => qrSet({install_url: $('installurl').value});
 $('installqr').onclick = () => $('installurl').value.trim() ? showQr($('installurl').value.trim(), 'Add the shortcut') : null;

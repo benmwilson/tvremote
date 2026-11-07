@@ -115,3 +115,31 @@ class FocusAndAvatarTests(unittest.TestCase):
         with mock.patch.object(server.kick, "avatars", return_value={"omie": "https://p/omie"}), mock.patch.object(server.twitch, "users", return_value={}):
             server.fill_avatars(items)
         self.assertEqual([i.get("avatar") for i in items], ["https://p/omie", "keep"])
+
+
+class WeatherTests(unittest.TestCase):
+    def test_geocode_and_current_read_open_meteo_and_remember(self):
+        import weather
+        weather._cache.clear()
+        def get(url):
+            if "geocoding" in url:
+                return {"results": [{"name": "Vancouver", "admin1": "British Columbia", "country_code": "CA", "latitude": 49.2827, "longitude": -123.1207}]}
+            return {"current": {"temperature_2m": 9.6, "weather_code": 61, "is_day": 0}, "daily": {"temperature_2m_max": [11.2], "temperature_2m_min": [6.4]}, "utc_offset_seconds": -28800}
+        with mock.patch.object(weather, "_get", side_effect=get) as g:
+            place = weather.geocode(" Vancouver ")
+            self.assertEqual(place, {"name": "Vancouver, British Columbia, CA", "lat": 49.283, "lon": -123.121})
+            w = weather.current(place, "C")
+            self.assertEqual((w["temp"], w["hi"], w["lo"], w["code"], w["day"], w["offset"]), (10, 11, 6, 61, False, -28800))
+            weather.current(place, "C")
+            self.assertEqual(g.call_count, 2)  # the second look is from memory
+        self.assertIsNone(weather.geocode(""))
+        with mock.patch.object(weather, "_get", return_value={"results": []}):
+            self.assertIsNone(weather.geocode("zzzz"))
+        self.assertIsNone(weather.current(None))
+
+    def test_a_stale_answer_beats_none_when_the_service_is_down(self):
+        import weather, time
+        place = {"name": "X", "lat": 1.0, "lon": 2.0}
+        weather._cache[(1.0, 2.0, "C")] = (time.time() - 9999, {"temp": 3})
+        with mock.patch.object(weather, "_get", side_effect=OSError):
+            self.assertEqual(weather.current(place, "C"), {"temp": 3})
