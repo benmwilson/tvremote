@@ -310,6 +310,20 @@ def api_auth():
                    tour_seen=None if g.user == accounts.GUEST else accounts.tour_seen(g.user), **info)  # (a guest's is kept on their own phone)
 
 
+@app.get("/api/notices")
+def api_notices():
+    """What needs an admin's attention, for the bell on Settings: [{id, tab, count, text}] (nothing for anyone else). Add a line here for each new kind."""
+    if accounts.role(g.user) != "admin":
+        return jsonify([])
+    out = []
+    n = len(access.requests_pending())
+    if n:
+        out.append({"id": "requests", "tab": "people", "count": n, "text": f"{n} access request{'s' if n != 1 else ''} waiting"})
+    if _moved["v"]:
+        out.append({"id": "moved", "tab": "tvs", "count": 1, "text": "The Pi may have moved to another TV"})
+    return jsonify(out)
+
+
 @app.post("/api/account/tour")
 def api_account_tour():
     """The first-run tour has been offered to this account: it is not started by itself again (Settings > Help can replay it)."""

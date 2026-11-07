@@ -92,3 +92,24 @@ class TvLimitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoticesTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir)):
+            p.start(); self.addCleanup(p.stop)
+        throttle.fails.clear()
+        self.admin = founder_client(server)
+
+    def test_the_bell_counts_requests_for_admins_only(self):
+        self.assertEqual(self.admin.get("/api/notices").get_json(), [])
+        access._last_by_ip.clear()
+        access.add_request("Kim", "hi", "5.6.7.8")
+        n = self.admin.get("/api/notices").get_json()
+        self.assertEqual([(x["id"], x["tab"], x["count"]) for x in n], [("requests", "people", 1)])
+        accounts.add("sam", "pass-word1", "user")
+        c = server.app.test_client()
+        c.post("/login", data={"username": "sam", "password": "pass-word1"})
+        self.assertEqual(c.get("/api/notices").get_json(), [])  # not theirs to act on
