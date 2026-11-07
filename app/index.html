@@ -1378,7 +1378,7 @@ function render() {
   $('src').className = 'badge ' + (run || st.starting ? (st.source || '') : '');
   $('live').classList.toggle('hide', !(run && st.live));
   const swapping = !run && !!st.starting && !!st.wall;  // a window of the multistream is restarting (a swap, a new layout): the others keep playing
-  $('title').textContent = run ? (st.title || st.url) : swapping ? (chanName(st.url || '') || 'Main stream') : st.starting ? 'Starting…' : st.error ? 'Playback stopped' : ext ? ext.app : 'Nothing playing';
+  $('title').textContent = run ? (st.title || st.url) : swapping ? (chanName(st.url || '') || 'Main stream') : st.starting ? 'Starting…' : st.error ? 'Playback stopped' : ext ? (ext.title || ext.app) : 'Nothing playing';
   const extCtl = !!ext && !!ext.controllable;  // a pause button only while that app's player is really open
   const nowUrl = run || swapping ? st.url : '';
   if (nowUrl !== nowAvFor) {  // the streamer's picture and a link to their page
@@ -1441,7 +1441,7 @@ function render() {
   setBtn($('pp'), st.paused ? 'play' : 'pause', st.paused ? 'Paused' : '');
   $('seek').classList.toggle('hide', !run || st.live);
   if (!up && !starting && !st.error) $('meta').textContent = ext
-    ? (extCtl ? (ext.paused ? 'Paused' : 'Playing') + (ext.position != null ? ' at ' + fmt(ext.position) : '') : 'Open') + ' on the TV itself, not through this remote. Starting something here will switch the TV to ' + (((targets.find(t => t.id === target) || {}).kind === 'chromecast') ? 'the Chromecast' : 'the Pi') + '.'
+    ? (ext.channel ? ext.channel + ' on ' + ext.app + '. ' : '') + (extCtl ? (ext.paused ? 'Paused' : 'Playing') + (ext.position != null ? ' at ' + fmt(ext.position) : '') : 'Open') + ' on the TV itself, not through this remote. Starting something here will switch the TV to ' + (((targets.find(t => t.id === target) || {}).kind === 'chromecast') ? 'the Chromecast' : 'the Pi') + '.'
     : 'Pick something below, or open a favourite.';
   $('extpp').classList.toggle('hide', !extCtl);
   setBtn($('extpp'), ext && ext.paused ? 'play' : 'pause', ext && ext.paused ? 'Paused' : '');
@@ -3589,7 +3589,7 @@ function cardEl(c, onTap, extra) {
   const sub = [[c.brand, size].filter(Boolean).join(' '), c.model].filter(Boolean).join(' · ');
   const n = c.now;
   const ms = !!(n && n.streams && n.streams.length > 1);  // several streams on the screen
-  const line = !c.reachable ? "Can't reach this TV" : ms ? 'Multistream \u00b7 ' + n.streams.length + ' streams' : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.external ? (c.external.paused ? 'Paused on the TV: ' : 'On the TV: ') + c.external.app + (c.external.position != null ? ' · ' + fmt(c.external.position) : '') : c.error ? "Couldn't play: " + c.error : c.kind === 'tv' ? 'TV controls only' : 'Nothing playing';
+  const line = !c.reachable ? "Can't reach this TV" : ms ? 'Multistream \u00b7 ' + n.streams.length + ' streams' : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.external ? (c.external.paused ? 'Paused on the TV: ' : 'On the TV: ') + c.external.app + (c.external.title ? ' · ' + c.external.title : '') + (c.external.position != null ? ' · ' + fmt(c.external.position) : '') : c.error ? "Couldn't play: " + c.error : c.kind === 'tv' ? 'TV controls only' : 'Nothing playing';
   b.append(head, el('div', 'sub', [sub, c.connection].filter(Boolean).join(' · ')), el('div', 'now', line));
   if (c.reachable && ms) {  // one row per stream: who, which site, live or not, what they are playing, and whether it has sound
     const list = el('div', 'cstreams');

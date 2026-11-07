@@ -52,6 +52,7 @@ import dockerctl
 import emotes
 import mpvipc
 import multi
+import nowplaying
 import pihealth
 from multi import cap
 import roku
@@ -2241,6 +2242,7 @@ def fetch_roku(tv_id):
                 info["media"] = roku.media(ROKU_IPS[tv_id])
             except (roku.RokuError, OSError):
                 pass
+        nowplaying.sync(tv_id, ROKU_IPS[tv_id], external_app(info))  # YouTube: listen for the title while somebody is looking
         if info.get("power") != "PowerOn":
             _woken.pop(tv_id, None)
         if was_on and info.get("power") != "PowerOn":  # went to standby (the TV's own remote, or the app)
@@ -2273,8 +2275,11 @@ def external_now(tv_id):
     pos = (r.get("media") or {}).get("position")
     if pos is not None and state == "play":
         pos += time.time() - _roku.get(tv_id, (time.time(), 0))[0]  # the answer is a few seconds old: carry it on while it plays
-    return {"app": app, "state": state, "paused": state == "pause", "controllable": state in ("play", "pause", "buffer"),
-            "duration": (r.get("media") or {}).get("duration"), "position": pos}
+    out = {"app": app, "state": state, "paused": state == "pause", "controllable": state in ("play", "pause", "buffer"),
+           "duration": (r.get("media") or {}).get("duration"), "position": pos}
+    if has_request_context() and accounts.role(getattr(g, "user", None)) == "admin":  # what someone watches on their own TV is for admins only
+        out.update(nowplaying.get(tv_id, app) or {})
+    return out
 
 
 def roku_details(tv_id):
