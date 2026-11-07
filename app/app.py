@@ -66,7 +66,7 @@ import shell
 import targets
 import tlscallback
 import tvconfig
-from sessions import SESSION_DAYS, drop_guest, drop_session, drop_user_sessions, guest_sessions, new_session, session_user
+from sessions import SESSION_DAYS, can_reinstate, drop_guest, drop_session, drop_user_sessions, guest_sessions, new_session, session_user
 
 try:
     from cast import CastTarget
@@ -4163,7 +4163,8 @@ def account_password():
 @app.get("/api/access")
 def access_state():
     admin_only()
-    return jsonify(requests=access.requests_pending(), invites=access.invites_pending(), guests=guest_sessions(), used=access.invites_used())
+    return jsonify(requests=access.requests_pending(), invites=access.invites_pending(), guests=guest_sessions(),
+                   used=[{**u, "can_reinstate": can_reinstate(u["id"])} for u in access.invites_used()])
 
 
 def slug_name(text):
@@ -4248,6 +4249,15 @@ def guest_history_remove(uid):
 def guest_revoke(gid):
     admin_only()
     drop_guest(gid)
+    return access_state()
+
+
+@app.post("/api/guests/<entry>/reinstate")
+def guest_reinstate(entry):
+    """Undo a revoke: the guest's login works again for the time it had left. (`entry` is the id of that opening of the link, as in the history list.)"""
+    admin_only()
+    if not sessions.reinstate_guest(entry):
+        return jsonify(ok=False, error="That access has run out or can't be brought back."), 404
     return access_state()
 
 

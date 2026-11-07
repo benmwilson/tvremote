@@ -113,3 +113,29 @@ class NoticesTests(unittest.TestCase):
         c = server.app.test_client()
         c.post("/login", data={"username": "sam", "password": "pass-word1"})
         self.assertEqual(c.get("/api/notices").get_json(), [])  # not theirs to act on
+
+
+class ReinstateTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir)):
+            p.start(); self.addCleanup(p.stop)
+        throttle.fails.clear()
+        server.sessions.revoked.clear()
+        self.admin = founder_client(server)
+
+    def test_a_revoked_guest_can_be_reinstated_with_the_same_login(self):
+        url = self.admin.post("/api/invites", json={"hours": 2, "label": "Pat"}).get_json()["url"]
+        guest = server.app.test_client()
+        guest.post("/join/" + url.rsplit("/join/", 1)[1])
+        self.assertEqual(guest.get("/api/auth").get_json()["guest"], True)
+        gid = self.admin.get("/api/access").get_json()["guests"][0]["id"]
+        entry = self.admin.get("/api/access").get_json()["guests"][0]["entry"]
+        self.admin.delete("/api/guests/" + gid)
+        self.assertFalse(guest.get("/api/auth", headers={"Accept": "application/json"}).get_json(silent=True) and guest.get("/api/auth").get_json().get("guest"))  # signed out
+        used = self.admin.get("/api/access").get_json()["used"]
+        self.assertTrue(next(u for u in used if u["id"] == entry)["can_reinstate"])
+        self.assertEqual(self.admin.post("/api/guests/" + entry + "/reinstate").status_code, 200)
+        self.assertEqual(guest.get("/api/auth").get_json()["guest"], True)  # the same phone, no new link
+        self.assertEqual(self.admin.post("/api/guests/" + entry + "/reinstate").status_code, 404)  # nothing left to bring back

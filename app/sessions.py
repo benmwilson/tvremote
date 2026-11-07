@@ -103,17 +103,62 @@ def guest_sessions():
             if isinstance(v, dict) and v.get("user") == accounts.GUEST and v["exp"] > time.time() and k not in revoked]
 
 
+def _rev_file():
+    return os.path.join(_dir(), "guest_revoked.json")
+
+
+def _rev_load():
+    try:
+        with open(_rev_file()) as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
 def drop_guest(gid):
+    """End a guest's access. The session is kept aside (hashed, like every session) until it would have run out anyway, so an admin can reinstate it."""
     activity.forget("guest:" + gid)
     with lock:
         d = load()
         gone = [k for k, v in d.items() if len(gid) >= 8 and k.startswith(gid) and isinstance(v, dict) and v.get("user") == accounts.GUEST]
+        if gone:
+            kept = {k: v for k, v in _rev_load().items() if _exp(v) > time.time()}
+            for k in gone:
+                kept[k] = d[k]
+            try:
+                store.write_json(_rev_file(), dict(list(kept.items())[-20:]), 0o600)
+            except OSError:
+                pass  # then it simply can't be reinstated
         for k in gone:
             del d[k]
             revoked.add(k)
         if gone:
             save(d)
         return bool(gone)
+
+
+def can_reinstate(entry):
+    """Is there a revoked guest session for this opening of a link that has not yet run out?"""
+    return bool(entry) and any(isinstance(v, dict) and v.get("entry") == entry and _exp(v) > time.time() for v in _rev_load().values())
+
+
+def reinstate_guest(entry):
+    """Give a revoked guest their access back (the same login, so their phone works again), for the time it had left. True when done."""
+    with lock:
+        rev = _rev_load()
+        hit = next((k for k, v in rev.items() if isinstance(v, dict) and v.get("entry") == entry and _exp(v) > time.time()), None)
+        if hit is None:
+            return False
+        d = {k: v for k, v in load().items() if _exp(v) > time.time()}
+        d[hit] = rev.pop(hit)
+        revoked.discard(hit)
+        save(d)
+        try:
+            store.write_json(_rev_file(), rev, 0o600)
+        except OSError:
+            pass
+        return True
 
 
 def drop_user_sessions(name):

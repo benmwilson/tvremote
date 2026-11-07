@@ -2706,6 +2706,7 @@ function renderAccess() {
     ...used.map(u => mk('div', {class: 's-row', style: 'opacity:.75', 'data-t': String(u.opened || 0)}, mk('div', {class: 'avatar', 'aria-hidden': 'true'}, '✓'),
       mk('div', {class: 'grow'}, mk('b', {}, u.label || 'Guest link'), ' ', mk('span', {class: 'pill'}, u.ended ? 'ended' : 'revoked'),
         mk('span', {class: 'sub'}, 'Opened ' + ago(u.opened) + ' · ' + hoursText(u.hours) + ' of access')),
+      ...(u.can_reinstate ? [iBtn('refresh', 'Reinstate this access', async e => { await busy(e.currentTarget, () => api('/api/guests/' + u.id + '/reinstate', 'POST')); loadAccess(); })] : []),
       iBtn('x', 'Remove this from the list', async () => {
         if (!await confirmSheet('Remove from the list?', 'This only clears it from the list. Nothing else changes.', 'Remove')) return;
         await api('/api/guest-history/' + u.id, 'DELETE'); loadAccess();
