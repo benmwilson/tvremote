@@ -1417,7 +1417,7 @@ COMMANDS = {
 
 
 _vol_saved = {"t": 0.0}
-_vol_osd = {"t": 0.0}  # when the volume notice was last drawn: every redraw of the on-screen text costs the Pi frames, so a drag draws it a few times a second
+_vol_osd = {"t": 0.0}  # when the volume notice was last drawn: every redraw of the on-screen text costs the Pi frames, so a drag draws it twice a second at most
 
 
 def resume_live(paused, duration, now=None):
@@ -1517,7 +1517,7 @@ def api_cmd():
             _vol_saved["t"] = time.time()
             save_settings()
     if ok and action in ("volume", "volume_delta", "mute", "unmute", "mute_on", "mute_off"):
-        if action != "volume" or data.get("final") or time.time() - _vol_osd["t"] > 0.3:  # a drag's last value always shows
+        if action != "volume" or data.get("final") or time.time() - _vol_osd["t"] > 0.5:  # measured on the Pi: each redraw of the text costs about one dropped frame at 1080p60  # a drag's last value always shows
             _vol_osd["t"] = time.time()
             osd_volume(sel_info()[3])  # in the window of the stream being controlled
     return jsonify(ok=ok)
