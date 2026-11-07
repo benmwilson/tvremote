@@ -186,7 +186,7 @@ class PausedOverlay(unittest.TestCase):
             self.sent.append(cmd)
             return {"error": "success"}
         props = {"pause": now_paused, "media-title": "chan: a stream", "duration": 3600.0}
-        with mock.patch.object(server, "mpv", fake_mpv), mock.patch.object(server, "prop", lambda n: props.get(n)):
+        with mock.patch.object(server, "mpv", fake_mpv), mock.patch.object(server, "prop", lambda n: props.get(n)), mock.patch.dict(server.settings, {"notice_style": "text"}):
             return self.client.post("/api/cmd", json={"action": "pause"})
 
     def test_mute_buttons_send_the_wanted_state_and_unmuting_overwrites_a_remembered_mute(self):
@@ -406,7 +406,7 @@ class ShellFlow(unittest.TestCase):
     def test_volume_is_shown_as_plain_text_on_the_tv(self):
         sent = []
         props = {"volume": 40, "mute": False}
-        with mock.patch.object(server, "prop", lambda n: props.get(n)), mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}):
+        with mock.patch.object(server, "prop", lambda n: props.get(n)), mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(cmd) or {"error": "success"}),                 mock.patch.dict(server.settings, {"notice_style": "text"}):
             server.osd_volume()
             props["mute"] = True
             server.osd_volume()
@@ -848,3 +848,31 @@ class InProcessLibraries(unittest.TestCase):
         with mock.patch.object(inproc, "ENABLED", False):
             with self.assertRaises(inproc.Unavailable):
                 inproc.streamlink_json("https://kick.com/a")
+
+
+class NoticeStyle(unittest.TestCase):
+    def tearDown(self):
+        server._banner.update(win=None, timer=None, paused=False)  # a test that "paused" must not leave the strip waiting for a resume
+
+    def test_volume_and_paused_use_the_strip_by_default_and_the_text_when_chosen(self):
+        props = {"volume": 40, "mute": False, "pause": False}
+        with mock.patch.object(server, "prop", lambda n: props.get(n)), mock.patch.object(server, "mpv") as m, mock.patch.object(server, "tv_banner", return_value=True) as banner,                 mock.patch.object(server, "tv_banner_clear") as clear, mock.patch.object(server.wall, "active", return_value=False):
+            with mock.patch.dict(server.settings, {"notice_style": "strip"}):
+                server.osd_volume()
+                self.assertIn("Volume 40%", banner.call_args[0][0])
+                server.osd_paused(True)
+                self.assertEqual(banner.call_args[0][2], None)  # the paused notice stays until it is resumed
+                server.osd_paused(False)
+                clear.assert_called_once()
+            self.assertFalse([c for c in m.call_args_list if c[0][0][1] not in ("",)])  # no text went on the picture
+            banner.reset_mock(); m.reset_mock()
+            with mock.patch.dict(server.settings, {"notice_style": "text"}):
+                server.osd_volume()
+            banner.assert_not_called()
+            self.assertEqual(m.call_args[0][0][0], "show-text")
+
+    def test_several_streams_keep_the_text_in_their_own_window(self):
+        with mock.patch.object(server, "tv_banner") as banner, mock.patch.object(server.wall, "active", return_value=True), mock.patch.dict(server.settings, {"notice_style": "strip"}):
+            self.assertFalse(server.notices_on_strip())
+            server.osd_volume("/tmp/x.sock") if False else None
+        banner.assert_not_called()

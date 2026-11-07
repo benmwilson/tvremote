@@ -846,7 +846,10 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <select id="weatherunit" aria-label="Temperature units" style="margin-top:8px"><option value="C">Celsius (&deg;C)</option><option value="F">Fahrenheit (&deg;F)</option></select></div>
     <p class="sub" id="weathermsg" style="margin:2px 0 6px">Leave the city empty for no weather. Only the city's weather is looked up (from Open-Meteo); nothing else leaves the Pi.</p>
     <label class="s-check" style="justify-content:space-between;margin-top:6px">Warn on the TV when the Pi runs hot<input id="heattv" type="checkbox" class="tg" role="switch"></label>
-      <p class="sub" style="margin:2px 0 0">A short line of text on the picture (from 78 °C, at most once a minute).</p>
+      <p class="sub" style="margin:2px 0 0">A strip across the top of the screen (from 78 °C, at most once a minute). The volume and paused notices use the same strip for a single full-screen stream.</p>
+      <button id="bannertest" type="button" style="margin-top:8px;width:100%">Show a test warning on the TV</button>
+      <label class="s-cap" for="noticestyle" style="display:block;margin-top:12px">Volume and paused notices</label>
+      <select id="noticestyle" aria-label="How volume and paused notices look on the TV"><option value="strip">Strip across the top</option><option value="text">Text on the picture</option></select>
     </div>
     <h3 class="shead hide" id="qrhead">QR code on the TV</h3>
     <div class="card s-form hide" id="qrbox">
@@ -2515,13 +2518,15 @@ async function loadSettings() {
 async function loadConfig() {  // app settings an admin can change; more (and per-role permissions) can be added here
   const c = await fetch('/api/config').then(r => r.json()).catch(() => null);
   if (!c || c.ok === false) return;
-  $('cfgq').value = String(c.phone_quality); $('cfgguests').checked = !!c.phone_guests; $('heattv').checked = !!c.heat_tv;
+  $('cfgq').value = String(c.phone_quality); $('cfgguests').checked = !!c.phone_guests; $('heattv').checked = !!c.heat_tv; $('noticestyle').value = c.notice_style === 'text' ? 'text' : 'strip';
   $('sugglive').checked = c.groups_live_only !== false; $('sugghide').checked = !!c.recents_hide_offline; $('suggrec').value = String(c.recents_max || 5); $('suggquick').value = String(c.quick_max || 6);
   uiCfg = {groups_live_only: c.groups_live_only !== false, recents_max: c.recents_max || 5, quick_max: c.quick_max || 6, recents_hide_offline: !!c.recents_hide_offline};
 }
 $('cfgq').onchange = () => api('/api/config', 'POST', {phone_quality: Number($('cfgq').value)}).then(loadConfig);
 $('cfgguests').onchange = () => api('/api/config', 'POST', {phone_guests: $('cfgguests').checked}).then(loadConfig);
 $('heattv').onchange = () => api('/api/config', 'POST', {heat_tv: $('heattv').checked}).then(loadConfig);
+$('noticestyle').onchange = () => api('/api/config', 'POST', {notice_style: $('noticestyle').value}).then(loadConfig);
+$('bannertest').onclick = () => busy($('bannertest'), () => api('/api/banner/test', 'POST', {}));
 const ugc = (k, v) => api('/api/config', 'POST', {[k]: v}).then(() => loadConfig().then(() => { quickSig = ''; renderQuick(); loadRecents(); if ($('wallcard').open) renderWall(); }));
 $('sugglive').onchange = () => ugc('groups_live_only', $('sugglive').checked);
 $('sugghide').onchange = () => ugc('recents_hide_offline', $('sugghide').checked);

@@ -1855,8 +1855,24 @@ def api_move():
 PAUSED_TEXT = "▌▌  Paused"  # two bars and the word, in the same on-screen text the volume uses (a drawn overlay did not show reliably)
 
 
+def notices_on_strip():
+    """The volume and paused notices go on the strip across the top for one full-screen stream, unless the admin chose the classic text on the picture
+    (Settings > TV screen). Several streams always use text in the stream's own window: the notice is about that stream."""
+    return settings.get("notice_style") != "text" and not wall.active()
+
+
 def osd_paused(paused, sock=SOCK):
-    """Show a pause symbol on the TV for as long as the stream is paused (a very long show-text), and clear it on resume."""
+    """Show a pause notice on the TV for as long as the stream is paused, and clear it on resume. One full-screen stream: the strip across the top;
+    several streams: text in that stream's own window."""
+    if sock == SOCK and notices_on_strip():
+        if paused:
+            _banner["paused"] = True
+            if tv_banner(PAUSED_TEXT, "info", None):
+                return
+        else:
+            tv_banner_clear()
+            mpv(["show-text", "", 1])  # and the old text, if the strip could not open when it paused
+            return
     cmd = ["show-text", PAUSED_TEXT, 3600000] if paused else ["show-text", "", 1]
     if sock == SOCK:
         mpv(cmd)
@@ -1875,9 +1891,10 @@ def osd_volume(sock=SOCK):
     if sock == SOCK:
         vol, muted = prop("volume"), prop("mute")
         if vol is not None:
-            mpv(["show-text", volume_text(vol, muted), 1500])
-            if prop("pause") is True:  # the volume text replaced the pause symbol: put it back once the volume has gone
-                threading.Timer(1.7, lambda: prop("pause") is True and osd_paused(True)).start()
+            if not (notices_on_strip() and tv_banner(volume_text(vol, muted), "info", 1.6)):  # the strip for one full-screen stream (it returns to "Paused" by itself)
+                mpv(["show-text", volume_text(vol, muted), 1500])
+                if prop("pause") is True:  # the volume text replaced the pause symbol: put it back once the volume has gone
+                    threading.Timer(1.7, lambda: prop("pause") is True and osd_paused(True)).start()
         return
     vol, muted = sprop(sock, "volume"), sprop(sock, "mute")
     if vol is not None:
@@ -1977,7 +1994,8 @@ def phone_settings():
     whether a guest may use it. More of these (and per-role permissions) can join this one place."""
     q = settings.get("phone_quality", 720)
     return {"phone_quality": q if q in PHONE_QUALITIES else 720, "phone_guests": settings.get("phone_guests", True) is not False,
-            "qr": settings.get("qr", True) is not False, "heat_tv": bool(settings.get("heat_tv")), **ui_settings()}
+            "qr": settings.get("qr", True) is not False, "heat_tv": bool(settings.get("heat_tv")),
+            "notice_style": "text" if settings.get("notice_style") == "text" else "strip", **ui_settings()}
 
 
 @app.post("/api/qr")
@@ -2009,6 +2027,8 @@ def api_config_set():
     for k in ("phone_guests", "qr", "heat_tv", "groups_live_only", "recents_hide_offline"):
         if k in body:
             settings[k] = bool(body[k])
+    if body.get("notice_style") in ("strip", "text"):  # how the volume and paused notices look on the TV
+        settings["notice_style"] = body["notice_style"]
     for k, lo, hi in (("recents_max", 3, 8), ("quick_max", 3, 9)):
         if k in body:
             if not isinstance(body[k], int) or isinstance(body[k], bool) or not lo <= body[k] <= hi:
@@ -3173,26 +3193,47 @@ def versions():
 heat = {"on": False, "saved": None, "restored": False}  # the heat guard: lowers multistream pictures while the Pi is very hot
 
 
-_banner = {"win": None, "timer": None}
+_banner = {"win": None, "timer": None, "paused": False}
+
+
+def _banner_done():
+    """The strip's time is up: it goes, unless the stream is paused, in which case the pause notice takes its place again."""
+    win = _banner["win"]
+    if _banner["paused"]:
+        win and win.update(shell.banner_line("▌▌  Paused", "info"))
+    elif win:
+        win.close()
 
 
 def tv_banner(text, level="warn", seconds=5):
-    """A warning about the Pi or the TV as a whole, drawn as a strip across the top of the screen (a window of its own, above every stream window),
-    so with several streams on screen it is not stuck inside one of them. Falls back to text on the main stream if that window won't open."""
+    """A notice about the Pi, the TV or the one full-screen stream, drawn as a strip across the top of the screen (a window of its own, above every
+    stream window), so with several streams on screen a warning is not stuck inside one of them. seconds=None keeps it until tv_banner_clear().
+    Falls back to text on the main stream if that window won't open."""
     try:
         win = _banner["win"] = _banner["win"] or chatwin.banner_panel()
         if not (win.open() and win.update(shell.banner_line(text, level))):
             raise OSError("the banner window did not open")
     except Exception as e:
         app.logger.info("Banner window: %s", e)
-        mpv(["show-text", text, int(seconds * 1000)])
+        mpv(["show-text", text, int((seconds or 3600) * 1000)])
         return False
     if _banner["timer"]:
         _banner["timer"].cancel()
-    _banner["timer"] = threading.Timer(seconds, win.close)
-    _banner["timer"].daemon = True
-    _banner["timer"].start()
+        _banner["timer"] = None
+    if seconds:
+        _banner["timer"] = threading.Timer(seconds, _banner_done)
+        _banner["timer"].daemon = True
+        _banner["timer"].start()
     return True
+
+
+def tv_banner_clear():
+    _banner["paused"] = False
+    if _banner["timer"]:
+        _banner["timer"].cancel()
+        _banner["timer"] = None
+    if _banner["win"]:
+        _banner["win"].close()
 
 
 def heat_check(temp):
@@ -3252,6 +3293,13 @@ def heat_loop():
             heat_warn(t)
         except Exception as e:
             app.logger.warning("Heat check failed: %s", e)
+
+
+@app.post("/api/banner/test")
+def api_banner_test():
+    """Show the warning strip on the TV for a few seconds (Settings > TV screen), to see what a real warning looks like."""
+    admin_only()
+    return jsonify(ok=tv_banner("Pi is warm: 76 °C (this is a test)", "warn", 6))
 
 
 @app.get("/api/health")

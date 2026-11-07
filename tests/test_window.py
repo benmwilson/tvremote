@@ -114,7 +114,7 @@ if __name__ == "__main__":
 
 class GlobalBanner(unittest.TestCase):
     def setUp(self):
-        server._banner.update(win=None, timer=None)
+        server._banner.update(win=None, timer=None, paused=False)
 
     def test_a_warning_is_a_strip_across_the_screen_and_goes_away_by_itself(self):
         win = mock.Mock(); win.open.return_value = True; win.update.return_value = True
