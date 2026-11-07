@@ -126,7 +126,7 @@ class GlobalNote(unittest.TestCase):
         with mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(("main", cmd)) or {"error": "success"}),                 mock.patch.object(server.mpvipc, "send", lambda sock, cmd, *a: sent.append((sock, cmd)) or {"error": "success"}),                 mock.patch.object(server.wall, "active", return_value=True), mock.patch.object(server.wall, "count", return_value=3):
             self.assertTrue(server.tv_note("Pi is warm", "warn", 4))
         self.assertEqual([s for s, _ in sent], ["main", server.wall.sock(1, server.SOCK), server.wall.sock(2, server.SOCK)])
-        self.assertTrue(all(c[0] == "show-text" and c[2] == 4000 for _, c in sent))
+        self.assertTrue(all(c[:2] == ["expand-properties", "show-text"] and c[3] == 4000 for _, c in sent))
 
     def test_the_banner_window_and_its_rule_are_gone(self):
         import multi

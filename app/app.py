@@ -3195,7 +3195,7 @@ def note_text(text, level="warn"):
     """mpv on-screen text with ASS styling in it ("${osd-ass-cc/0}" lets the tags through): large bold coloured text with a dark outline, no background,
     so the stream shows through behind it."""
     col = NOTE_COLOURS.get(level, NOTE_COLOURS["warn"])
-    return "${osd-ass-cc/0}{BSan7BSfs46BSb1BSbord4BSshad0BS1c&HCOL&BS3c&H000000&}TEXT${osd-ass-cc/1}".replace("BS", chr(92)).replace("COL", col).replace("TEXT", text.replace("{", "(").replace("}", ")").replace(chr(92), ""))
+    return "${osd-ass-cc/0}{BSan7BSfs26BSb1BSbord3BSshad0BS1c&HCOL&BS3c&H000000&}TEXT${osd-ass-cc/1}".replace("BS", chr(92)).replace("COL", col).replace("TEXT", text.replace("{", "(").replace("}", ")").replace(chr(92), ""))
 
 
 def tv_note(text, level="warn", seconds=5):
@@ -3205,7 +3205,8 @@ def tv_note(text, level="warn", seconds=5):
     socks = [SOCK] + ([wall.sock(k, SOCK) for k in range(1, wall.count())] if wall.active() else [])
     ok = False
     for sock in socks:
-        r = mpv(["show-text", note_text(text, level), ms]) if sock == SOCK else mpvipc.send(sock, ["show-text", note_text(text, level), ms])
+        cmd = ["expand-properties", "show-text", note_text(text, level), ms]  # the prefix is what lets "${osd-ass-cc/0}" through (commands over IPC don't expand by default)
+        r = mpv(cmd) if sock == SOCK else mpvipc.send(sock, cmd)
         ok = ok or bool(r)
     return ok
 
