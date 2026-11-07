@@ -126,7 +126,14 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .tvoff{display:flex;align-items:center;gap:14px;margin:0 0 14px;padding:2px 0 2px 14px;border-left:4px solid var(--tv,#6bb2ff)}  /* a quiet row with the TV's own colour bar, like its card on the home page */
 /* TV off and nothing playing: the "off" message is the whole card, not a banner above an empty "Nothing playing" */
 /* Watch on phone: a player that stays at the top while you scroll to the controls and the chat */
-.watch{position:sticky;top:8px;z-index:6;padding:10px;box-shadow:0 10px 28px rgba(0,0,0,.5);margin-top:12px}
+/* Watch on phone / this computer: a full-screen player, like the chat. On a desktop layout it is a big panel over a dimmed page instead. */
+.watch{position:fixed;left:0;right:0;top:var(--vvt,0);height:var(--vvh,100dvh);z-index:60;margin:0;width:100%;border-radius:0;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;background:#05070b;padding:calc(10px + env(safe-area-inset-top)) 12px calc(10px + env(safe-area-inset-bottom))}
+.watch.hide{display:none}
+.watch #watchbody{flex:1 1 auto;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
+.watch #watchvid{width:100%;height:100%;object-fit:contain;border-radius:10px;background:#000}
+.watch #watchlive{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);width:auto!important;margin:0!important;padding:0 18px;min-height:40px;border-radius:20px;background:rgba(0,0,0,.72);color:#fff;font-weight:700}
+.watch #watchnote{flex:none;margin:0 2px!important;font-size:13px}
+html[data-layout=desktop] .watch{left:50%;right:auto;top:50%;height:min(82vh,760px);width:min(1180px,92vw);transform:translate(-50%,-50%);border-radius:18px;box-shadow:0 0 0 100vmax rgba(0,0,0,.62),0 24px 60px rgba(0,0,0,.6);padding:14px 16px}
 .watchbar{display:flex;align-items:center;gap:8px;margin-bottom:8px}.watchbar b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .watchbar button{flex:none;width:44px;min-height:44px;padding:0;display:grid;place-items:center}.watchbar select{flex:none;max-width:46%;min-height:44px;font-size:15px}
 body.no-titles .ftitle{display:none}
@@ -353,7 +360,7 @@ html[data-layout=desktop] #view-all #cards{display:grid;grid-template-columns:re
 html[data-layout=desktop] #view-all #cards .tvcard{margin-bottom:0;height:100%;display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch}
 html[data-layout=desktop] #view-tv{display:grid;grid-template-columns:minmax(400px,480px) minmax(0,1fr);column-gap:32px;align-items:start}
 html[data-layout=desktop] #view-tv>#tvid{grid-column:1/-1}
-html[data-layout=desktop] #view-tv>#now,html[data-layout=desktop] #view-tv>#watchcard,html[data-layout=desktop] #view-tv>#chatcard,html[data-layout=desktop] #view-tv>#wallopencard,html[data-layout=desktop] #view-tv>#browsecard,html[data-layout=desktop] #view-tv>#tvctl{grid-column:1}
+html[data-layout=desktop] #view-tv>#now,html[data-layout=desktop] #view-tv>#chatcard,html[data-layout=desktop] #view-tv>#wallopencard,html[data-layout=desktop] #view-tv>#browsecard,html[data-layout=desktop] #view-tv>#tvctl{grid-column:1}
 html[data-layout=desktop] #view-tv>#playsec{grid-column:2;grid-row:2/span 12;margin-top:0}
 html[data-layout=desktop] #favs,html[data-layout=desktop] #recents,html[data-layout=desktop] #groups{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 html[data-layout=desktop] #favs.list,html[data-layout=desktop] #recents.list,html[data-layout=desktop] #groups{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
@@ -1436,7 +1443,7 @@ function render() {
   $('fav').classList.toggle('hide', !up);
   const mv = moveInfo();
   $('move').classList.toggle('hide', !up || !mv || !st.url);
-  $('watch').classList.toggle('hide', !up || !st.url || me.watch === false);  // an admin can switch it off for guests
+  $('watch').classList.toggle('hide', !up || !st.url || me.watch === false); paintWatchLabels();  // an admin can switch it off for guests
   renderQuick();  // when nothing is playing: who is live, ready to tap
   if (mv) $('movelabel').textContent = mv.label;
   $('pp').classList.toggle('paused', !!st.paused);
@@ -1494,8 +1501,8 @@ async function poll() {
     else if (s.starting && !s.error && lastRun && lastRun.url === s.url && Date.now() - lastRun.at < 45000) { Object.assign(s, lastRun, {running: true, starting: false, buffering: true, error: null}); delete s.at; }
     st = s; render();
     if (watchTv && !$('watchcard').classList.contains('hide')) {  // the picture on the phone ends when the stream on the TV does
-      if (!s.running && !s.starting) closeWatch('The stream ended, so the phone player closed.');
-      else if (watchUrl && s.url && s.url !== watchUrl) closeWatch('A different stream started, so the phone player closed.');
+      if (!s.running && !s.starting) closeWatch('The stream ended, so the player closed.');
+      else if (watchUrl && s.url && s.url !== watchUrl) closeWatch('A different stream started, so the player closed.');
     }
   }
 }
@@ -3458,10 +3465,23 @@ document.addEventListener('click', e => {
 $('wallnote').onclick = () => $('wallopen').click();
 // Watch on phone: the phone plays what the TV plays, itself (home network only), in a player that stays at the top of the remote.
 // Several streams: pick which one; the chat tab below follows. It can run ahead of or behind the TV by a few seconds.
-let watchI = 0, watchUrl = null, watchTv = null;
+let watchI = 0, watchUrl = null, watchTv = null, watchHls = null, hlsLoading = null;
+function watchWord() { return document.documentElement.dataset.layout === 'desktop' ? 'this computer' : 'phone'; }  // the player is for whichever screen this is
+function paintWatchLabels() {
+  const w = watchWord();
+  $('watch').querySelector('span').textContent = 'Watch on ' + w;
+  $('watchcard').setAttribute('aria-label', 'Watching on ' + (w === 'phone' ? 'this phone' : w));
+  $('watchclose').setAttribute('aria-label', 'Stop watching on ' + (w === 'phone' ? 'this phone' : w)); $('watchclose').title = $('watchclose').getAttribute('aria-label');
+  if ($('watchcard').classList.contains('hide')) $('watchttl').textContent = 'Watch on ' + w;
+}
+// Safari plays HLS itself; Chrome, Edge and Firefox use the bundled hls.js (app/vendor), loaded the first time it is needed.
+const loadHls = () => window.Hls ? Promise.resolve() : (hlsLoading = hlsLoading || new Promise((ok, bad) => {
+  const s = document.createElement('script'); s.src = '/vendor/hls.min.js'; s.onload = ok; s.onerror = () => { hlsLoading = null; bad(new Error('hls.js did not load')); }; document.head.append(s);
+}));
 function closeWatch(why) {
   watchUrl = watchTv = null;
   if (why) err(why);
+  if (watchHls) { watchHls.destroy(); watchHls = null; }
   const v = $('watchvid');
   v.pause(); v.removeAttribute('src'); v.onpause = v.onplay = v.ontimeupdate = v.onerror = null; v.load();
   $('watchcard').classList.add('hide');
@@ -3470,6 +3490,7 @@ async function startWatch(i) {
   const v = $('watchvid'), note = $('watchnote'), card = $('watchcard');
   card.classList.remove('hide');
   note.textContent = 'Getting the stream…';
+  if (watchHls) { watchHls.destroy(); watchHls = null; }
   v.pause(); v.removeAttribute('src'); v.load();
   const r = await api('/api/watch' + (i == null ? '' : '?i=' + i));
   if (card.classList.contains('hide')) return;  // closed while it was loading
@@ -3479,9 +3500,16 @@ async function startWatch(i) {
   sel.classList.toggle('hide', streams.length < 2);
   if (streams.length > 1) { sel.replaceChildren(...streams.map(t => mk('option', {value: String(t.i)}, t.name || 'Stream ' + (t.i + 1)))); sel.value = String(watchI); }
   if (st.wall && chatTab !== watchI) { chatTab = watchI; chatShow(); }  // the chat below is the one for what you are watching
-  $('watchttl').textContent = r.title || 'Watch on phone';
+  $('watchttl').textContent = r.title || 'Watch on ' + watchWord();
   note.textContent = 'Up to ' + r.quality + 'p' + (r.live ? '' : '. Starts where the TV is') + '. The TV is not affected.';
-  v.src = r.url;
+  if (r.kind === 'hls' && !v.canPlayType('application/vnd.apple.mpegurl')) {  // no built-in HLS (Chrome, Edge, Firefox): the bundled player
+    try { await loadHls(); } catch (e) { note.textContent = 'The player library didn’t load, so this browser can’t show the stream.'; return; }
+    if (card.classList.contains('hide')) return;  // closed while the library loaded
+    if (!window.Hls || !Hls.isSupported()) { note.textContent = 'This browser can’t play live streams. Use Safari, or watch on the TV.'; return; }
+    watchHls = new Hls({lowLatencyMode: false, maxBufferLength: 20});
+    watchHls.on(Hls.Events.ERROR, (ev, d) => { if (d.fatal) note.textContent = 'The stream stopped loading (' + d.details + '). Try again or pick a lower quality in Settings.'; });
+    watchHls.loadSource(r.url); watchHls.attachMedia(v);
+  } else v.src = r.url;
   const live = $('watchlive'), edge = () => { const k = v.seekable; return k && k.length ? k.end(k.length - 1) : 0; };
   const goLive = () => { const e = edge(); if (e) v.currentTime = Math.max(0, e - 2); };  // a few seconds under the edge, so it doesn't stall
   let pausedAt = 0;
@@ -3492,11 +3520,12 @@ async function startWatch(i) {
     v.ontimeupdate = () => live.classList.toggle('hide', !(edge() && edge() - v.currentTime > 10));
   } else { v.onpause = v.onplay = v.ontimeupdate = null; }
   if (r.start) v.addEventListener('loadedmetadata', () => { v.currentTime = r.start; }, {once: true});
-  v.onerror = () => { note.textContent = 'This phone couldn’t play that stream. Try the TV, or a lower quality in Settings.'; };
+  v.onerror = () => { note.textContent = 'This ' + (watchWord() === 'phone' ? 'phone' : 'computer') + ' couldn’t play that stream. Try the TV, or a lower quality in Settings.'; };
   v.play().catch(() => {});  // autoplay can be refused: the controls are there
 }
 $('watch').onclick = () => startWatch(st.wall ? st.wall.selected : null);
 $('watchsrc').onchange = () => startWatch(Number($('watchsrc').value));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('watchcard').classList.contains('hide')) closeWatch(); });  // Esc leaves the player
 $('watchclose').onclick = () => closeWatch();  // not closeWatch itself: it would be handed the click event as the reason
 $('remove').onclick = () => st.wall && busy($('remove'), () => wallApi({action: 'remove', i: st.wall.selected}));
 $('enlarge').onclick = () => st.wall && wallApi({action: 'swap', i: st.wall.selected});  // swap windows with the big one; the control choice stays with the stream
@@ -3840,7 +3869,7 @@ function paintLayoutBtn() {
   const desk = layoutNow() === 'desktop', b = $('layoutbtn');
   b.innerHTML = ic(desk ? 'phone' : 'tv'); b.title = desk ? 'Switch to the phone layout' : 'Switch to the desktop layout'; b.setAttribute('aria-label', b.title);
 }
-$('layoutbtn').onclick = () => { const next = layoutNow() === 'desktop' ? 'mobile' : 'desktop'; document.documentElement.dataset.layout = next; try { localStorage.setItem('layout', next); } catch (e) {} paintLayoutBtn(); };
+$('layoutbtn').onclick = () => { const next = layoutNow() === 'desktop' ? 'mobile' : 'desktop'; document.documentElement.dataset.layout = next; try { localStorage.setItem('layout', next); } catch (e) {} paintLayoutBtn(); paintWatchLabels(); };
 paintLayoutBtn();
 document.addEventListener('keydown', e => {
   if (layoutNow() !== 'desktop' || e.ctrlKey || e.metaKey || e.altKey || view() !== 'tv') return;

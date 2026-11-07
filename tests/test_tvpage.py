@@ -195,3 +195,17 @@ class CitySearchTests(unittest.TestCase):
             with mock.patch.object(server.weather, "search", return_value=[{"name": "A", "lat": 1.0, "lon": 2.0}]):
                 self.assertEqual(owner.get("/api/weather/search?q=Al").get_json(), {"places": [{"name": "A", "lat": 1.0, "lon": 2.0}]})
             self.assertEqual(server.app.test_client().get("/api/weather/search?q=Al").status_code in (401, 403, 302, 303), True)
+
+
+class VendorTests(unittest.TestCase):
+    def test_the_bundled_hls_player_is_served_to_logged_in_users_only(self):
+        import shutil, tempfile
+        d = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, d, True)
+        with mock.patch.dict(os.environ, {"TVREMOTE_DATA": d}), mock.patch.object(server, "DATA", d), mock.patch.object(server.time, "sleep"):
+            owner = founder_client(server)
+            r = owner.get("/vendor/hls.min.js")
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("text/javascript", r.headers["Content-Type"])
+            self.assertIn(b"Hls", r.data[-300:])
+            self.assertIn(server.app.test_client().get("/vendor/hls.min.js").status_code, (302, 303, 401, 403))
+        self.assertIn("/vendor/hls.min.js", server.GUEST_GET)  # a guest allowed to watch needs it too

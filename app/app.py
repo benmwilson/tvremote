@@ -175,7 +175,7 @@ SETUP_GET = {"/", "/logo.svg", "/manifest.json", "/login", "/api/auth", "/api/se
 # later) is refused, so a new endpoint is closed to guests until it is listed here on purpose.
 GUEST_GET = {"/", "/share", "/logo.svg", "/manifest.json", "/login", "/logout", "/play", "/api/auth", "/api/status", "/api/tv",
              "/api/qualities", "/api/targets", "/api/roku", "/api/recents", "/api/search", "/api/favourites", "/api/kick",
-             "/api/shell", "/api/stats", "/api/browse", "/api/twitch/avatars", "/api/emotes", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch", "/api/detect"}  # /api/watch checks the guest setting itself
+             "/vendor/hls.min.js", "/api/shell", "/api/stats", "/api/browse", "/api/twitch/avatars", "/api/emotes", "/api/chat/feed", "/api/sleep", "/api/roku/apps", "/api/roku/icon", "/api/watch", "/api/detect"}  # /api/watch checks the guest setting itself
 GUEST_POST = {"/api/launcher/key", "/api/play", "/api/cmd", "/api/tv/wake", "/api/roku/key", "/api/sleep", "/api/targets/refresh", "/api/move", "/api/roku/launch", "/logout"}
 
 
@@ -2033,6 +2033,12 @@ def watch_playlist(token):
         app.logger.warning("Twitch watch playlist: %s", e)
         return Response("", 502)
     return Response(text, mimetype="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/vendor/hls.min.js")
+def vendor_hls():
+    """The HLS player library the page loads when the browser can't play HLS itself (see app/vendor/README.md)."""
+    return send_file(os.path.join(BASE, "vendor", "hls.min.js"), mimetype="text/javascript", max_age=86400)
 
 
 @app.get("/api/watch")
