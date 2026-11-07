@@ -2,12 +2,8 @@
 <html lang="en"><head><meta charset="utf-8"><title>TV home</title>
 <style>
 :root{--bg:#0b0e14;--card:#151a26;--fg:#e8ecf4;--dim:#8d97ab;--ring:#4da3ff;--live:#e0243a}
+*{cursor:none!important}
 html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-gradient(1200px 500px at 15% -10%,#16264a 0%,transparent 70%),radial-gradient(900px 500px at 100% 0%,#1d1840 0%,transparent 65%),var(--bg);color:var(--fg);font:600 22px system-ui,sans-serif}
-/* two soft colour patches drifting very slowly: each is one pre-drawn gradient moved as a layer, so it costs the Pi next to nothing */
-.glow{position:absolute;width:1300px;height:1300px;border-radius:50%;pointer-events:none;will-change:transform;z-index:0}
-.g1{left:-500px;top:-700px;background:radial-gradient(circle,#2a4a9a55 0%,transparent 65%);animation:d1 70s ease-in-out infinite alternate}
-.g2{right:-600px;top:-300px;background:radial-gradient(circle,#4a2a9a40 0%,transparent 65%);animation:d2 90s ease-in-out infinite alternate}
-@keyframes d1{to{transform:translate(520px,260px)}}@keyframes d2{to{transform:translate(-460px,360px)}}
 #head{position:absolute;left:40px;right:40px;top:26px;height:84px;display:flex;align-items:center;gap:20px;z-index:3}
 #head img{width:60px;height:60px;border-radius:14px}
 #head .brand{font-size:34px;font-weight:800;letter-spacing:.3px}
@@ -19,12 +15,12 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 #clock{text-align:right;line-height:1.1}
 #clock .time{font-size:56px;font-weight:800;letter-spacing:1px}
 #clock .date{font-size:20px;color:var(--dim)}
-#rows{z-index:1;position:absolute;left:40px;top:120px;width:1840px;transition:transform .3s ease}
+#rows{z-index:1;position:absolute;left:40px;top:120px;width:1840px;will-change:transform}
 .row{height:350px;position:relative;overflow:hidden}
 .row h2{margin:0 0 0 22px;font-size:26px;color:var(--dim);font-weight:700}
-.strip{display:flex;gap:22px;transition:transform .25s ease;padding:16px 24px 24px 22px}
-.card{flex:0 0 330px;height:258px;background:var(--card);border-radius:18px;position:relative;transition:transform .2s,box-shadow .2s;overflow:hidden}
-.card.f{transform:scale(1.07);box-shadow:0 0 0 4px var(--ring),0 20px 40px #000a;z-index:2}
+.strip{display:flex;gap:22px;padding:16px 24px 24px 22px;will-change:transform}
+.card{flex:0 0 330px;height:258px;background:var(--card);border-radius:18px;position:relative;overflow:hidden}
+.card.f{box-shadow:0 0 0 5px var(--ring)}
 .card img.t{width:330px;height:186px;object-fit:cover;display:block}
 .card .ph{width:330px;height:186px;display:flex;align-items:center;justify-content:center}
 .av{width:64px;height:64px;border-radius:50%;object-fit:cover;background:#2a3350;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800}
@@ -41,7 +37,6 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 .empty[hidden]{display:none}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:var(--dim)}
 </style></head><body>
-<div class="glow g1"></div><div class="glow g2"></div>
 <div id="head"><img src="/logo.svg" alt=""><span class="brand">TV Remote</span><span class="grow"></span>
   <div id="wx"><span id="wxi"></span><div><div class="t" id="wxt"></div><div class="s" id="wxs"></div></div></div>
   <div id="clock"><div class="time" id="ct"></div><div class="date" id="cd"></div></div></div>
@@ -49,7 +44,7 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 <script>
 const K = new URLSearchParams(location.search).get('k') || '';
 const q = p => p + (p.includes('?') ? '&' : '?') + 'k=' + encodeURIComponent(K);
-let sig = '', cur = {row: 0, col: 0};
+let cur = {row: 0, col: 0};
 const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
 const num = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n);
 function avatar(t, cls) {
@@ -78,12 +73,23 @@ function focus() {
   document.getElementById('rows').style.transform = 'translateY(' + -Math.max(0, cur.row - 1) * 350 + 'px)';
 }
 function draw(d) {
-  const s = JSON.stringify(d.rows);
-  if (s !== sig) {
-    sig = s; const box = document.getElementById('rows'); box.replaceChildren();
-    d.rows.forEach(r => { const row = el('div', 'row'); row.append(el('h2', null, r.title)); const st = el('div', 'strip'); r.tiles.forEach(t => st.append(card(t))); row.append(st); box.append(row); });
-    document.getElementById('empty').hidden = d.rows.length > 0;
-  }
+  const box = document.getElementById('rows');
+  const rows = [...box.children];
+  while (rows.length > d.rows.length) box.lastChild.remove(), rows.pop();
+  d.rows.forEach((r, i) => {
+    let row = rows[i];
+    if (!row) { row = el('div', 'row'); row.append(el('h2'), el('div', 'strip')); box.append(row); }
+    row.firstChild.textContent = r.title;
+    const strip = row.lastChild, have = [...strip.children];
+    r.tiles.forEach((t, j) => {  // only a card whose facts changed is rebuilt; the others (and their pictures) stay as they are
+      const key = JSON.stringify(t);
+      if (have[j] && have[j]._k === key) return;
+      const c = card(t); c._k = key;
+      if (have[j]) have[j].replaceWith(c); else strip.append(c);
+    });
+    while (strip.children.length > r.tiles.length) strip.lastChild.remove();
+  });
+  document.getElementById('empty').hidden = d.rows.length > 0;
   cur = {row: d.row, col: d.col}; focus();
 }
 async function tick() { try { draw(await (await fetch(q('/tv/data'), {cache: 'no-store'})).json()); } catch (e) {} }

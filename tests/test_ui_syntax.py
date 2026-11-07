@@ -12,12 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PageScript(unittest.TestCase):
+    page = "index.html"
+
     def scripts(self):
-        html = (ROOT / "app" / "index.html").read_text(encoding="utf-8")
+        html = (ROOT / "app" / self.page).read_text(encoding="utf-8")
         return re.findall(r"<script>(.*?)</script>", html, re.S)
 
     def test_the_page_has_its_script(self):
-        self.assertTrue(self.scripts() and max(len(s) for s in self.scripts()) > 50_000)
+        self.assertTrue(self.scripts() and max(len(s) for s in self.scripts()) > (50_000 if self.page == "index.html" else 1_000))
 
     @unittest.skipUnless(shutil.which("node"), "Node is not installed")
     def test_the_page_script_has_no_syntax_errors(self):
@@ -26,8 +28,13 @@ class PageScript(unittest.TestCase):
                 f = os.path.join(d, f"page{i}.js")
                 Path(f).write_text(src, encoding="utf-8")
                 r = subprocess.run(["node", "--check", f], capture_output=True, text=True, timeout=30)
-                self.assertEqual(r.returncode, 0, "index.html script %d: %s" % (i, r.stderr[:600]))
+                self.assertEqual(r.returncode, 0, "%s script %d: %s" % (self.page, i, r.stderr[:600]))
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TvPageScript(PageScript):
+    """The TV's launcher page (a browser on the Pi draws it): the same check."""
+    page = "tv.html"
