@@ -1710,8 +1710,8 @@ function markFavs() {
   document.querySelectorAll('#quick .wstream').forEach(b => { const on = !!favLoading && here('quick') && b.dataset.url === favLoading.url; b.classList.toggle('loading', on); b.setAttribute('aria-busy', String(on)); });
   document.querySelectorAll('#favs .fav, #recents .fav, #quick .fav').forEach(b => {  // recents and the quick cards get the same spinner and error note
     const n = b.querySelector('.note');
-    if (n) n.textContent = favNote && (b.dataset.urls || b.dataset.url).split(' ').includes(favNote.url) && Date.now() < favNote.until ? favNote.text : '';
-    const on = !!favLoading && here((b.closest('#quick,#favs,#recents') || {}).id) && (b.dataset.urls || b.dataset.url).split(' ').includes(favLoading.url);
+    if (n) n.textContent = favNote && (b.dataset.urls || b.dataset.url || '').split(' ').includes(favNote.url) && Date.now() < favNote.until ? favNote.text : '';
+    const on = !!favLoading && here((b.closest('#quick,#favs,#recents') || {}).id) && (b.dataset.urls || b.dataset.url || '').split(' ').includes(favLoading.url);
     b.classList.toggle('loading', on);
     if (on) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
   });
