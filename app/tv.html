@@ -39,7 +39,40 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 #note[hidden]{display:none}
 .empty[hidden]{display:none}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:var(--dim)}
+
+/* boot intro: only while the server has marked this load as the first after the app started (body.intro); transform and opacity only, so it stays smooth on the Pi */
+#intro{display:none;position:fixed;inset:0;z-index:50;background:radial-gradient(900px 600px at 50% 45%,#13213f 0%,#0b0e14 70%);flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+body.intro #intro{display:flex}
+#intro .stage{position:relative;width:320px;height:320px;display:flex;align-items:center;justify-content:center}
+#intro .mark{width:190px;height:190px;border-radius:42px;opacity:0;transform:scale(.55);animation:ipop .9s .35s cubic-bezier(.2,.9,.25,1.25) forwards;box-shadow:0 0 60px #4da3ff55}
+#intro svg.ring{position:absolute;inset:0;width:320px;height:320px;transform:rotate(-90deg)}
+#intro svg.ring circle{fill:none;stroke:#4da3ff;stroke-width:4;stroke-linecap:round;stroke-dasharray:942;stroke-dashoffset:942;animation:idraw 1.5s .1s cubic-bezier(.5,0,.2,1) forwards}
+#intro .pulse{position:absolute;width:190px;height:190px;border-radius:44px;border:3px solid #4da3ff;opacity:0;animation:ipulse 2.6s 1.2s ease-out infinite}
+#intro .pulse.b{animation-delay:2.5s}
+#intro .word{margin-top:34px;font-size:72px;font-weight:800;letter-spacing:10px;opacity:0;transform:translateY(24px);animation:irise .9s 1s cubic-bezier(.2,.8,.2,1) forwards}
+#intro .word b{color:#4da3ff;font-weight:800}
+#intro ul{list-style:none;margin:34px 0 0;padding:0;width:560px;display:flex;flex-direction:column;gap:10px}
+#intro li{font-size:26px;color:var(--dim);opacity:0;transform:translateX(-16px);transition:opacity .4s,transform .4s,color .4s;display:flex;align-items:center;gap:14px}
+#intro li::before{content:"";width:14px;height:14px;border-radius:50%;border:3px solid #4da3ff66;box-sizing:border-box;flex:none}
+#intro li.on{opacity:1;transform:none}
+#intro li.ok{color:var(--fg)}
+#intro li.ok::before{background:#4da3ff;border-color:#4da3ff}
+#intro #ibar{margin-top:26px;width:560px;height:6px;border-radius:3px;background:#ffffff14;overflow:hidden}
+#intro #ibar i{display:block;height:100%;background:linear-gradient(90deg,#4da3ff,#9b6bff);transform-origin:left;transform:scaleX(0);transition:transform .7s cubic-bezier(.3,.8,.3,1)}
+#intro.out{animation:iout .8s cubic-bezier(.5,0,.8,.4) forwards}
+body.reveal .card{animation:cardin .7s both cubic-bezier(.2,.8,.2,1);animation-delay:calc(var(--i,0) * 70ms)}
+body.reveal #head{animation:cardin .7s both cubic-bezier(.2,.8,.2,1)}
+@keyframes ipop{to{opacity:1;transform:scale(1)}}
+@keyframes idraw{to{stroke-dashoffset:0}}
+@keyframes ipulse{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(1.9)}}
+@keyframes irise{to{opacity:1;transform:none}}
+@keyframes iout{to{opacity:0;transform:scale(1.12)}}
+@keyframes cardin{from{opacity:0;transform:translateY(40px) scale(.96)}to{opacity:1;transform:none}}
 </style></head><body>
+<div id="intro"><div class="stage"><svg class="ring" viewBox="0 0 320 320"><circle cx="160" cy="160" r="150"/></svg><span class="pulse"></span><span class="pulse b"></span><img class="mark" src="/logo.svg" alt=""></div>
+  <div class="word">TV <b>REMOTE</b></div>
+  <ul id="isteps"><li>Starting up</li><li>Finding your TVs</li><li>Checking who&rsquo;s live</li><li>Opening your launcher</li></ul>
+  <div id="ibar"><i></i></div></div>
 <div id="head"><img src="/logo.svg" alt=""><span class="brand">TV Remote</span><span id="others"></span><span class="grow"></span>
   <div id="wx"><span id="wxi"></span><div><div class="t" id="wxt"></div><div class="s" id="wxs"></div></div></div>
   <div id="clock"><div class="time" id="ct"></div><div class="date" id="cd"></div></div></div>
@@ -124,6 +157,7 @@ function draw(d) {
     while (strip.children.length > r.tiles.length) strip.lastChild.remove();
   });
   document.getElementById('empty').hidden = d.rows.length > 0;
+  liveNow = ((d.rows.find(r => r.title === 'Live now') || {}).tiles || []).length;
   const nt = document.getElementById('note'); nt.textContent = d.note || ''; nt.hidden = !d.note;
   cur = {row: d.row, col: d.col}; focus();
 }
@@ -159,5 +193,27 @@ async function info() {
     }
   } catch (e) { report('info: ' + e); }
 }
-tick(); info(); setInterval(tick, 2000); setInterval(focusTick, 150); setInterval(info, 60000); setInterval(clock, 10000);
+// the boot intro: the steps follow the real start (the TV list, who is live), each shown at least a moment; then it zooms away and the cards rise in
+async function runIntro(pInfo, pTick) {
+  const lis = [...document.querySelectorAll('#isteps li')], bar = document.querySelector('#ibar i');
+  const wait = ms => new Promise(r => setTimeout(r, ms)), t0 = Date.now();
+  const min = ms => wait(Math.max(0, ms - (Date.now() - t0)));
+  const done = i => { lis[i].classList.add('ok'); bar.style.transform = 'scaleX(' + (i + 1) / lis.length + ')'; };
+  lis[0].classList.add('on'); await min(1400); done(0);
+  lis[1].classList.add('on'); await Promise.race([pInfo, wait(6000)]); await min(2300); done(1);
+  lis[2].classList.add('on'); await Promise.race([pTick, wait(6000)]);
+  lis[2].textContent = liveNow ? liveNow + ' live now' : 'Checking who\u2019s live';
+  await min(3300); done(2);
+  lis[3].classList.add('on'); await min(4200); done(3);
+  await wait(350);
+  document.querySelectorAll('.card').forEach((c, i) => c.style.setProperty('--i', Math.min(i, 12)));
+  document.body.classList.add('reveal');
+  const box = document.getElementById('intro'); box.classList.add('out');
+  await wait(850); document.body.classList.remove('intro'); box.remove();
+  setTimeout(() => document.body.classList.remove('reveal'), 2200);  // the entrance only plays once: later card rebuilds must not replay it
+}
+let liveNow = 0;
+const pInfo = info(), pTick = tick();
+if (document.body.classList.contains('intro')) runIntro(pInfo, pTick);
+setInterval(tick, 2000); setInterval(focusTick, 150); setInterval(info, 60000); setInterval(clock, 10000);
 </script></body></html>

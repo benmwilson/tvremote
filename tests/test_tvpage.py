@@ -39,6 +39,17 @@ class TvPageTests(unittest.TestCase):
             self.assertEqual(self.c.get("/tv?k=" + server.TV_KEY).status_code, 200)
             self.assertEqual(self.c.get("/tv/data?k=" + server.TV_KEY).get_json(), {"rows": [], "row": 0, "col": 0})
 
+    def test_the_boot_animation_plays_once_after_the_app_starts(self):
+        with mock.patch.object(server, "launcher_state", return_value=None):
+            server._tv_intro["pending"] = True
+            first = self.c.get("/tv?k=" + server.TV_KEY).get_data(as_text=True)
+            second = self.c.get("/tv?k=" + server.TV_KEY).get_data(as_text=True)
+        self.assertIn('<body class="intro">', first)
+        self.assertNotIn('<body class="intro">', second)
+        with mock.patch.dict(server.settings, {"boot_intro": False}):
+            server._tv_intro["pending"] = True
+            self.assertNotIn('<body class="intro">', self.c.get("/tv?k=" + server.TV_KEY).get_data(as_text=True))  # switched off
+
     def test_only_six_tiles_keep_a_stream_picture_and_addresses_become_ids(self):
         tiles = [tile(f"s{i}", f"https://img/{i}.jpg", f"https://av/{i}.jpg") for i in range(8)]
         with mock.patch.object(server, "launcher_state", return_value=([{"title": "Live now", "tiles": tiles}], 0, 2)):

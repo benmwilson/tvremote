@@ -2695,10 +2695,22 @@ def _tv_img_id(url, bucket=0):
     return i
 
 
+_tv_intro = {"pending": True}  # the boot animation plays once per app start: on the first load of the TV page after it
+
+
 @app.get("/tv")
 def tv_page():
+    """The launcher page. The first load after the app started also carries the boot animation (setting `boot_intro`, on by default);
+    an admin can preview it any time with /tv?intro=1."""
     tv_viewer_ok()
-    return send_file(os.path.join(BASE, "tv.html"), mimetype="text/html", max_age=0)
+    with open(os.path.join(BASE, "tv.html"), encoding="utf-8") as f:
+        page = f.read()
+    preview = request.args.get("intro") == "1" and not tv_key_ok()
+    if preview or (_tv_intro["pending"] and tv_key_ok() and settings.get("boot_intro", True)):
+        page = page.replace("<body>", '<body class="intro">', 1)
+    if tv_key_ok():
+        _tv_intro["pending"] = False
+    return Response(page, mimetype="text/html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/tv/data")
