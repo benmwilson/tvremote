@@ -849,7 +849,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <p class="sub" id="pihelp"></p>
       <label class="s-check" style="justify-content:space-between;margin-top:6px">Launcher on the TV between streams<input id="launchertoggle" type="checkbox" class="tg" role="switch"></label>
       <label class="s-check" style="justify-content:space-between">Live preview when you rest on a card<input id="launcherpreview" type="checkbox" class="tg" role="switch"></label>
-      <label class="s-check" style="justify-content:space-between">Play sound in the preview (needs a sound connection for the browser: see docs)<input id="launcherpreviewsound" type="checkbox" class="tg" role="switch"></label>
+      <label class="s-check" style="justify-content:space-between">Play sound in the preview<input id="launcherpreviewsound" type="checkbox" class="tg" role="switch"></label>
+      <p class="sub hide" id="pvsoundnote" style="margin:0 2px 4px">Not available yet: the TV&rsquo;s browser has no sound connection, and asking for sound would freeze the preview.</p>
     <p class="sub" style="margin:2px 0 6px">Who is live, your favourites, groups and recents as tiles on the TV. Move around it with the pad on the remote (an IR receiver can be added later).</p>
     <div style="margin-top:10px"><b style="display:block;margin-bottom:6px;font-weight:600">Weather in the launcher&rsquo;s header</b>
       <input id="weathercity" type="text" placeholder="Start typing a city" aria-label="City for the weather" maxlength="80" autocapitalize="words" autocorrect="off" autocomplete="off">
@@ -2289,7 +2290,7 @@ function renderShell() {
   if (document.activeElement !== $('shortcuturl')) $('shortcuturl').value = s.shortcut_url || '';
   $('qrshortcut').classList.toggle('hide', mode !== 'shortcut'); $('scname-wrap').classList.toggle('hide', mode !== 'shortcut'); $('qrinstall').classList.toggle('hide', mode !== 'install'); if (document.activeElement !== $('installurl')) $('installurl').value = s.install_url || '';
   $('launchertoggle').checked = !!s.launcher;
-  $('launcherpreview').checked = s.launcher_preview !== false; $('launcherpreviewsound').checked = s.launcher_preview_sound === true; $('launcherpreviewsound').disabled = s.launcher_preview === false;
+  $('launcherpreview').checked = s.launcher_preview !== false; $('launcherpreviewsound').checked = s.launcher_preview_sound === true; $('launcherpreviewsound').disabled = s.launcher_preview === false || !s.preview_audio; $('pvsoundnote').classList.toggle('hide', !!s.preview_audio);
   if (document.activeElement !== $('weathercity')) $('weathercity').value = s.weather_place || '';
   $('weatherunit').value = s.weather_unit || 'C';
   $('qropts').classList.toggle('hide', s.qr === false || !!s.qr_guest);  // these only matter while the remote's own code is the one on the TV

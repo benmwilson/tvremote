@@ -39,6 +39,14 @@ class TvPageTests(unittest.TestCase):
             self.assertEqual(self.c.get("/tv?k=" + server.TV_KEY).status_code, 200)
             self.assertEqual(self.c.get("/tv/data?k=" + server.TV_KEY).get_json(), {"rows": [], "row": 0, "col": 0})
 
+    def test_preview_sound_is_only_offered_when_the_browser_has_a_sound_connection(self):
+        rows = ([{"title": "Live now", "tiles": [tile("a", "https://img/a.jpg")]}], 0, 0)
+        with mock.patch.object(server, "launcher_state", return_value=rows), mock.patch.dict(server.settings, {"launcher_preview_sound": True}):
+            with mock.patch.object(server, "PREVIEW_AUDIO", False):
+                self.assertFalse(self.c.get("/tv/data?k=" + server.TV_KEY).get_json()["sound"])  # asking for sound with no output stalls the video
+            with mock.patch.object(server, "PREVIEW_AUDIO", True):
+                self.assertTrue(self.c.get("/tv/data?k=" + server.TV_KEY).get_json()["sound"])
+
     def test_the_boot_animation_plays_once_after_the_app_starts(self):
         with mock.patch.object(server, "launcher_state", return_value=None):
             server._tv_intro["pending"] = True

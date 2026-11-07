@@ -2446,7 +2446,7 @@ SHELL_SHOT = "/tmp/tvremote-shell.png"
 def shell_state():
     running = bool(HOME and HOME.running())
     return {"enabled": bool(settings.get("shell")), "running": running, "qr": settings.get("qr", True) is not False,
-            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "install_url": settings.get("install_url", ""), "launcher": launcher_on(), "launcher_preview": settings.get("launcher_preview", True), "launcher_preview_sound": settings.get("launcher_preview_sound", False), "weather_place": (settings.get("weather") or {}).get("name", ""), "weather_unit": settings.get("weather_unit", "C"), "qr_guest": bool(qr_guest["url"]), "qr_guest_id": access.invite_id_for_url(qr_guest["url"]),
+            "qr_mode": settings.get("qr_mode", "remote"), "shortcut_url": settings.get("shortcut_url", ""), "install_url": settings.get("install_url", ""), "launcher": launcher_on(), "launcher_preview": settings.get("launcher_preview", True), "launcher_preview_sound": settings.get("launcher_preview_sound", False), "preview_audio": PREVIEW_AUDIO, "weather_place": (settings.get("weather") or {}).get("name", ""), "weather_unit": settings.get("weather_unit", "C"), "qr_guest": bool(qr_guest["url"]), "qr_guest_id": access.invite_id_for_url(qr_guest["url"]),
             "vo": HOME.vo if HOME else None, "error": HOME.error if HOME else None,
             "props": HOME.props() if running and hasattr(HOME, "props") else None}  # what the window is doing, for debugging
 
@@ -2737,7 +2737,7 @@ def tv_data():
             tiles.append(t)
         rows.append({"title": r["title"], "tiles": tiles})
     return jsonify(rows=rows, row=st[1], col=st[2], note=_launch_note["text"] if time.time() < _launch_note["until"] else "",
-                   preview=bool(settings.get("launcher_preview", True)), sound=bool(settings.get("launcher_preview_sound", False)))
+                   preview=bool(settings.get("launcher_preview", True)), sound=PREVIEW_AUDIO and bool(settings.get("launcher_preview_sound", False)))
 
 
 @app.get("/tv/info")
@@ -2844,6 +2844,9 @@ def api_launcher():
     if st is None:
         return jsonify(ok=False, error="The launcher is off."), 404
     return jsonify(ok=True, rows=st[0], row=st[1], col=st[2])
+
+
+PREVIEW_AUDIO = os.environ.get("TVREMOTE_PREVIEW_AUDIO") == "1"  # set only once the browser container has a sound connection: without one, asking a video for sound stalls it
 
 
 _launch_note = {"text": "", "until": 0.0}  # a line the launcher page shows for a few seconds (a card that turned out to be offline)
