@@ -72,3 +72,23 @@ class TvPageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BrowserFlagTests(unittest.TestCase):
+    def test_the_browser_is_wanted_only_on_the_idle_launcher(self):
+        home = mock.Mock(kind="idle")
+        with mock.patch.object(server, "launcher_on", return_value=True), mock.patch.object(server, "HOME", home), \
+                mock.patch.object(server, "pi_playing", return_value=False), mock.patch.object(server.wall, "active", return_value=False), \
+                mock.patch.dict(server.state, {"starting": False}):
+            self.assertTrue(server.tv_browser_wanted())
+            home.kind = "loading"
+            self.assertFalse(server.tv_browser_wanted())
+            home.kind = "idle"
+            with mock.patch.object(server, "pi_playing", return_value=True):
+                self.assertFalse(server.tv_browser_wanted())
+            with mock.patch.object(server.wall, "active", return_value=True):
+                self.assertFalse(server.tv_browser_wanted())
+            with mock.patch.dict(server.state, {"starting": True}):
+                self.assertFalse(server.tv_browser_wanted())
+            with mock.patch.object(server, "launcher_on", return_value=False):
+                self.assertFalse(server.tv_browser_wanted())

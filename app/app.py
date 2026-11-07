@@ -2542,6 +2542,31 @@ _tv_imgs = {}   # id -> picture address, from the last /tv/data (only these can 
 _tv_img_cache = {}  # address -> (time, bytes, type)
 
 
+def tv_browser_wanted():
+    """The TV's browser shows the launcher only while it is the home screen: launcher on, the Ready screen up, nothing playing or starting."""
+    return bool(launcher_on() and HOME and HOME.kind == "idle" and not pi_playing() and not state.get("starting") and not wall.active())
+
+
+def tv_browser_loop():
+    """Tells the browser container (docker/cog) whether to show its page, through a flag file in /data. The key is written first, at every start."""
+    flag = os.path.join(DATA, "tvbrowser.on")
+    try:
+        fd = os.open(os.path.join(DATA, "tvkey"), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(TV_KEY)
+    except OSError:
+        return  # a read-only disk: no browser, the mpv home screen carries on
+    while True:
+        try:
+            if tv_browser_wanted():
+                open(flag, "a").close()
+            elif os.path.exists(flag):
+                os.unlink(flag)
+        except OSError:
+            pass
+        time.sleep(0.5)
+
+
 def tv_key_ok():
     return hmac.compare_digest(request.args.get("k", ""), TV_KEY)
 
@@ -4085,6 +4110,7 @@ if __name__ == "__main__":
     threading.Thread(target=sleep_loop, daemon=True).start()
     threading.Thread(target=heat_loop, daemon=True).start()
     threading.Thread(target=_groups_loop, daemon=True).start()
+    threading.Thread(target=tv_browser_loop, daemon=True).start()
     threading.Thread(target=_moved_loop, daemon=True).start()
     threading.Thread(target=_offline_loop, daemon=True).start()
     threading.Thread(target=lambda: (inproc.warm(), versions()), daemon=True).start()  # one-time loads and the tool versions, so no tap pays for them

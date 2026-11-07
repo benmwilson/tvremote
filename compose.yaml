@@ -45,5 +45,34 @@ services:
       timeout: 5s
       retries: 3
 
+  tvbrowser:
+    # Draws the TV page (/tv) as the home screen while the launcher is on and nothing plays; the app starts and stops it with a flag file in /data.
+    build:
+      context: .
+      dockerfile: docker/cog/Dockerfile
+    image: tvbrowser:latest
+    container_name: tvbrowser
+    restart: unless-stopped
+    network_mode: host
+    user: "${PI_UID:-1000}:${PI_GID:-1000}"
+    group_add: ["${VIDEO_GID:-44}", "${RENDER_GID:-992}"]
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/video10:/dev/video10
+      - /dev/video11:/dev/video11
+      - /dev/video12:/dev/video12
+    volumes:
+      - /run/user/${PI_UID:-1000}:/run/user/${PI_UID:-1000} # the Wayland socket
+      - tvremote-data:/data:ro
+    environment:
+      - XDG_RUNTIME_DIR=/run/user/${PI_UID:-1000}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
+      - HOME=/tmp
+      - PORT=${PORT:-8765}
+      - COG_PLATFORM_WL_VIEW_FULLSCREEN=1
+      # WebKit's own sandbox can't start inside a container (no user namespaces), so it is off here. The page is ours (localhost only),
+      # every picture is fetched by the app and handed over, and nothing else is loaded. Do not point this container at other sites.
+      - WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+
 volumes:
   tvremote-data:
