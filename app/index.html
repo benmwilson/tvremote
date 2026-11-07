@@ -1440,7 +1440,7 @@ function render() {
   setBtn($('pp'), st.paused ? 'play' : 'pause', st.paused ? 'Paused' : '');
   $('seek').classList.toggle('hide', !run || st.live);
   if (!up && !starting && !st.error) $('meta').textContent = ext
-    ? (extCtl ? (ext.paused ? 'Paused' : 'Playing') : 'Open') + ' on the TV itself, not through this remote. Starting something here will switch the TV to ' + (((targets.find(t => t.id === target) || {}).kind === 'chromecast') ? 'the Chromecast' : 'the Pi') + '.'
+    ? (extCtl ? (ext.paused ? 'Paused' : 'Playing') + (ext.position != null ? ' at ' + fmt(ext.position) : '') : 'Open') + ' on the TV itself, not through this remote. Starting something here will switch the TV to ' + (((targets.find(t => t.id === target) || {}).kind === 'chromecast') ? 'the Chromecast' : 'the Pi') + '.'
     : 'Pick something below, or open a favourite.';
   $('extpp').classList.toggle('hide', !extCtl);
   setBtn($('extpp'), ext && ext.paused ? 'play' : 'pause', ext && ext.paused ? 'Paused' : '');
