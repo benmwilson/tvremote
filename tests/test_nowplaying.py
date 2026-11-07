@@ -62,3 +62,10 @@ class ViewTests(unittest.TestCase):
             with mock.patch.object(server.accounts, "role", return_value="admin"):
                 self.assertEqual(server.own_app_view(ext)["title"], "t")
             self.assertIsNone(server.own_app_view(None))
+
+
+class AllowListTests(unittest.TestCase):
+    def test_a_tv_not_on_the_list_is_never_listened_to(self):
+        with mock.patch.dict(nowplaying.os.environ, {"TVREMOTE_NOWPLAYING_IPS": "192.168.1.142"}), mock.patch.object(nowplaying.threading, "Thread") as th:
+            nowplaying.sync("tv1", "192.168.1.141", "YouTube")
+            th.assert_not_called()

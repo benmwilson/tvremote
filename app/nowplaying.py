@@ -7,6 +7,7 @@ Netflix and Prime Video have no known local interface; Plex would need its serve
 
 A listener only runs while somebody is looking at that TV (sync() is called from the Roku refresh) and stops 90 s after the last look."""
 import json
+import os
 import re
 import threading
 import time
@@ -115,6 +116,9 @@ def _run(tv_id, ip, st):
 
 def sync(tv_id, ip, app):
     """Called when the TV's open app is known (None when it is on an input, home or off): start, keep or stop its listener."""
+    allowed = [x.strip() for x in os.environ.get("TVREMOTE_NOWPLAYING_IPS", "").split(",") if x.strip()]
+    if allowed and ip not in allowed:
+        return  # listen only to the TVs named here (empty: every TV)
     with _lock:
         st = _state.get(tv_id)
         if st and st["app"] != app:

@@ -33,6 +33,7 @@ services:
       - TVREMOTE_CEC_NAME=HunnidPi
       - TVREMOTE_SHELL_VO=${SHELL_VO:-wlshm,gpu}
       - TVREMOTE_SHELL=${HOME_SCREEN:-1}  # 0 = never open the full-screen home screen (the Pi desktop stays usable)
+      - TVREMOTE_NOWPLAYING_IPS=${NOWPLAYING_IPS:-}  # Roku addresses whose own-app title is read (empty: all)
       - TVREMOTE_KICK_CLIENT_ID=${KICK_CLIENT_ID:-}
       - TVREMOTE_KICK_CLIENT_SECRET=${KICK_CLIENT_SECRET:-}
       - TVREMOTE_TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID:-}
