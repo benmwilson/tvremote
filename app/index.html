@@ -425,7 +425,19 @@ details[open]>summary::after{transform:rotate(180deg)}
 #tourbox{position:fixed;left:0;right:0;bottom:0;z-index:60;max-width:560px;margin:0 auto;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:var(--card);border-radius:22px 22px 0 0;box-shadow:0 -10px 34px rgba(0,0,0,.55)}
 #tourbox .tt{display:flex;align-items:center;gap:10px}#tourbox .tt b{flex:1;font-size:17px}#tourbox .sub{font-size:12px;color:var(--dim)}
 #tourbox p{margin:4px 0 12px;color:var(--dim);font-size:15px;line-height:1.45;min-height:3em}
-body.touring{padding-bottom:260px}
+/* Settings tabs: one section at a time. A scrolling row of pills on the phone, a rail down the left on a desktop. */
+.stabs{position:sticky;top:0;z-index:20;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:8px 0 12px;margin:0 0 6px;background:var(--bg,#0b0e14)}
+.stabs::-webkit-scrollbar{display:none}
+.stabs button{flex:none;min-height:42px;padding:0 18px;border-radius:99px;background:var(--card);color:var(--dim);font-size:15px;font-weight:600}
+.stabs button[aria-selected=true]{background:var(--tv,#6bb2ff);color:#0b0e14}
+.stab-off{display:none!important}
+#view-settings .scat{display:none}  /* the tab names the section */
+html[data-layout=desktop] #view-settings:not(.hide){display:grid;grid-template-columns:190px minmax(0,1fr);column-gap:36px;align-items:start;max-width:1060px}
+html[data-layout=desktop] #view-settings>*{grid-column:2}
+html[data-layout=desktop] #view-settings>.stabs{grid-column:1;grid-row:1 / span 40;position:sticky;top:12px;flex-direction:column;overflow:visible;gap:4px;background:none;padding:0;margin:0}
+html[data-layout=desktop] .stabs button{border-radius:12px;text-align:left;min-height:44px;background:none}
+html[data-layout=desktop] .stabs button[aria-selected=true]{background:var(--card2,var(--card));color:var(--fg,#eef1f6);box-shadow:inset 3px 0 0 var(--tv,#6bb2ff)}
+body.touring{padding-bottom:260px;min-height:calc(100dvh + 140px)}  /* a short screen (the TV list) must still be scrollable: Safari only tucks its bottom bar away, and lets the box sit at the real bottom, once the page has scrolled */
 body.touring dialog.sheet[open]{z-index:55}body.touring dialog.sheet .sb{padding-bottom:300px}  /* a sheet the tour opens stays below the tour box, with room to scroll its last rows clear of it */
 .tour-hl{outline:3px solid var(--tv,#6bb2ff)!important;outline-offset:4px;border-radius:14px;animation:tourpulse 1.4s ease-in-out infinite}
 @keyframes tourpulse{50%{outline-offset:8px}}
@@ -750,6 +762,14 @@ body:has(dialog.sheet[open]){overflow:hidden}
 </section>
 
 <section id="view-settings" class="hide">
+  <div id="stabs" class="stabs" role="tablist" aria-label="Settings sections">
+    <button type="button" role="tab" data-t="you">You</button>
+    <button type="button" role="tab" data-t="people" data-admin>People</button>
+    <button type="button" role="tab" data-t="tvs" data-admin>TVs</button>
+    <button type="button" role="tab" data-t="remote" data-admin>Remote</button>
+    <button type="button" role="tab" data-t="system" data-admin>System</button>
+    <button type="button" role="tab" data-t="help">Help</button>
+  </div>
   <h2 class="scat">Your account</h2>
   <div class="card s-prof">
     <div class="avatar" id="sav" aria-hidden="true">?</div>
@@ -761,7 +781,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <form id="pwform" class="hide s-form">
       <input id="pwcur" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password">
       <input id="pwnew" type="password" placeholder="New password (6+ characters)" autocomplete="new-password" aria-label="New password">
-      <p class="sub">You'll be signed out everywhere and log in again with the new one.</p>
+      <p class="sub">Signs you out everywhere.</p>
       <button class="go">Change password</button>
     </form>
   </div>
@@ -791,7 +811,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <label class="s-check" style="justify-content:space-between">Show what each stream is called<input id="apptitles" type="checkbox" class="tg" role="switch"></label>
     <label class="s-check" style="justify-content:space-between">Scroll long titles<input id="appmarquee" type="checkbox" class="tg" role="switch"></label>
     <label class="s-check" style="justify-content:space-between">Match the site’s colour while playing<input id="appcolour" type="checkbox" class="tg" role="switch"></label>
-    <p class="sub">These are saved on this device only, so each phone can look different.</p>
+    <p class="sub">Saved on this device only.</p>
     <button id="forgetsites" type="button" class="s-wide">Forget the sites I picked for streamers</button>
   </div>
 
@@ -799,7 +819,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <h2 class="scat">People and access</h2>
     <h3 class="shead">People</h3>
     <div class="card" id="people"></div>
-    <p class="sub s-note" style="margin:10px 4px 0"><b>Owner</b> is the first admin, made at setup: the only one who can add or change other admins. <b>Admins</b> manage users, guest links, TVs and these settings. <b>Users</b> play, favourite and link their own accounts. <b>Guests</b> come in through a link and can only control the TVs, for a limited time.</p>
+    <p class="sub s-note" style="margin:10px 4px 0"><b>Owner</b> adds admins. <b>Admins</b> manage everything. <b>Users</b> play and favourite. <b>Guests</b> only control TVs.</p>
     <button id="addperson" class="s-wide" aria-expanded="false">Add a person</button>
     <form id="acctadd" class="card s-form hide">
       <input id="acctname" placeholder="Name (letters, digits, - or _)" autocapitalize="none" autocomplete="off" aria-label="New account name">
@@ -811,7 +831,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
 
     <h3 class="shead">Access requests <span class="pill hide" id="reqcount"></span></h3>
     <div class="card" id="requests"></div>
-    <p class="sub s-note">People who aren't logged in can ask for access from the login page. You'll see them here.</p>
+    <p class="sub s-note">Requests from the login page show up here.</p>
 
     <h3 class="shead">Guest links</h3>
     <div class="card s-form" id="inviteform">
@@ -824,9 +844,9 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <option value="3">Works on up to 3 devices</option><option value="5">Works on up to 5 devices</option></select>
       <div id="invtvs"></div>
       <button class="go" id="invmake">Create a guest link</button>
-      <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. Copy it or show its QR code. It clears from here in a minute; its QR code stays in the list below.</p>
+      <div id="invout" class="hide"><p class="sub s-ok" style="margin:0 0 6px">Link ready. It clears here in a minute; its QR stays in the list.</p>
         <div class="s-out"><input id="invurl" readonly aria-label="The guest link"><button id="invcopy" type="button" class="iconbtn" aria-label="Copy the link" title="Copy the link"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg></button><button id="invqr" type="button" class="iconbtn" aria-label="Show QR code" title="Show QR code"><svg class="ic" aria-hidden="true"><use href="#i-qr"/></svg></button><button id="invtv" type="button" class="iconbtn hide" aria-label="Show it on the TV" title="Show it on the TV"><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg></button></div></div>
-      <p class="sub">A guest can play Kick, Twitch and YouTube links and control the TVs. They can't change favourites, link accounts or manage people and TVs. Each device that opens the link uses up one of its places, and it must be opened within 2 days.</p>
+      <p class="sub">Guests can play links and control TVs, nothing else. A link works for 2 days unopened.</p>
     </div>
     <div class="card hide" id="guests"></div>
 
@@ -836,7 +856,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <button id="autosetup" class="s-wide go" style="margin:0 0 8px">Set up automatically</button>
     <p id="autonote" class="sub s-note" role="status"></p>
     <button id="rerun" class="s-wide" style="margin:0">Change or move a TV</button>
-    <p class="sub s-note">Moved the Pi to another TV, or added a Chromecast or Roku? Plug it in, turn that TV on, then tap this. It looks again, shows what it found (including which HDMI port the Pi is on) and lets you rename, re-pair and test each TV.</p>
+    <p class="sub s-note">Moved the Pi or added a TV? Turn it on, then scan again.</p>
     <h3 class="shead hide" id="pihead">TV screen</h3>
     <div class="card pi-card hide" id="pibox">
       <div class="pi-top">
@@ -850,15 +870,15 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <label class="s-check" style="justify-content:space-between;margin-top:6px">Launcher on the TV between streams<input id="launchertoggle" type="checkbox" class="tg" role="switch"></label>
       <label class="s-check" style="justify-content:space-between">Live preview when you rest on a card<input id="launcherpreview" type="checkbox" class="tg" role="switch"></label>
       <label class="s-check" style="justify-content:space-between">Play sound in the preview<input id="launcherpreviewsound" type="checkbox" class="tg" role="switch"></label>
-      <p class="sub hide" id="pvsoundnote" style="margin:0 2px 4px">Not available yet: the TV&rsquo;s browser has no sound connection, and asking for sound would freeze the preview.</p>
-    <p class="sub" style="margin:2px 0 6px">Who is live, your favourites, groups and recents as tiles on the TV. Move around it with the pad on the remote (an IR receiver can be added later).</p>
+      <p class="sub hide" id="pvsoundnote" style="margin:0 2px 4px">No sound connection for the TV&rsquo;s browser yet.</p>
+    <p class="sub" style="margin:2px 0 6px">Live favourites, groups and recents as tiles. Use the pad on the remote to move around.</p>
     <div style="margin-top:10px"><b style="display:block;margin-bottom:6px;font-weight:600">Weather in the launcher&rsquo;s header</b>
       <input id="weathercity" type="text" placeholder="Start typing a city" aria-label="City for the weather" maxlength="80" autocapitalize="words" autocorrect="off" autocomplete="off">
       <div id="weathersug" class="wsug" role="listbox" aria-label="Matching cities"></div>
       <select id="weatherunit" aria-label="Temperature units" style="margin-top:8px"><option value="C">Celsius (&deg;C)</option><option value="F">Fahrenheit (&deg;F)</option></select></div>
-    <p class="sub" id="weathermsg" style="margin:2px 0 6px">Leave the city empty for no weather. Only the city's weather is looked up (from Open-Meteo); nothing else leaves the Pi.</p>
+    <p class="sub" id="weathermsg" style="margin:2px 0 6px">Leave empty for no weather.</p>
     <label class="s-check" style="justify-content:space-between;margin-top:6px">Warn on the TV when the Pi runs hot<input id="heattv" type="checkbox" class="tg" role="switch"></label>
-      <p class="sub" style="margin:2px 0 0">Amber text on the picture (from 78 °C, at most once a minute); with several streams it shows on every window. The volume and paused notices can use the same look for a single full-screen stream.</p>
+      <p class="sub" style="margin:2px 0 0">Amber text on the picture from 78 &deg;C.</p>
       <button id="bannertest" type="button" style="margin-top:8px;width:100%">Show a test warning on the TV</button>
       <label class="s-cap" for="noticestyle" style="display:block;margin-top:12px">Volume and paused notices</label>
       <select id="noticestyle" aria-label="How volume and paused notices look on the TV"><option value="strip">Coloured text (new)</option><option value="text">Plain text (classic)</option></select>
@@ -873,10 +893,10 @@ body:has(dialog.sheet[open]){overflow:hidden}
           <input id="shortcuturl" placeholder="shortcuts://run-shortcut?name=TV%20Remote" aria-label="The Play on Pi shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"></div>
         <div id="qrinstall" class="hide"><div class="s-cap">The shortcut's iCloud link</div>
           <div class="s-out"><input id="installurl" placeholder="https://www.icloud.com/shortcuts/..." aria-label="The shortcut's iCloud link" inputmode="url" autocapitalize="off" autocorrect="off"><button id="installqr" type="button" class="iconbtn" aria-label="Show the QR code" title="Show the QR code"><svg class="ic" aria-hidden="true"><use href="#i-qr"/></svg></button></div>
-          <p class="sub">To get the link: open the Shortcuts app, touch and hold the shortcut, tap Share, then Copy iCloud Link. Paste it here. Anyone who scans the code on an iPhone is offered the shortcut to add. The shortcut has to be shared this way, so it can't be made for you.</p></div>
+          <p class="sub">Shortcuts app: hold the shortcut, Share, Copy iCloud Link, paste here.</p></div>
         <div id="scname-wrap" class="hide"><div class="s-cap">Or just the shortcut's name</div>
           <div class="s-out"><input id="scname" placeholder="TV Remote" aria-label="The shortcut's name, as shown in the Shortcuts app" autocapitalize="off" autocorrect="off"><button id="scuse" type="button">Use it</button></div>
-          <p class="sub">Open the Shortcuts app on the iPhone, find the shortcut and type its name here exactly as shown. The QR code then runs that shortcut when it is scanned on an iPhone that has it. No link needed.</p></div>
+          <p class="sub">Type the shortcut&rsquo;s name exactly as shown in the Shortcuts app.</p></div>
         <p class="sub" id="qrhelp"></p>
       </div>
     </div>
@@ -895,7 +915,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
         <option value="360">Up to 360p (lightest)</option><option value="480">Up to 480p</option>
         <option value="720">Up to 720p</option><option value="1080">Up to 1080p (heaviest)</option></select>
       <label class="s-check" style="justify-content:space-between">Let guests watch on their phone<input id="cfgguests" type="checkbox" class="tg" role="switch"></label>
-      <p class="sub">"Watch on phone" shows the TV's stream on the phone, at home only. A bigger picture uses more of the home Wi-Fi.</p>
+      <p class="sub">Watch on phone works at home only; a bigger picture uses more Wi-Fi.</p>
     </div>
     <h2 class="scat">System</h2>
     <h3 class="shead">Pi health</h3>
@@ -903,7 +923,7 @@ body:has(dialog.sheet[open]){overflow:hidden}
     <h3 class="shead">The app</h3>
     <div class="card s-form">
       <button id="restartapp" type="button">Restart the app</button>
-      <p class="sub" id="restartnote">Restarts the container's app (Docker brings it straight back). It stops what is playing on the Pi's screen. Use it if something is stuck.</p>
+      <p class="sub" id="restartnote">Restarts the app (stops what is playing). Use it if something is stuck.</p>
     </div>
     <h3 class="shead hide" id="dockerhead">Docker</h3>
     <div class="card hide" id="dockerbox">
@@ -1380,7 +1400,26 @@ function linkEl(url, source) {
 let nowAvFor = '';
 
 const err = m => { $('err').textContent = m || ''; if (m) setTimeout(() => $('err').textContent = '', 6000); };
+// The tour's demo: while it runs and nothing real is playing, the page shows a made-up live stream (and, on the multistream steps, a made-up
+// multistream and chat), so every control can be explained as if it were live. Nothing in it can reach the TV: every write is refused.
+let tourDemoOn = false, tourDemoWall = false, realSt = {}, demoChatN = 0;
+const DEMO_WALL = () => ({layout: 'focus', max: 4, sound: [0], selected: 0, busy: false,
+  main: {i: 0, url: 'https://www.twitch.tv/anthonyz', name: 'anthonyz', source: 'Twitch', running: true, title: 'Grand Theft Auto V', quality: ''},
+  tiles: [{i: 1, url: 'https://kick.com/xqc', name: 'xqc', source: 'Kick', running: true, title: 'Just Chatting', quality: '720'},
+          {i: 2, url: 'https://kick.com/omie', name: 'omie', source: 'Kick', running: true, title: 'Grand Theft Auto V', quality: ''}]});
+const demoSt = () => ({running: true, target, title: 'Grand Theft Auto V RP | !socials', source: 'Twitch', url: 'https://www.twitch.tv/anthonyz', live: true, live_for: 7400,
+  game: 'Grand Theft Auto V', paused: false, position: null, duration: null, quality: '1080p60,best', volume: 60, muted: false, height: 1080, hwdec: 'v4l2m2m',
+  drops: 1, buffering: false, chat_ok: true, chat: false, chat_pref: false, chat_tv: 0, wall: tourDemoWall ? DEMO_WALL() : null});
+const DEMO_CHAT = [['maple', '#ff7ac6', 'that first turn was clean'], ['jun_k', '#62b0ff', 'LETS GOOO'], ['pixel', '#53fc18', 'who is the other car'], ['rowan', '#ffb06b', 'chat is moving fast today'],
+  ['tess', '#a970ff', 'GG'], ['bo', '#ff6b6b', 'clip that'], ['ivy', '#62b0ff', 'hello from the couch'], ['dax', '#53fc18', 'this is the best part']];
+function setDemo(on, wall) {
+  wall = on && !!wall;
+  if (tourDemoOn === on && tourDemoWall === wall) return;
+  tourDemoOn = on; tourDemoWall = wall; demoChatN = 0; chatLast = 0; $('chatbox').replaceChildren(); wallSig = '';
+  if (on) { st = demoSt(); render(); chatShow(); } else poll();
+}
 async function api(path, method = 'GET', body) {
+  if (tourDemoOn && method !== 'GET') { err('That is only an example from the tour.'); return {ok: false}; }
   try {
     const u = path + (path.includes('?') ? '&' : '?') + 'target=' + encodeURIComponent(target || 'living');
     const r = await fetch(u, {method, headers: body ? {'Content-Type': 'application/json'} : {},
@@ -1526,6 +1565,8 @@ async function poll() {
   if (view() !== 'tv') return;
   if ((targets.find(t => t.id === target) || {}).kind === 'tv') return;  // nothing plays here
   const s = await api('/api/status');
+  if (s) realSt = s;
+  if (tourDemoOn) { st = demoSt(); render(); return; }  // the tour's example stands in for the real status
   if (s) {
     // The same stream reloading (a quality switch, Refresh) briefly reports "starting": keep showing the controls meanwhile,
     // instead of dropping the whole card back to Stop only. A different stream, or an error, shows as itself.
@@ -2021,18 +2062,19 @@ function confirmSheet(title, text, yes, danger) {
 // `when` is added to the text if the thing is not on screen right now (it only appears in some states).
 const TOUR = [
   {t: 'Pick a TV', x: 'The first screen has a card for each TV and what it is playing. Tap one to open its remote. Controls only act on the TV you opened.', view: 'all', sel: '#cards .tvcard'},
+  {t: 'Launcher', x: 'While nothing plays, the TV shows the launcher: your live favourites, groups and recents. The arrows move around it, OK plays what is highlighted, and resting on a live card for a moment previews it.', view: 'tv', real: true, sel: '#launchcard', when: 'It shows here while the launcher is on the Pi\u2019s screen and nothing is playing.'},
+  {t: 'Now playing', x: 'This card is the remote for what is on the TV: its title and site, LIVE or how far in you are, big play and pause, the volume slider, the quality menu, Refresh to reload a stalled stream, the star to save it as a favourite, Watch on phone, Move to another TV, and Stop. (An example here: nothing is really playing.)', view: 'tv', sel: '#now'},
   {t: 'Play something', x: 'Paste a link, type a channel name or search here. A bare name looks on Kick; the buttons below switch to Twitch or YouTube. From your phone you can also use Share: the \u201cPlay on Pi\u201d Shortcut on an iPhone, or the TV Remote app in the Share list on Android.', view: 'tv', sel: '#link'},
   {t: 'Favourites', x: 'Tap the star on a stream to keep it here. The LIVE badge shows who is on now, and greyed ones are offline.', view: 'tv', sel: '#favs', noGuest: true, when: 'Nothing is saved yet: tap the star on a stream to add one.'},
   {t: 'Recents', x: 'What you watched lately. Offline channels are greyed out.', view: 'tv', sel: '#recents', when: 'It fills up as you play things.'},
+  {t: 'Chat', x: 'Read the chat of the Twitch or Kick channel that is playing, right here. With several streams, tap a picture in its header to read that one. The TV button puts the chat on the TV (the picture moves over to make room), the arrow-out button opens it on the site, and the arrow opens or closes this view. Link your account in Settings to type, pick emotes and send. (These messages are made up.)', view: 'tv', sel: '#chatcard', grp: 'chat'},
+  {t: 'Multistream', x: 'Watch up to four streams at once on the Pi\u2019s screen. This sheet opens from the Multistream button. Type a channel name or link and tap Add, or tap a live suggestion. What you see on the next steps is an example.', view: 'tv', sel: '#walladdbox', when: 'Only the Pi\u2019s screen can show several streams.', grp: 'wall'},
+  {t: 'Layouts: Grid and Focus', x: 'Two buttons at the top of the sheet pick the layout. Grid shows every stream in an equal tile. Focus is the stage layout: one big stream with the others small underneath it, and the big one has the sound.', view: 'tv', sel: '#walllayout', grp: 'wall'},
+  {t: 'A stream\u2019s buttons', x: 'Every stream has its own row. Tap its name to choose it: the Controlling tag shows which stream the main controls (pause, volume, chat) act on. The speaker turns its sound on or off, and any number can be heard at once. The quality menu sets its picture size. Replace puts a different stream in that window. Enlarge (Focus layout only) swaps it with the big window. Full screen ends the multistream and keeps only that stream. The X takes it off the screen.', view: 'tv', sel: '#walltiles .wtile', grp: 'wall'},
+  {t: 'Sync and groups', x: 'The arrows button at the top lines the streams up in time when they show the same event. Save these as a group keeps a set to start together later from Favourites.', view: 'tv', sel: '#wallsync', grp: 'wall'},
+  {t: 'Browse live channels', x: 'See who is live on Kick and Twitch. Search, filter and sort, then play one or add it to the multistream.', view: 'tv', sel: '#browsecard'},
   {t: 'TV controls', x: 'Volume, mute, power and the TV\u2019s HDMI inputs, for the TV you opened.', view: 'tv', sel: '#tvctl'},
   {t: 'TV apps', x: 'Open the TV\u2019s own apps (YouTube, Netflix and so on) from here.', view: 'tv', sel: '#appsopen', when: 'Only TVs with a Roku have apps.'},
-  {t: 'Browse live channels', x: 'See who is live on Kick and Twitch. Search, filter and sort, then play one or add it to the multistream.', view: 'tv', sel: '#browsecard'},
-  {t: 'Launcher', x: 'While nothing plays, the TV shows the launcher: your live favourites, groups and recents. The arrows move around it, OK plays what is highlighted, and resting on a live card for a moment previews it.', view: 'tv', sel: '#launchcard', when: 'It shows here while the launcher is on the Pi\u2019s screen.'},
-  {t: 'Multistream', x: 'Watch up to four streams at once on the Pi\u2019s screen. This sheet opens from the Multistream button. Type a channel name or link and tap Add, or tap a live suggestion. The first stream you add starts playing by itself.', view: 'tv', sel: '#walladdbox', when: 'Only the Pi\u2019s screen can show several streams.', grp: 'wall'},
-  {t: 'Layouts: Grid and Focus', x: 'Two buttons at the top of the sheet pick the layout. Grid shows every stream in an equal tile. Focus is the stage layout: one big stream with the others small underneath it, and the big one has the sound.', view: 'tv', sel: '#walllayout', when: 'The layout buttons appear once two streams are on screen.', grp: 'wall'},
-  {t: 'A stream\u2019s buttons', x: 'Every stream has its own row. Tap its name to choose it: the Controlling tag shows which stream the main controls (pause, volume, chat) act on. The speaker turns its sound on or off, and any number can be heard at once. The quality menu sets its picture size. Replace puts a different stream in that window. Enlarge (Focus layout only) swaps it with the big window. Full screen ends the multistream and keeps only that stream. The X takes it off the screen.', view: 'tv', sel: '#walltiles .wtile', when: 'Add a stream or two and these appear on each row.', grp: 'wall'},
-  {t: 'Sync, groups and heat', x: 'The arrows button at the top lines the streams up in time when they show the same event. Save these as a group keeps a set to start together later from Favourites. If the Pi runs hot it lowers the pictures to 480p by itself and says so.', view: 'tv', sel: '#wallsync', when: 'Sync appears once two streams are on screen.', grp: 'wall'},
-  {t: 'Chat', x: 'Read the chat of the Twitch or Kick channel that is playing, right here. With several streams, tap a picture in its header to read that one. The TV button puts the chat on the TV (the picture moves over to make room), the arrow-out button opens it on the site, and the arrow opens or closes this view. Link your account in Settings to type, pick emotes and send.', view: 'tv', sel: '#chatcard', needsPlay: true, when: 'It appears while a Twitch or Kick channel plays.', grp: 'chat'},
   {t: 'Link your accounts', x: 'Link Kick or Twitch here to chat as yourself.', view: 'settings', sel: '#platforms', noGuest: true, when: 'Guests can\u2019t link accounts.'},
   {t: 'Help and Home Screen', x: 'More answers live here. To use this like an app, add it to your Home Screen (Safari: Share, Add to Home Screen. Chrome on Android: menu, Install app).', view: 'settings', sel: '#help'},
   {t: 'That\u2019s it', x: 'Tap Take the tour any time to see this again.', view: 'settings', sel: '#tourgo'}];
@@ -2056,21 +2098,18 @@ async function tourShow() {
   }
   if (seq !== tourSeq || !tourOpen()) return;  // a newer step, or the tour ended, while the screen changed
   const cur = targets.find(t => t.id === tourTv()) || {};
-  if (s.needsPlay && cur.kind === 'pi' && !st.running && !st.starting && !st.wall) {  // this card only exists while something plays: ask for that, or let them skip
-    $('tourtext').textContent = 'This part appears once something is playing. Play a channel with the box below and it shows up here, or skip it.';
-    $('tournext').textContent = 'Skip';
-    const q = $('link'); tourEl = q; q.classList.add('tour-hl'); q.scrollIntoView({block: 'center', behavior: 'smooth'});
-    const w = setInterval(() => { if (seq !== tourSeq || !tourOpen()) clearInterval(w); else if (st.running || st.wall) { clearInterval(w); tourShow(); } }, 1000);  // it carries on by itself once a stream plays
-    return;
-  }
+  // the example: on the TV screens, unless the step is about the real idle TV (real) or something is really playing (a real stream is shown as it is)
+  const wantDemo = s.view === 'tv' && !s.real && !realSt.wall && (!(realSt.running || realSt.starting) || s.grp === 'wall');
+  setDemo(wantDemo, s.grp === 'wall');
+  if (wantDemo) await new Promise(r => setTimeout(r, 250));  // let the example draw
   if (s.grp && cur.kind === 'pi' || s.grp === 'chat') { tourGrp = s.grp; if (TOUR_OPEN[s.grp]) TOUR_OPEN[s.grp](); await new Promise(r => setTimeout(r, 350)); if (seq !== tourSeq || !tourOpen()) return; }  // let the sheet or card draw
   const e = s.sel ? document.querySelector(s.sel) : null, on = !!(e && e.getClientRects().length);
   $('tourtext').textContent = on || !s.when ? s.x : s.x + ' (' + s.when + ')';
   if (on) { tourEl = e; e.classList.add('tour-hl'); e.scrollIntoView({block: 'center', behavior: 'smooth'}); }
-  if (window.scrollY < 2) window.scrollTo({top: 2, behavior: 'smooth'});  // a step with nothing to scroll to left the browser's bottom bar showing, and the box sat above it: any scroll tucks it away like the other steps
+  setTimeout(() => { if (seq === tourSeq && window.scrollY < 40) window.scrollTo({top: 60, behavior: 'smooth'}); }, 500);  // the step's own scrolling had nothing to do (like the first one): scroll a little anyway, so Safari lets the box sit at the real bottom
 }
 function tourEnd() {
-  tourSeq++; tourClear(); tourLeave();
+  tourSeq++; tourClear(); tourLeave(); setDemo(false);
   $('tourbox').classList.add('hide'); document.body.classList.remove('touring');
   if (view() !== (tourHome === '#/settings' ? 'settings' : tourHome.startsWith('#/tv/') ? 'tv' : 'all') || tourHome !== location.hash) location.hash = tourHome || '#/';
 }
@@ -2456,6 +2495,27 @@ function copyText(input) {
 }
 let me = {}, people = [], access = {requests: [], invites: [], guests: []}, openPerson = null;
 
+const STABS = {'Your account': 'you', 'On this device': 'you', 'People and access': 'people', 'TVs and screens': 'tvs', 'How the remote behaves': 'remote', 'System': 'system', 'Help': 'help'};
+let stab = 'you';
+try { stab = localStorage.getItem('stab') || 'you'; } catch (e) {}
+function stabInit() {  // every block under a category heading belongs to that heading's tab
+  let cur = 'you';
+  const walk = el => [...el.children].forEach(c => {
+    if (c.id === 'stabs') return;
+    if (c.id === 'adminarea') { walk(c); return; }
+    if (c.classList.contains('scat')) cur = STABS[c.textContent.trim()] || cur;
+    c.dataset.stab = cur;
+  });
+  walk($('view-settings'));
+  $('stabs').onclick = e => { const b = e.target.closest('button[data-t]'); if (!b) return; stab = b.dataset.t; try { localStorage.setItem('stab', stab); } catch (x) {} stabRefresh(); window.scrollTo({top: 0}); };
+}
+function stabRefresh() {  // people who are not admins only have You and Help
+  const admin = !!(me && me.admin);
+  if (!admin && stab !== 'help') stab = 'you';
+  document.querySelectorAll('#stabs button').forEach(b => { b.classList.toggle('hide', b.hasAttribute('data-admin') && !admin); b.setAttribute('aria-selected', String(b.dataset.t === stab)); });
+  document.querySelectorAll('#view-settings [data-stab]').forEach(e => e.classList.toggle('stab-off', e.dataset.stab !== stab));
+}
+stabInit();  // which settings tab each block belongs to (the markup is static: once is enough; after STABS and stab exist)
 function renderProfile() {
   const name = me.guest ? 'Guest' + (me.label ? ' (' + me.label + ')' : '') : me.user === 'owner' ? 'Owner' : me.user || '';
   $('sname').textContent = name || 'Signed out';
@@ -2471,6 +2531,7 @@ function renderProfile() {
   document.body.classList.toggle('is-guest', !!me.guest);  // hides what a guest can't use (favourites, groups)
   document.querySelectorAll('#help .adm').forEach(e => e.classList.toggle('hide', !me.admin));
   $('adminarea').classList.toggle('hide', !me.admin);
+  stabRefresh();
   $('dbgrow').classList.toggle('hide', !me.admin);
 }
 
@@ -3169,6 +3230,7 @@ function chatAdd(row) {
 
 async function chatPoll() {  // Twitch
   if (!chatOpen || document.hidden || view() !== 'tv') return;
+  if (tourDemoOn) { const m = DEMO_CHAT[demoChatN++ % DEMO_CHAT.length]; chatAdd(chatRow(m[0], m[1], [{t: m[2]}])); $('chatsub').textContent = '#anthonyz'; return; }
   const r = await fetch('/api/chat/feed?target=' + encodeURIComponent(target || 'living') + '&i=' + chatTab + '&since=' + chatLast).then(x => x.json()).catch(() => null);
   if (!r) return;
   if (r.reset) { $('chatbox').replaceChildren(); chatLast = 0; }
@@ -3449,7 +3511,7 @@ function renderWall() {
   $('walllayout').classList.toggle('hide', !w);
   $('wallsync').classList.toggle('hide', !w);
   if (w) $('walllayout').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === w.layout)));
-  $('wallsub').textContent = syncMsg && Date.now() < syncMsg.until ? syncMsg.text : w && w.note ? w.note : w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') + (w.heat ? ' \u00b7 Pi running hot: quality lowered' : '') : (!st.running && !st.starting ? 'Nothing is playing yet. The first stream starts by itself, add more for a multistream' : 'Watch more than one at once');
+  $('wallsub').textContent = tourDemoOn ? 'Example only: nothing is playing on the TV' : syncMsg && Date.now() < syncMsg.until ? syncMsg.text : w && w.note ? w.note : w ? rows.length + ' of ' + w.max + ' on screen' + (w.busy ? ' \u00b7 updating\u2026' : '') + (w.heat ? ' \u00b7 Pi running hot: quality lowered' : '') : (!st.running && !st.starting ? 'Nothing is playing yet. The first stream starts by itself, add more for a multistream' : 'Watch more than one at once');
   $('wallcard').classList.toggle('updating', !!(w && w.busy));  // the Pi is changing the windows: a spinner, and the buttons that change them wait
   const sig = JSON.stringify([w, wallReplace, favList.map(f => f.live === true), recentList.map(x => x.live === true)]);
   if (sig === wallSig) return;
