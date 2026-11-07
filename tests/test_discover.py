@@ -34,10 +34,10 @@ class Parsing(unittest.TestCase):
     def test_the_media_player_answer_is_read_without_sending_anything(self):
         xml = '<player error="false" state="play"><plugin id="837" name="YouTube"/><position>35700 ms</position><duration>212000 ms</duration></player>'
         with mock.patch.object(roku, "_call", return_value=xml) as call:
-            self.assertEqual(roku.media("192.168.1.141"), {"state": "play", "duration": 212.0})
+            self.assertEqual(roku.media("192.168.1.141"), {"state": "play", "duration": 212.0, "position": 35.7})
             call.assert_called_once_with("192.168.1.141", "/query/media-player")  # a plain GET: no keypress, no POST
         with mock.patch.object(roku, "_call", return_value='<player error="false" state="close"/>'):
-            self.assertEqual(roku.media("192.168.1.141"), {"state": "close", "duration": None})
+            self.assertEqual(roku.media("192.168.1.141"), {"state": "close", "duration": None, "position": None})
 
 
 class PiPort(unittest.TestCase):
@@ -498,7 +498,7 @@ class WhatTheTvIsPlayingByItself(unittest.TestCase):
             self.assertEqual(got["controllable"], controllable, state)  # an app that is only browsing has nothing to pause
 
     def test_the_roku_menu_is_not_reported_as_something_playing(self):
-        with self.details(app="Roku Dynamic Menu", app_id="562859", media={"state": "close", "duration": None}):
+        with self.details(app="Roku Dynamic Menu", app_id="562859", media={"state": "close", "duration": None, "position": None}):
             self.assertIsNone(self.client.get("/api/status").get_json()["external"])
             self.assertIsNone(server.make_card("living", {"running": False})["external"])
 

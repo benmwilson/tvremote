@@ -3588,7 +3588,7 @@ function cardEl(c, onTap, extra) {
   const sub = [[c.brand, size].filter(Boolean).join(' '), c.model].filter(Boolean).join(' · ');
   const n = c.now;
   const ms = !!(n && n.streams && n.streams.length > 1);  // several streams on the screen
-  const line = !c.reachable ? "Can't reach this TV" : ms ? 'Multistream \u00b7 ' + n.streams.length + ' streams' : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.external ? (c.external.paused ? 'Paused on the TV: ' : 'On the TV: ') + c.external.app : c.error ? "Couldn't play: " + c.error : c.kind === 'tv' ? 'TV controls only' : 'Nothing playing';
+  const line = !c.reachable ? "Can't reach this TV" : ms ? 'Multistream \u00b7 ' + n.streams.length + ' streams' : n && n.starting ? 'Starting…' : n ? (n.paused ? 'Paused: ' : 'Playing: ') + n.title : c.external ? (c.external.paused ? 'Paused on the TV: ' : 'On the TV: ') + c.external.app + (c.external.position != null ? ' · ' + fmt(c.external.position) : '') : c.error ? "Couldn't play: " + c.error : c.kind === 'tv' ? 'TV controls only' : 'Nothing playing';
   b.append(head, el('div', 'sub', [sub, c.connection].filter(Boolean).join(' · ')), el('div', 'now', line));
   if (c.reachable && ms) {  // one row per stream: who, which site, live or not, what they are playing, and whether it has sound
     const list = el('div', 'cstreams');

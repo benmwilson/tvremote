@@ -2270,8 +2270,11 @@ def external_now(tv_id):
         return None
     state = (r.get("media") or {}).get("state")
     # only an app whose player is really open can be paused: a menu, a browse screen or a closed player reports "close" (or nothing)
+    pos = (r.get("media") or {}).get("position")
+    if pos is not None and state == "play":
+        pos += time.time() - _roku.get(tv_id, (time.time(), 0))[0]  # the answer is a few seconds old: carry it on while it plays
     return {"app": app, "state": state, "paused": state == "pause", "controllable": state in ("play", "pause", "buffer"),
-            "duration": (r.get("media") or {}).get("duration")}
+            "duration": (r.get("media") or {}).get("duration"), "position": pos}
 
 
 def roku_details(tv_id):

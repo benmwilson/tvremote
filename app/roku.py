@@ -50,7 +50,9 @@ def media(ip):
     xml = _call(ip, "/query/media-player")
     state = re.search(r'<player\b[^>]*\bstate="([^"]*)"', xml)
     dur = re.match(r"(\d+)\s*ms", _tag(xml, "duration") or "")
-    return {"state": state.group(1) if state else None, "duration": int(dur.group(1)) / 1000 if dur else None}
+    pos = re.match(r"(\d+)\s*ms", _tag(xml, "position") or "")
+    return {"state": state.group(1) if state else None, "duration": int(dur.group(1)) / 1000 if dur else None,
+            "position": int(pos.group(1)) / 1000 if pos else None}
 
 
 def apps(ip):
