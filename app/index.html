@@ -2058,10 +2058,10 @@ function moveInfo() {
   return {to, here, same, dev, label: same ? 'Continue on ' + dev : 'Move to ' + to.name};  // same TV: carry what is playing over to the other device
 }
 // A confirmation sheet for something that stops what is playing: resolves true on the confirm button, false on Cancel, Esc or a tap outside.
-function confirmSheet(title, text, yes, danger) {
+function confirmSheet(title, text, yes, danger, no) {
   return new Promise(resolve => {
     const d = $('confirm');
-    $('confirmttl').textContent = title; $('confirmtext').textContent = text; $('confirmyes').textContent = yes;
+    $('confirmttl').textContent = title; $('confirmtext').textContent = text; $('confirmyes').textContent = yes; $('confirmno').textContent = no || 'Cancel';
     $('confirmyes').className = danger ? 'danger' : 'go';  // red for something that cannot be undone
     let done = false;
     const finish = v => { if (done) return; done = true; if (d.open) d.close(); resolve(v); };
@@ -3047,14 +3047,17 @@ async function loadTvsAdmin() {
 fetch('/api/setup').then(r => r.json()).then(j => { setupNeeded = !!j.needed; if (setupNeeded && view() !== 'setup') location.hash = '#/setup'; }).catch(() => {});
 
 fetch("/api/auth").then(r => r.json()).then(j => { me = j; document.body.classList.toggle("is-guest", !!j.guest); if (j.required) $("logout").classList.remove("hide"); if (j.ui) { uiCfg = j.ui; quickSig = ''; loadRecents(); renderQuick(); } firstTour(j); loadNotices(); }).catch(() => {});
-// A new account (or a guest on their first visit) gets the tour once, by itself; it can always be replayed from Settings > Help.
+// A new account (or a guest on their first visit) is offered the tour once; it can always be replayed from Settings > Help.
 function firstTour(j) {
   if (!j || j.required === false || setupNeeded || tourOpen()) return;
   let seen = !!j.tour_seen;
   if (j.guest) { try { seen = !!localStorage.getItem('tourSeenGuest'); if (!seen) localStorage.setItem('tourSeenGuest', '1'); } catch (e) { seen = true; } }
   else if (!seen) fetch('/api/account/tour', {method: 'POST'}).catch(() => {});
   if (seen) return;
-  setTimeout(() => { if (!tourOpen() && !document.querySelector('dialog[open]') && ['all', 'tv'].includes(view())) $('tourgo').onclick(); }, 1800);
+  setTimeout(async () => {  // asked, not forced: a welcome with the choice
+    if (tourOpen() || document.querySelector('dialog[open]') || !['all', 'tv'].includes(view())) return;
+    if (await confirmSheet('Welcome to TV Remote', 'Want a one-minute tour of what you can do here? You can replay it any time from Settings, then Help.', 'Start the tour', false, 'Not now')) $('tourgo').onclick();
+  }, 1800);
 }
 
 // ---- seek bar, quality shortcuts, sleep timer ----
