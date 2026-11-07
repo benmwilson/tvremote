@@ -1225,15 +1225,12 @@
   {
    "names": [
     "unshare",
-    "setns",
     "clone",
     "clone3",
     "mount",
     "umount",
     "umount2",
-    "pivot_root",
-    "sethostname",
-    "setdomainname"
+    "pivot_root"
    ],
    "action": "SCMP_ACT_ALLOW"
   }
