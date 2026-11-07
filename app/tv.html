@@ -68,7 +68,7 @@ function card(t) {
   return c;
 }
 // hover preview: after a pause on a live card its stream plays muted in the card, through the app's relay (never from the internet directly)
-let pvCard = null, pvTimer = 0, pvHls = null, pvVideo = null;
+let pvKey = '', pvCard = null, pvTimer = 0, pvHls = null, pvVideo = null;
 const hs = document.createElement('script'); hs.src = q('/vendor/hls.min.js'); document.head.append(hs);
 function stopPreview() {
   clearTimeout(pvTimer); if (pvHls) { pvHls.destroy(); pvHls = null; } if (pvVideo) { pvVideo.remove(); pvVideo = null; }
@@ -99,7 +99,8 @@ function focus() {
   const r = rows[cur.row]; if (!r) return;
   const strip = r.querySelector('.strip'), cards = strip.children, c = cards[cur.col];
   if (c) c.classList.add('f');
-  if (c !== pvCard) preview(c);
+  const key = cur.row + ':' + cur.col + ':' + (c && c._t && c._t.url);  // the same focused tile (even if its card is rebuilt for a new viewer count) never restarts a preview
+  if (key !== pvKey) { pvKey = key; preview(c); }
   strip.style.transform = 'translateX(' + -Math.max(0, cur.col - 4) * 352 + 'px)';
   document.getElementById('rows').style.transform = 'translateY(' + -Math.max(0, cur.row - 1) * 350 + 'px)';
 }
