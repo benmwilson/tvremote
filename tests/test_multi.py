@@ -226,6 +226,18 @@ class HomeScreenPausedTest(unittest.TestCase):
         screen.assert_called_with("playing")
 
 
+    def test_collapsing_to_one_stream_draws_no_switching_card_but_a_real_switch_does(self):
+        import app as server
+        proc = mock.MagicMock()
+        proc.poll.return_value = None
+        server.wall.clear()
+        server._swapping.clear()  # an earlier test can leave it set
+        for quiet, cards in ((True, 0), (False, 1)):
+            with mock.patch.object(server, "HOT", True), mock.patch.dict(server.state, {"proc": proc, "hot": True, "wid": server.wall.main_wid(), "url": "https://kick.com/a"}),                     mock.patch.object(server, "resolve", return_value=("Kick", "streamlink")), mock.patch.object(server, "stream_url", return_value="https://cdn/x.m3u8"),                     mock.patch.object(server.mpvipc, "send", return_value={"error": "success"}), mock.patch.object(server, "screen"), mock.patch.object(server, "osd_swap") as card,                     mock.patch.object(server.livewatch, "refresh_one"), mock.patch.object(server, "sl_info"), mock.patch.object(server, "switch_tv_to_pi"):
+                self.assertTrue(server.hot_load("https://kick.com/b", None, quiet=quiet))
+            self.assertEqual(card.call_count, cards)
+
+
 class QualityOsdTest(unittest.TestCase):
     def test_a_spinning_mark_shows_while_the_quality_changes_then_the_result_is_said(self):
         import app as server

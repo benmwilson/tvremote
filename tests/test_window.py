@@ -1,5 +1,6 @@
 import sys
 import time
+import os
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -134,3 +135,9 @@ class GlobalBanner(unittest.TestCase):
     def test_the_banner_has_its_own_window_rule(self):
         import multi
         self.assertIn('identifier="tvr-banner"', multi.rules_xml())
+
+
+class PlayerConfig(unittest.TestCase):
+    def test_mpvs_own_controller_is_switched_off(self):
+        conf = open(os.path.join(os.path.dirname(__file__), "..", "config", "mpv.conf"), encoding="utf-8").read().splitlines()
+        self.assertIn("osc=no", [l.strip() for l in conf])  # otherwise it shows a seek bar and the stream's address over the picture

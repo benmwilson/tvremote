@@ -844,7 +844,7 @@ def sl_quality(quality, default_q=None):
     return quality if ok(quality) else (default_q if ok(default_q) else SL_DEFAULT)
 
 
-def hot_load(url, quality=None):
+def hot_load(url, quality=None, quiet=False):
     """Change what the running player plays, in place: no window closes or opens, so nothing on the TV redraws. True when done; False when it
     can't be done this way (nothing running, a Twitch stream, a window that is the wrong shape), and the caller starts a player as usual."""
     p = state["proc"]
@@ -858,7 +858,7 @@ def hot_load(url, quality=None):
     if url == state["url"]:
         _addr_cache.pop((url, q), None)  # Refresh: a fresh address, not the remembered one
     addr = stream_url(url, q)  # raises when it is offline: the caller then starts it the usual way
-    if not _swapping.is_set() and not wall.active():  # a quality change draws its own card
+    if not quiet and not _swapping.is_set() and not wall.active():  # a quality change draws its own card; a multistream collapsing to one stream says nothing
         before = state.get("started")
         osd_swap(None, ready=lambda: _picture_changed_since(before), title=fav_name(url), source=source,
                  line="Refreshing the stream" if url == state["url"] else "Switching stream")
@@ -1533,7 +1533,7 @@ def wall_relayout(main_url=None):
             mpvipc.set_mute(SOCK, False)
             state["wid"] = None
             try:
-                if hot_load(url, wall.saved_quality):
+                if hot_load(url, wall.saved_quality, quiet=True):  # removing streams is not a "switch": no card
                     chat_sync()  # chat on: the strip beside the tiles goes, and the single-stream chat column takes its place
                     return
             except Exception as e:
