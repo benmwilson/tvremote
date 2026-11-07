@@ -5,6 +5,7 @@ of keys (the phone's pad, a keyboard, the TV remote through HDMI-CEC or an IR re
     pad = Launcher(rows)            # rows: [{"title": "Live now", "tiles": [{"id", "name", "kind", "url", ...}]}]
     ev = pad.key("down")            # -> {"redraw": True} | {"play": url} | {"group": id} | {"back": True} | None
 """
+from urllib.parse import urlparse
 
 # every way a key arrives -> the one name the launcher uses (Linux input names from CEC / IR / a keyboard, Roku ECP names from the phone's pad)
 KEYMAP = {
@@ -27,8 +28,9 @@ def build_rows(favs=(), recents=(), groups=(), live_first=True):
     """The launcher's rows from the app's own lists. Each item: {"name", "url", "live", "source", "avatar"?}; groups: {"id", "name", "members"}.
     "Live now" comes first (anyone live among favourites and recents, once each), then Groups, Favourites and Recents (without repeats)."""
     seen, live_tiles, rows = set(), [], []
-    def key(x):
-        return (x.get("name") or x.get("url") or "").lower()
+    def key(x):  # the channel in the link, so "xqc: LIVE HERE" (a favourite saved with a title) and "xqc" are one streamer, and Kick and Twitch share a name
+        seg = urlparse(x.get("url") or "").path.strip("/").split("/")[0].lower()
+        return seg or (x.get("name") or x.get("url") or "").lower()
     def tile(x, kind="stream"):
         return {"id": x.get("id") or x.get("url"), "kind": kind, "name": x.get("name") or x.get("url"), "url": x.get("url"),
                 "live": x.get("live") is True, "source": x.get("source"), "avatar": x.get("avatar"), "members": x.get("members"),

@@ -20,6 +20,13 @@ class RowsTests(unittest.TestCase):
         self.assertEqual([t["name"] for t in rows[1]["tiles"]], ["capped"])
         self.assertEqual([t["name"] for t in rows[2]["tiles"]], ["old"])
 
+    def test_one_streamer_is_one_tile_even_when_the_saved_name_has_a_title_in_it(self):
+        favs = [{"name": "xqc: LIVE HERE", "url": "https://kick.com/xqc", "live": True, "source": "Kick"}]
+        recents = [{"name": "xqc", "url": "https://kick.com/xqc", "live": True, "source": "Kick"},
+                   {"name": "xqc", "url": "https://www.twitch.tv/xqc", "live": True, "source": "Twitch"}]
+        rows = launcher.build_rows(favs, recents, [])
+        self.assertEqual([t["name"] for r in rows for t in r["tiles"]], ["xqc: LIVE HERE"])
+
     def test_groups_are_their_own_row_of_group_tiles(self):
         rows = launcher.build_rows([], [], [{"id": "g1", "name": "omie, xqc", "members": []}])
         self.assertEqual(rows[0]["title"], "Groups")
