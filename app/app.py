@@ -1855,24 +1855,17 @@ def api_move():
 PAUSED_TEXT = "▌▌  Paused"  # two bars and the word, in the same on-screen text the volume uses (a drawn overlay did not show reliably)
 
 
-def notices_on_strip():
-    """The volume and paused notices go on the strip across the top for one full-screen stream, unless the admin chose the classic text on the picture
-    (Settings > TV screen). Several streams always use text in the stream's own window: the notice is about that stream."""
+def notices_styled():
+    """The volume and paused notices are coloured text for one full-screen stream, unless the admin chose the classic plain text (Settings > TV screen).
+    Several streams always use plain text in the stream's own window: the notice is about that stream."""
     return settings.get("notice_style") != "text" and not wall.active()
 
 
 def osd_paused(paused, sock=SOCK):
-    """Show a pause notice on the TV for as long as the stream is paused, and clear it on resume. One full-screen stream: the strip across the top;
-    several streams: text in that stream's own window."""
-    if sock == SOCK and notices_on_strip():
-        if paused:
-            _banner["paused"] = True
-            if tv_banner(PAUSED_TEXT, "info", None):
-                return
-        else:
-            tv_banner_clear()
-            mpv(["show-text", "", 1])  # and the old text, if the strip could not open when it paused
-            return
+    """Show a pause notice on the TV for as long as the stream is paused, and clear it on resume (coloured text, or plain text in the stream's own window)."""
+    if sock == SOCK and notices_styled() and paused:
+        tv_note(PAUSED_TEXT, "info", None)
+        return
     cmd = ["show-text", PAUSED_TEXT, 3600000] if paused else ["show-text", "", 1]
     if sock == SOCK:
         mpv(cmd)
@@ -1891,10 +1884,12 @@ def osd_volume(sock=SOCK):
     if sock == SOCK:
         vol, muted = prop("volume"), prop("mute")
         if vol is not None:
-            if not (notices_on_strip() and tv_banner(volume_text(vol, muted), "info", 1.6)):  # the strip for one full-screen stream (it returns to "Paused" by itself)
+            if notices_styled():
+                tv_note(volume_text(vol, muted), "info", 1.5)
+            else:
                 mpv(["show-text", volume_text(vol, muted), 1500])
-                if prop("pause") is True:  # the volume text replaced the pause symbol: put it back once the volume has gone
-                    threading.Timer(1.7, lambda: prop("pause") is True and osd_paused(True)).start()
+            if prop("pause") is True:  # the volume text replaced the pause symbol: put it back once the volume has gone
+                threading.Timer(1.7, lambda: prop("pause") is True and osd_paused(True)).start()
         return
     vol, muted = sprop(sock, "volume"), sprop(sock, "mute")
     if vol is not None:
@@ -3193,47 +3188,30 @@ def versions():
 heat = {"on": False, "saved": None, "restored": False}  # the heat guard: lowers multistream pictures while the Pi is very hot
 
 
-_banner = {"win": None, "timer": None, "paused": False}
+NOTE_COLOURS = {"warn": "62B0FF", "hot": "6B6BFF", "info": "FFB06B"}  # text colours (BGR): amber, red, blue
 
 
-def _banner_done():
-    """The strip's time is up: it goes, unless the stream is paused, in which case the pause notice takes its place again."""
-    win = _banner["win"]
-    if _banner["paused"]:
-        win and win.update(shell.banner_line("▌▌  Paused", "info"))
-    elif win:
-        win.close()
+def note_text(text, level="warn"):
+    """mpv on-screen text with ASS styling in it ("${osd-ass-cc/0}" lets the tags through): large bold coloured text with a dark outline, no background,
+    so the stream shows through behind it."""
+    col = NOTE_COLOURS.get(level, NOTE_COLOURS["warn"])
+    return "${osd-ass-cc/0}{BSan7BSfs46BSb1BSbord4BSshad0BS1c&HCOL&BS3c&H000000&}TEXT${osd-ass-cc/1}".replace("BS", chr(92)).replace("COL", col).replace("TEXT", text.replace("{", "(").replace("}", ")").replace(chr(92), ""))
 
 
-def tv_banner(text, level="warn", seconds=5):
-    """A notice about the Pi, the TV or the one full-screen stream, drawn as a strip across the top of the screen (a window of its own, above every
-    stream window), so with several streams on screen a warning is not stuck inside one of them. seconds=None keeps it until tv_banner_clear().
-    Falls back to text on the main stream if that window won't open."""
-    try:
-        win = _banner["win"] = _banner["win"] or chatwin.banner_panel()
-        if not (win.open() and win.update(shell.banner_line(text, level))):
-            raise OSError("the banner window did not open")
-    except Exception as e:
-        app.logger.info("Banner window: %s", e)
-        mpv(["show-text", text, int((seconds or 3600) * 1000)])
-        return False
-    if _banner["timer"]:
-        _banner["timer"].cancel()
-        _banner["timer"] = None
-    if seconds:
-        _banner["timer"] = threading.Timer(seconds, _banner_done)
-        _banner["timer"].daemon = True
-        _banner["timer"].start()
-    return True
+def tv_note(text, level="warn", seconds=5):
+    """A notice drawn as coloured text over the picture. With several streams on screen it goes on every window, so a warning about the Pi or the TV as a
+    whole is not stuck in one of them. seconds=None keeps it (an hour) until it is replaced or cleared."""
+    ms = int((seconds or 3600) * 1000)
+    socks = [SOCK] + ([wall.sock(k, SOCK) for k in range(1, wall.count())] if wall.active() else [])
+    ok = False
+    for sock in socks:
+        r = mpv(["show-text", note_text(text, level), ms]) if sock == SOCK else mpvipc.send(sock, ["show-text", note_text(text, level), ms])
+        ok = ok or bool(r)
+    return ok
 
 
-def tv_banner_clear():
-    _banner["paused"] = False
-    if _banner["timer"]:
-        _banner["timer"].cancel()
-        _banner["timer"] = None
-    if _banner["win"]:
-        _banner["win"].close()
+def tv_note_clear():
+    mpv(["show-text", "", 1])
 
 
 def heat_check(temp):
@@ -3251,7 +3229,7 @@ def heat_check(temp):
                 e["quality"] = "480"
             wall_later(_restart_main_quality, "480")
             wall_later(reconcile_job)
-        tv_banner(f"Pi running hot ({temp:.0f} °C): lowering the picture quality", "hot", 6)
+        tv_note(f"Pi running hot ({temp:.0f} °C): lowering the picture quality", "hot", 6)
     elif temp < pihealth.COOL and heat["on"]:
         heat["on"], saved, heat["saved"] = False, heat["saved"], None
         if saved and wall.active() and len(saved[1]) == len(wall.extras):
@@ -3280,7 +3258,7 @@ def heat_warn(temp, now=None):
     if prop("pid") is None:
         return False  # nothing is playing: the home screen has no picture to put text on
     _warned["at"] = now
-    tv_banner(f"Pi is warm: {temp:.0f} °C", "warn", 5)
+    tv_note(f"Pi is warm: {temp:.0f} °C", "warn", 5)
     return True
 
 
@@ -3297,9 +3275,9 @@ def heat_loop():
 
 @app.post("/api/banner/test")
 def api_banner_test():
-    """Show the warning strip on the TV for a few seconds (Settings > TV screen), to see what a real warning looks like."""
+    """Show a warning on the TV for a few seconds (Settings > TV screen), to see what a real warning looks like."""
     admin_only()
-    return jsonify(ok=tv_banner("Pi is warm: 76 °C (this is a test)", "warn", 6))
+    return jsonify(ok=tv_note("Pi is warm: 76 °C (this is a test)", "warn", 6))
 
 
 @app.get("/api/health")

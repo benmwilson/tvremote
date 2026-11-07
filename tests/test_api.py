@@ -851,28 +851,21 @@ class InProcessLibraries(unittest.TestCase):
 
 
 class NoticeStyle(unittest.TestCase):
-    def tearDown(self):
-        server._banner.update(win=None, timer=None, paused=False)  # a test that "paused" must not leave the strip waiting for a resume
-
-    def test_volume_and_paused_use_the_strip_by_default_and_the_text_when_chosen(self):
+    def test_volume_and_paused_are_coloured_by_default_and_plain_when_chosen(self):
         props = {"volume": 40, "mute": False, "pause": False}
-        with mock.patch.object(server, "prop", lambda n: props.get(n)), mock.patch.object(server, "mpv") as m, mock.patch.object(server, "tv_banner", return_value=True) as banner,                 mock.patch.object(server, "tv_banner_clear") as clear, mock.patch.object(server.wall, "active", return_value=False):
+        with mock.patch.object(server, "prop", lambda n: props.get(n)), mock.patch.object(server, "mpv") as m, mock.patch.object(server, "tv_note") as note,                 mock.patch.object(server.wall, "active", return_value=False):
             with mock.patch.dict(server.settings, {"notice_style": "strip"}):
                 server.osd_volume()
-                self.assertIn("Volume 40%", banner.call_args[0][0])
+                self.assertIn("Volume 40%", note.call_args[0][0])
                 server.osd_paused(True)
-                self.assertEqual(banner.call_args[0][2], None)  # the paused notice stays until it is resumed
-                server.osd_paused(False)
-                clear.assert_called_once()
-            self.assertFalse([c for c in m.call_args_list if c[0][0][1] not in ("",)])  # no text went on the picture
-            banner.reset_mock(); m.reset_mock()
+                self.assertEqual(note.call_args[0][2], None)  # the paused notice stays until it is resumed
+            self.assertFalse(m.called)  # nothing plain went on the picture
+            note.reset_mock(); m.reset_mock()
             with mock.patch.dict(server.settings, {"notice_style": "text"}):
                 server.osd_volume()
-            banner.assert_not_called()
+            note.assert_not_called()
             self.assertEqual(m.call_args[0][0][0], "show-text")
 
-    def test_several_streams_keep_the_text_in_their_own_window(self):
-        with mock.patch.object(server, "tv_banner") as banner, mock.patch.object(server.wall, "active", return_value=True), mock.patch.dict(server.settings, {"notice_style": "strip"}):
-            self.assertFalse(server.notices_on_strip())
-            server.osd_volume("/tmp/x.sock") if False else None
-        banner.assert_not_called()
+    def test_several_streams_keep_the_plain_text_in_their_own_window(self):
+        with mock.patch.object(server.wall, "active", return_value=True), mock.patch.dict(server.settings, {"notice_style": "strip"}):
+            self.assertFalse(server.notices_styled())

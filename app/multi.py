@@ -105,8 +105,6 @@ def rules_xml():
                  '<action name="ResizeTo" width="480" height="1080"/><action name="ToggleAlwaysOnTop"/></windowRule>')
     rules.append('    <windowRule identifier="tvr-transition"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="0"/>'
                  '<action name="ResizeTo" width="1920" height="1080"/><action name="ToggleAlwaysOnTop"/></windowRule>')
-    rules.append('    <windowRule identifier="tvr-banner"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="0"/>'
-                 '<action name="ResizeTo" width="1920" height="84"/><action name="ToggleAlwaysOnTop"/></windowRule>')
     rules.append('    <windowRule identifier="tvr-chatbar"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="810"/>'
                  '<action name="ResizeTo" width="1440" height="270"/><action name="ToggleAlwaysOnTop"/></windowRule>')
     # the TV's browser (docker/cog) never hides the mouse pointer itself: the compositor is told to when its window opens

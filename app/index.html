@@ -846,10 +846,10 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <select id="weatherunit" aria-label="Temperature units" style="margin-top:8px"><option value="C">Celsius (&deg;C)</option><option value="F">Fahrenheit (&deg;F)</option></select></div>
     <p class="sub" id="weathermsg" style="margin:2px 0 6px">Leave the city empty for no weather. Only the city's weather is looked up (from Open-Meteo); nothing else leaves the Pi.</p>
     <label class="s-check" style="justify-content:space-between;margin-top:6px">Warn on the TV when the Pi runs hot<input id="heattv" type="checkbox" class="tg" role="switch"></label>
-      <p class="sub" style="margin:2px 0 0">A strip across the top of the screen (from 78 °C, at most once a minute). The volume and paused notices use the same strip for a single full-screen stream.</p>
+      <p class="sub" style="margin:2px 0 0">Amber text on the picture (from 78 °C, at most once a minute); with several streams it shows on every window. The volume and paused notices can use the same look for a single full-screen stream.</p>
       <button id="bannertest" type="button" style="margin-top:8px;width:100%">Show a test warning on the TV</button>
       <label class="s-cap" for="noticestyle" style="display:block;margin-top:12px">Volume and paused notices</label>
-      <select id="noticestyle" aria-label="How volume and paused notices look on the TV"><option value="strip">Strip across the top</option><option value="text">Text on the picture</option></select>
+      <select id="noticestyle" aria-label="How volume and paused notices look on the TV"><option value="strip">Coloured text (new)</option><option value="text">Plain text (classic)</option></select>
     </div>
     <h3 class="shead hide" id="qrhead">QR code on the TV</h3>
     <div class="card s-form hide" id="qrbox">

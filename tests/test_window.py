@@ -88,7 +88,7 @@ class HeatWarning(unittest.TestCase):
         server._warned["at"] = 0.0
 
     def test_off_by_default_and_only_when_warm_and_a_picture_is_playing(self):
-        with mock.patch.object(server, "tv_banner") as m, mock.patch.object(server, "prop", return_value=123):
+        with mock.patch.object(server, "tv_note") as m, mock.patch.object(server, "prop", return_value=123):
             with mock.patch.dict(server.settings, {"heat_tv": False}):
                 self.assertFalse(server.heat_warn(85.0, 100.0))
             with mock.patch.dict(server.settings, {"heat_tv": True}):
@@ -98,7 +98,7 @@ class HeatWarning(unittest.TestCase):
         m.assert_called_once()
 
     def test_at_most_once_a_minute_and_never_without_a_player(self):
-        with mock.patch.dict(server.settings, {"heat_tv": True}), mock.patch.object(server, "tv_banner") as m:
+        with mock.patch.dict(server.settings, {"heat_tv": True}), mock.patch.object(server, "tv_note") as m:
             with mock.patch.object(server, "prop", return_value=None):
                 self.assertFalse(server.heat_warn(85.0, 100.0))  # no player: nothing to put text on
             with mock.patch.object(server, "prop", return_value=123):
@@ -112,29 +112,25 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class GlobalBanner(unittest.TestCase):
-    def setUp(self):
-        server._banner.update(win=None, timer=None, paused=False)
+class GlobalNote(unittest.TestCase):
+    def test_a_warning_is_coloured_text_with_no_background(self):
+        text = server.note_text("Pi is warm: 80 °C", "warn")
+        self.assertTrue(text.startswith("${osd-ass-cc/0}"))
+        self.assertIn(chr(92) + "1c&H62B0FF&", text)  # amber
+        self.assertNotIn(chr(92) + "p1", text)  # no drawn box behind it
+        self.assertIn("Pi is warm", text)
+        self.assertIn("a(b)c", server.note_text("a{b}c"))  # braces in the text are turned into brackets: it can never add ASS tags of its own
 
-    def test_a_warning_is_a_strip_across_the_screen_and_goes_away_by_itself(self):
-        win = mock.Mock(); win.open.return_value = True; win.update.return_value = True
-        with mock.patch.object(server.chatwin, "banner_panel", return_value=win), mock.patch.object(server, "mpv") as m:
-            self.assertTrue(server.tv_banner("Pi is warm: 80 °C", "warn", 0.05))
-            win.update.assert_called_once()
-            self.assertIn("Pi is warm", win.update.call_args[0][0])
-            m.assert_not_called()  # nothing is drawn inside one stream's window
-            time.sleep(0.3)
-            win.close.assert_called_once()
+    def test_with_several_streams_the_warning_goes_on_every_window(self):
+        sent = []
+        with mock.patch.object(server, "mpv", lambda cmd, timeout=1.0: sent.append(("main", cmd)) or {"error": "success"}),                 mock.patch.object(server.mpvipc, "send", lambda sock, cmd, *a: sent.append((sock, cmd)) or {"error": "success"}),                 mock.patch.object(server.wall, "active", return_value=True), mock.patch.object(server.wall, "count", return_value=3):
+            self.assertTrue(server.tv_note("Pi is warm", "warn", 4))
+        self.assertEqual([s for s, _ in sent], ["main", server.wall.sock(1, server.SOCK), server.wall.sock(2, server.SOCK)])
+        self.assertTrue(all(c[0] == "show-text" and c[2] == 4000 for _, c in sent))
 
-    def test_when_the_banner_window_will_not_open_the_text_goes_on_the_main_stream(self):
-        win = mock.Mock(); win.open.return_value = False
-        with mock.patch.object(server.chatwin, "banner_panel", return_value=win), mock.patch.object(server, "mpv") as m:
-            self.assertFalse(server.tv_banner("Pi is warm: 80", "warn", 4))
-        self.assertEqual(m.call_args[0][0][:2], ["show-text", "Pi is warm: 80"])
-
-    def test_the_banner_has_its_own_window_rule(self):
+    def test_the_banner_window_and_its_rule_are_gone(self):
         import multi
-        self.assertIn('identifier="tvr-banner"', multi.rules_xml())
+        self.assertNotIn("tvr-banner", multi.rules_xml())
 
 
 class PlayerConfig(unittest.TestCase):

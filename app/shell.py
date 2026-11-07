@@ -161,17 +161,6 @@ def screen(kind, detail="", hint="", dots=0, now=None, favs=(), accent=None):
     return r"{\an8\pos(960,@@Y@@)\bord0\shad0}" + r"\N".join(lines)
 
 
-BANNER_COLOURS = {"warn": "62B0FF", "hot": "6B6BFF", "info": "FFB06B"}  # accent bar colours (BGR): amber, red, blue
-
-
-def banner_line(text, level="warn"):
-    """The ASS for the warning strip (app/chatwin.banner_panel, 1920x84): an accent bar on the left and one line of text."""
-    col = BANNER_COLOURS.get(level, BANNER_COLOURS["warn"])
-    bar = r"{\an7\pos(0,0)\p1\bord0\shad0\1c&H%s&}m 0 0 l 14 0 14 84 0 84{\p0}" % col
-    line = r"{\an4\pos(44,42)\fs38\b1\bord0\shad0\1c&H%s&}%s" % (TEXT, esc(clean(text))[:110])
-    return "\n".join([bar, line])
-
-
 def transition_screen(title, line, source=None):
     """The card shown over the picture while a stream or its quality changes (a window of its own on the shared background): the logo, the
     channel's name, the site in its own colour and one line of what is happening. One ASS event text per line, joined by newlines."""
