@@ -341,7 +341,8 @@ body.chatfull{overflow:hidden}
 .arow .v{flex:none;color:var(--dim);font-size:14px;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.arow .chev{flex:none;color:var(--dim);font-size:24px;line-height:1}
 .arow.danger,.arow.danger .ic,.arow.danger .t small{color:var(--bad)}.arow.danger .t small{opacity:.8}
 #actsheet .sh .avatar{flex:none}#actsheet .sh .ab{flex:none;width:44px;min-height:44px;padding:0;font-size:26px;background:none}
-#actsheet .s-form{padding-bottom:4px}
+#actsheet .s-form{padding:4px 0}
+#actsheet .sb{padding-top:10px}  /* room above the first row or field: its focus ring and border were cut off by the scroll area's top edge */
 .s-row.open{background:var(--card2);border-radius:14px;padding-left:8px;padding-right:8px}
 .who{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.who b{font-size:16px}.pill.you{background:var(--line);color:var(--fg)}
 .s-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 0 14px 56px}.s-actions button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 12px;font-size:15px}.s-actions .ic{width:18px;height:18px;flex:none}
@@ -2476,7 +2477,7 @@ function openPersonSheet(u) {
     opt = opt || {};
     const b = mk('button', {type: 'button', class: 'arow' + (opt.danger ? ' danger' : ''), onclick: fn});
     b.innerHTML = ic(icon);
-    b.append(mk('span', {class: 't'}, mk('b', {}, label), hint ? mk('small', {}, hint) : null), opt.value ? mk('span', {class: 'v'}, opt.value) : null, opt.drill ? mk('span', {class: 'chev', 'aria-hidden': 'true'}, '\u203a') : null);
+    b.append(...[mk('span', {class: 't'}, mk('b', {}, label), hint ? mk('small', {}, hint) : null), opt.value ? mk('span', {class: 'v'}, opt.value) : null, opt.drill ? mk('span', {class: 'chev', 'aria-hidden': 'true'}, '\u203a') : null].filter(Boolean));  // append(null) would write the word null
     return b;
   };
   const passwordForm = () => {

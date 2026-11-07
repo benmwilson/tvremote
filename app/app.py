@@ -2934,6 +2934,9 @@ def api_shell_set():
     for k in ("launcher_preview", "launcher_preview_sound"):  # the live preview on a focused card, and whether it plays sound
         if k in body:
             settings[k] = bool(body[k])
+    if set(body) <= {"launcher_preview", "launcher_preview_sound"}:  # only those: answer here (falling through would switch the home screen off)
+        save_settings()
+        return jsonify(shell_state())
     if "launcher" in body:  # the launcher as the TV's home screen between streams
         settings["launcher"] = bool(body["launcher"])
         save_settings()
