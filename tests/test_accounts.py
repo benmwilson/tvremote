@@ -185,3 +185,22 @@ class ChatTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FirstRunTourTests(unittest.TestCase):
+    def test_a_new_account_is_offered_the_tour_once_and_old_accounts_are_not(self):
+        import shutil
+        import tempfile
+        import time
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        with mock.patch.dict(os.environ, {"TVREMOTE_DATA": d}):
+            accounts.add("newbie", "pass-word1", "user")
+            self.assertFalse(accounts.tour_seen("newbie"))
+            accounts.mark_tour("newbie")
+            self.assertTrue(accounts.tour_seen("newbie"))
+            data = accounts._load()
+            data["veteran"] = {"salt": "00", "hash": "00", "role": "user", "created": accounts.TOUR_SINCE - 100}
+            accounts._write(data)
+            self.assertTrue(accounts.tour_seen("veteran"))  # made before the tour existed
+            self.assertTrue(accounts.tour_seen(accounts.GUEST) and accounts.tour_seen(accounts.OWNER))  # tracked elsewhere / not applicable

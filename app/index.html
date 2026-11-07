@@ -1400,7 +1400,15 @@ let nowAvFor = '';
 const err = m => { $('err').textContent = m || ''; if (m) setTimeout(() => $('err').textContent = '', 6000); };
 // The tour's demo: while it runs and nothing real is playing, the page shows a made-up live stream (and, on the multistream steps, a made-up
 // multistream and chat), so every control can be explained as if it were live. Nothing in it can reach the TV: every write is refused.
-let tourDemoOn = false, tourDemoWall = false, realSt = {}, demoChatN = 0;
+let tourDemoOn = false, tourDemoWall = false, realSt = {}, demoChatN = 0, tourFillF = false, tourFillR = false;
+const tourBlock = () => tourDemoOn || tourFillF || tourFillR;  // while the tour shows made-up content, nothing it touches may be saved
+const DEMO_FAVS = () => { const t = Date.now() / 1000; return [
+  {name: 'novaplays', url: 'https://www.twitch.tv/novaplays', source: 'Twitch', live: true, live_for: 7400, game: 'Retro Platformer', title: 'Speedrun night: any% attempts', last_live: t},
+  {name: 'pixelfox', url: 'https://www.twitch.tv/pixelfox', source: 'Twitch', live: true, live_for: 2100, game: 'Pixel Art', title: 'Cozy pixel art and chill', last_live: t},
+  {name: 'cozykai', url: 'https://www.twitch.tv/cozykai', source: 'Twitch', live: false, game: 'Co-op Campaign', last_live: t - 7200}]; };
+const DEMO_RECENTS = () => { const t = Date.now() / 1000; return [
+  {name: 'brightowl', url: 'https://www.twitch.tv/brightowl', source: 'Twitch', live: true, live_for: 900, game: 'Puzzle Night', title: 'Puzzles with chat', last_live: t},
+  {name: 'quietmoss', url: 'https://www.twitch.tv/quietmoss', source: 'Twitch', live: false, game: 'Gardening Sim', last_live: t - 5400}]; };
 const DEMO_WALL = () => ({layout: 'focus', max: 4, sound: [0], selected: 0, busy: false,  // made-up streamers (all Twitch, so no chat page is ever fetched for them)
   main: {i: 0, url: 'https://www.twitch.tv/novaplays', name: 'novaplays', source: 'Twitch', running: true, title: 'Speedrun night: any% attempts', quality: ''},
   tiles: [{i: 1, url: 'https://www.twitch.tv/pixelfox', name: 'pixelfox', source: 'Twitch', running: true, title: 'Cozy pixel art and chill', quality: '720'},
@@ -1417,7 +1425,7 @@ function setDemo(on, wall) {
   if (on) { st = demoSt(); render(); chatShow(); } else poll();
 }
 async function api(path, method = 'GET', body) {
-  if (tourDemoOn && method !== 'GET') { err('That is only an example from the tour.'); return {ok: false}; }
+  if (tourBlock() && method !== 'GET') { err('That is only an example from the tour.'); return {ok: false}; }
   try {
     const u = path + (path.includes('?') ? '&' : '?') + 'target=' + encodeURIComponent(target || 'living');
     const r = await fetch(u, {method, headers: body ? {'Content-Type': 'application/json'} : {},
@@ -1594,6 +1602,7 @@ function siteChips(f) {
 const isSaved = url => favList.some(f => (f.links || [{url: f.url}]).some(l => l.url === url));
 let reordering = false;
 async function loadFavs() {
+  if (tourFillF || tourFillR) return;  // the tour is showing made-up ones
   favList = await api('/api/favourites') || [];
   drawFavs();
   loadRecents();
@@ -2108,12 +2117,17 @@ async function tourShow() {
 }
 function tourEnd() {
   tourSeq++; tourClear(); tourLeave(); setDemo(false);
+  if (tourFillF || tourFillR) { tourFillF = tourFillR = false; favList = []; recentList = []; loadFavs(); }  // the made-up ones go; the account's own come back
   $('tourbox').classList.add('hide'); document.body.classList.remove('touring');
   if (view() !== (tourHome === '#/settings' ? 'settings' : tourHome.startsWith('#/tv/') ? 'tv' : 'all') || tourHome !== location.hash) location.hash = tourHome || '#/';
 }
 $('tourgo').onclick = () => {
   tourHome = location.hash; tourI = 0;
   tourSteps = (tourTv() ? TOUR : TOUR.filter(s => s.view !== 'tv')).filter(s => !(s.noGuest && me && me.guest));  // no TV set up: skip the steps that need one; a guest skips what guests can't use
+  tourFillF = !favList.length; tourFillR = !recentList.length;  // an account with none (the first run) sees made-up ones; a replay shows the account's own
+  if (tourFillF) favList = DEMO_FAVS();
+  if (tourFillR) recentList = DEMO_RECENTS();
+  if (tourFillF || tourFillR) { drawFavs(); drawRecents(); markFavs(); }
   $('tourbox').classList.remove('hide'); document.body.classList.add('touring');
   tourShow();
 };
@@ -2926,6 +2940,7 @@ $('tvsave').onclick = async () => {
 async function finishSetup(btn, tour) {
   const r = await busy(btn, () => api('/api/setup/finish', 'POST', {}));
   if (!(r && r.ok)) return;
+  fetch('/api/account/tour', {method: 'POST'}).catch(() => {});  // offered here: not again by itself
   setupNeeded = false; location.hash = '#/';
   if (tour) setTimeout(() => $('tourgo').onclick(), 700);  // the remote draws first, then the tour starts on it
 }
@@ -3002,7 +3017,16 @@ async function loadTvsAdmin() {
 }
 fetch('/api/setup').then(r => r.json()).then(j => { setupNeeded = !!j.needed; if (setupNeeded && view() !== 'setup') location.hash = '#/setup'; }).catch(() => {});
 
-fetch("/api/auth").then(r => r.json()).then(j => { me = j; document.body.classList.toggle("is-guest", !!j.guest); if (j.required) $("logout").classList.remove("hide"); if (j.ui) { uiCfg = j.ui; quickSig = ''; loadRecents(); renderQuick(); } }).catch(() => {});
+fetch("/api/auth").then(r => r.json()).then(j => { me = j; document.body.classList.toggle("is-guest", !!j.guest); if (j.required) $("logout").classList.remove("hide"); if (j.ui) { uiCfg = j.ui; quickSig = ''; loadRecents(); renderQuick(); } firstTour(j); }).catch(() => {});
+// A new account (or a guest on their first visit) gets the tour once, by itself; it can always be replayed from Settings > Help.
+function firstTour(j) {
+  if (!j || j.required === false || setupNeeded || tourOpen()) return;
+  let seen = !!j.tour_seen;
+  if (j.guest) { try { seen = !!localStorage.getItem('tourSeenGuest'); if (!seen) localStorage.setItem('tourSeenGuest', '1'); } catch (e) { seen = true; } }
+  else if (!seen) fetch('/api/account/tour', {method: 'POST'}).catch(() => {});
+  if (seen) return;
+  setTimeout(() => { if (!tourOpen() && !document.querySelector('dialog[open]') && ['all', 'tv'].includes(view())) $('tourgo').onclick(); }, 1800);
+}
 
 // ---- seek bar, quality shortcuts, sleep timer ----
 let seekDrag = false;
@@ -3031,6 +3055,7 @@ $('sleepsel').onchange = async () => {
 // ---- recent links ----
 let recentList = [];
 async function loadRecents() {
+  if (tourFillR) return;
   const r = await fetch('/api/recents').then(x => x.json()).catch(() => []);
   recentList = Array.isArray(r) ? r : [];
   drawRecents();

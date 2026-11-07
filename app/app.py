@@ -306,7 +306,15 @@ def api_auth():
     role = accounts.role(g.user)
     return jsonify(required=auth_required(), user=g.user, owner=accounts.is_owner(g.user), role=role,
                    admin=role == "admin", guest=g.user == accounts.GUEST,
-                   watch=g.user != accounts.GUEST or phone_settings()["phone_guests"], ui=ui_settings(), **info)
+                   watch=g.user != accounts.GUEST or phone_settings()["phone_guests"], ui=ui_settings(),
+                   tour_seen=None if g.user == accounts.GUEST else accounts.tour_seen(g.user), **info)  # (a guest's is kept on their own phone)
+
+
+@app.post("/api/account/tour")
+def api_account_tour():
+    """The first-run tour has been offered to this account: it is not started by itself again (Settings > Help can replay it)."""
+    accounts.mark_tour(g.user)
+    return jsonify(ok=True)
 
 
 # ---------- routing ----------

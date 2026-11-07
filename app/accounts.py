@@ -107,6 +107,25 @@ def set_tvs(name, tv_ids):
         _write(d)
 
 
+TOUR_SINCE = 1794030000  # accounts made before the first-run tour existed are not shown it again
+
+
+def tour_seen(name):
+    """Has this account had the first-run tour (or been made before it existed)? The owner stand-in and guests are not tracked here."""
+    if name in (OWNER, GUEST):
+        return True
+    e = _load().get(name, {})
+    return bool(e.get("tour")) or (e.get("created") or 0) < TOUR_SINCE
+
+
+def mark_tour(name):
+    with _lock:
+        d = _load()
+        if name in d:
+            d[name]["tour"] = time.time()
+            _write(d)
+
+
 def touch(name):
     """Remember when an account last logged in."""
     with _lock:
