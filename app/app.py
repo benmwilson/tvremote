@@ -2517,7 +2517,7 @@ def launcher_rows():
         favs.append({"name": f.get("name") or fav_name(top["url"]), "url": top["url"], "source": top.get("source"), "live": any(is_live(l["url"]) for l in links), **facts(top["url"])})
     recents = [{"name": r.get("name") or fav_name(r.get("url") or ""), "url": r["url"], "source": r.get("source"), "live": is_live(r["url"]), **facts(r["url"])} for r in load_recents() if r.get("url")]
     try:
-        grp = [{"id": x["id"], "name": x["name"], "members": x["members"]} for x in groups.load(groups_file(owner))["groups"]]
+        grp = [{"id": x["id"], "name": x["name"], "members": [{**m, "live": is_live(m.get("url") or "")} for m in x["members"]]} for x in groups.load(groups_file(owner))["groups"]]
     except Exception:
         grp = []
     fill_avatars(favs + recents + [m for x in grp for m in x["members"]])
@@ -2633,7 +2633,7 @@ def tv_data():
                 t["thumb"] = None
             if t.get("avatar"):
                 t["avatar"] = "/tv/img?id=" + _tv_img_id(t["avatar"])
-            t["members"] = [{"name": m.get("name"), "avatar": ("/tv/img?id=" + _tv_img_id(m["avatar"])) if m.get("avatar") else None}
+            t["members"] = [{"name": m.get("name"), "live": bool(m.get("live")), "avatar": ("/tv/img?id=" + _tv_img_id(m["avatar"])) if m.get("avatar") else None}
                             for m in (t.get("members") or [])[:4]] or None  # a group card shows up to four faces
             tiles.append(t)
         rows.append({"title": r["title"], "tiles": tiles})

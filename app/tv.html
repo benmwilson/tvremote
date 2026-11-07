@@ -29,7 +29,8 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 .card .ph{width:330px;height:186px;display:flex;align-items:center;justify-content:center}
 .av{width:64px;height:64px;border-radius:50%;object-fit:cover;background:#2a3350;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800}
 .card .ph .av{width:110px;height:110px;font-size:46px}
-.stack{display:flex;align-items:center}.stack .av{width:92px;height:92px;font-size:38px;border:4px solid var(--card);margin-left:-26px}.stack .av:first-child{margin-left:0}
+.stack{display:flex;align-items:center}.stack .face{position:relative;margin-left:-26px}.stack .face:first-child{margin-left:0}.stack .av{width:92px;height:92px;font-size:38px;border:4px solid var(--card)}
+.face i{position:absolute;right:4px;bottom:4px;width:22px;height:22px;border-radius:50%;background:var(--live);border:4px solid var(--card)}
 .card .small{position:absolute;left:12px;top:154px;border:3px solid var(--card)}
 .name{position:absolute;left:86px;top:196px;right:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:23px}
 .name.solo{left:16px}
@@ -60,7 +61,7 @@ function card(t) {
   if (t.thumb) { const i = el('img', 't'); i.src = q(t.thumb); c.append(i); if (t.live) c.append(el('span', 'chip live', 'LIVE')); if (t.viewers != null) c.append(el('span', 'chip view', num(t.viewers))); c.append(avatar(t, 'small'), el('div', 'name', t.name), el('div', 'game', t.game || t.title || ''));
   } else {
     const ph = el('div', 'ph');
-    if (t.kind === 'group' && t.members && t.members.length) { const st = el('div', 'stack'); t.members.forEach(m => st.append(avatar(m))); ph.append(st); } else ph.append(avatar(t));
+    if (t.kind === 'group' && t.members && t.members.length) { const st = el('div', 'stack'); t.members.forEach(m => { const f = el('div', 'face'); f.append(avatar(m)); if (m.live) f.append(el('i')); st.append(f); }); ph.append(st); } else ph.append(avatar(t));
     c.append(ph);
     if (t.live) c.append(el('span', 'chip live', 'LIVE'));
     c.append(el('div', 'name solo', t.name), el('div', 'game solo', t.game || t.title || (t.kind === 'group' ? 'Group' : '')));
