@@ -49,3 +49,16 @@ class SyncTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ViewTests(unittest.TestCase):
+    def test_only_admins_see_what_is_being_watched(self):
+        import app as server
+        ext = {"app": "YouTube", "paused": False, "title": "t", "channel": "c", "thumb": "u", "video": "v"}
+        with server.app.test_request_context("/"):
+            server.g.user = "someone"
+            with mock.patch.object(server.accounts, "role", return_value="user"):
+                self.assertEqual(server.own_app_view(ext), {"app": "YouTube", "paused": False})
+            with mock.patch.object(server.accounts, "role", return_value="admin"):
+                self.assertEqual(server.own_app_view(ext)["title"], "t")
+            self.assertIsNone(server.own_app_view(None))

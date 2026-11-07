@@ -1940,7 +1940,7 @@ def api_status():
     else:
         d, tid = pi_status(), "living"
     if not d.get("running") and not d.get("starting") and not d.get("error"):
-        d["external"] = external_now(tid)
+        d["external"] = own_app_view(external_now(tid))
     return jsonify({**d, "sleep_at": _sleep.get(tid)})
 
 
@@ -2277,9 +2277,15 @@ def external_now(tv_id):
         pos += time.time() - _roku.get(tv_id, (time.time(), 0))[0]  # the answer is a few seconds old: carry it on while it plays
     out = {"app": app, "state": state, "paused": state == "pause", "controllable": state in ("play", "pause", "buffer"),
            "duration": (r.get("media") or {}).get("duration"), "position": pos}
-    if has_request_context() and accounts.role(getattr(g, "user", None)) == "admin":  # what someone watches on their own TV is for admins only
-        out.update(nowplaying.get(tv_id, app) or {})
+    out.update(nowplaying.get(tv_id, app) or {})
     return out
+
+
+def own_app_view(ext):
+    """The TV's own-app facts as this viewer may see them: what someone watches on their own TV (title, channel, picture) is for admins only."""
+    if ext and accounts.role(getattr(g, "user", None)) != "admin":
+        return {k: v for k, v in ext.items() if k not in ("title", "channel", "thumb", "video")}
+    return ext
 
 
 def roku_details(tv_id):
@@ -2639,7 +2645,7 @@ def api_targets():
         if not TV_ENABLED.get(c["id"], True):
             continue  # switched off in setup (for instance no screen on the Pi)
         kind, connection = KINDS.get(c["id"], ("tv", "Roku TV"))
-        out.append({"name": LABELS[c["id"]], "kind": kind, "connection": connection, **c,
+        out.append({"name": LABELS[c["id"]], "kind": kind, "connection": connection, **{**c, "external": own_app_view(c.get("external"))},
                     "type": kind, "online": c["reachable"], "roku": bool(ROKU_IPS.get(c["id"]))})
     return jsonify(out)
 
