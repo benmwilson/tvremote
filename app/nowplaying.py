@@ -10,7 +10,6 @@ A listener only runs while somebody is looking at that TV (sync() is called from
 import json
 import os
 import re
-import socket
 import threading
 import time
 import urllib.parse
@@ -119,10 +118,10 @@ def _run(tv_id, ip, st):
 
 def sync(tv_id, ip, app):
     """Called when the TV's open app is known (None when it is on an input, home or off): start, keep or stop its listener."""
-    _tv_ip[tv_id] = ip
     allowed = [x.strip() for x in os.environ.get("TVREMOTE_NOWPLAYING_IPS", "").split(",") if x.strip()]
     if allowed and ip not in allowed:
         return  # listen only to the TVs named here (empty: every TV)
+    _tv_ip[tv_id] = ip  # after the allowlist: Plex titles are read only for the TVs named there too
     with _lock:
         st = _state.get(tv_id)
         if st and st["app"] != app:
