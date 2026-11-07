@@ -2147,12 +2147,17 @@ $('fav').onclick = async () => {
 $('qual').onchange = () => $('qual').dataset.mode === 'wall' ? wallApi({action: 'quality', i: st.wall ? st.wall.selected : 0, quality: $('qual').value})
   : cmd('restart', null, {quality: $('qual').value}).then(() => setTimeout(poll, 1500));
 // One volume request at a time, always the latest value: a drag no longer queues dozens the TV has to catch up on.
-let volBusy = false, volNext = null;
+// While dragging, at most one every 150 ms (each one redraws the TV's volume text and costs the Pi frames); the value the finger ends on always goes, marked final.
+let volBusy = false, volNext = null, volFinal = false;
 async function sendVol(v, final) {
-  volNext = v;
+  volNext = v; volFinal = volFinal || !!final;
   if (volBusy) return;
   volBusy = true;
-  while (volNext !== null) { const x = volNext; volNext = null; await cmd('volume', x, final ? {final: true} : undefined); }
+  while (volNext !== null) {
+    const x = volNext, f = volFinal; volNext = null; volFinal = false;
+    await cmd('volume', x, f ? {final: true} : undefined);
+    if (!f) await new Promise(r => setTimeout(r, 150));
+  }
   volBusy = false;
 }
 $('tvnudge').addEventListener('input', () => {  // the number above the thumb: how many presses letting go would send
