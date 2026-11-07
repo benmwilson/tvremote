@@ -34,8 +34,8 @@ services:
       - TVREMOTE_SHELL_VO=${SHELL_VO:-wlshm,gpu}
       - TVREMOTE_SHELL=${HOME_SCREEN:-1}  # 0 = never open the full-screen home screen (the Pi desktop stays usable)
       - TVREMOTE_NOWPLAYING_IPS=${NOWPLAYING_IPS:-}  # Roku addresses whose own-app title is read (empty: all)
-      - TVREMOTE_PLEX_TOKEN=${PLEX_TOKEN:-}  # Plex titles on the TV cards (the server is found on the LAN)
-      - TVREMOTE_PLEX_URL=${PLEX_URL:-}  # only if the server isn't found by itself
+      - TVREMOTE_PLEX_TOKEN=${PLEX_TOKEN:-}  # Plex titles on the TV cards
+      - TVREMOTE_PLEX_URL=${PLEX_URL:-}  # e.g. http://192.168.1.50:32400 (needed with the token)
       - TVREMOTE_KICK_CLIENT_ID=${KICK_CLIENT_ID:-}
       - TVREMOTE_KICK_CLIENT_SECRET=${KICK_CLIENT_SECRET:-}
       - TVREMOTE_TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID:-}

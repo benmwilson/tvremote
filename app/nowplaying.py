@@ -4,7 +4,7 @@ The Roku only says which app is open, whether it plays, and where it is (ECP has
 YouTube listens to its own "Lounge" interface (the one phones use to cast) as a read-only remote and never sends a command.
 Unofficial: if it breaks, nothing else does, and the card falls back to the app name and position.
 Netflix and Prime Video have no known local interface. Plex: the server's /status/sessions says what each player (matched by the TV's address) is playing;
-it needs TVREMOTE_PLEX_TOKEN in .env (the server is found on the LAN, or set TVREMOTE_PLEX_URL).
+it needs TVREMOTE_PLEX_TOKEN and TVREMOTE_PLEX_URL in .env.
 
 A listener only runs while somebody is looking at that TV (sync() is called from the Roku refresh) and stops 90 s after the last look."""
 import json
@@ -139,29 +139,13 @@ def sync(tv_id, ip, app):
     threading.Thread(target=_run, args=(tv_id, ip, st), daemon=True).start()
 
 
-CRLF = bytes([13, 10])
-_plex = {"url": None, "tried": 0, "sessions": (0, None)}  # server address, when we last looked for it, (time, parsed sessions)
+_plex = {"sessions": (0, None)}  # (time, parsed sessions)
 _tv_ip = {}  # tv_id -> address, to match a Plex player
 
 
 def plex_server():
-    """The Plex server's address: TVREMOTE_PLEX_URL, else the first server that answers Plex's LAN discovery (GDM), looked for at most once a minute."""
-    if os.environ.get("TVREMOTE_PLEX_URL"):
-        return os.environ["TVREMOTE_PLEX_URL"].rstrip("/")
-    if not _plex["url"] and time.time() - _plex["tried"] > 60:
-        _plex["tried"] = time.time()
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            sock.settimeout(1.5)
-            sock.sendto(b"M-SEARCH * HTTP/1.1" + CRLF * 2, ("239.0.0.250", 32414))
-            data, addr = sock.recvfrom(2048)
-            port = re.search(rb"Port:\s*(\d+)", data)
-            _plex["url"] = f"http://{addr[0]}:{port.group(1).decode() if port else 32400}"
-        except OSError:
-            pass
-        finally:
-            sock.close()
-    return _plex["url"]
+    """The Plex server's address, only from TVREMOTE_PLEX_URL: the token goes there, so it is never sent to a host found by broadcast (anyone on the LAN can answer one)."""
+    return os.environ.get("TVREMOTE_PLEX_URL", "").rstrip("/") or None
 
 
 def parse_plex(xml_text):
@@ -183,7 +167,7 @@ def plex_get(ip):
     when, cached = _plex["sessions"]
     if time.time() - when > 5:  # one look at the server serves every card for a few seconds
         try:
-            cached = parse_plex(_open(f"{base}/status/sessions?X-Plex-Token={urllib.parse.quote(token)}", timeout=4).read())
+            cached = parse_plex(_open(f"{base}/status/sessions", {"X-Plex-Token": token}, timeout=4).read())
         except (OSError, ET.ParseError):
             cached = None
         _plex["sessions"] = (time.time(), cached)
