@@ -3061,10 +3061,11 @@ function firstTour(j) {
   if (j.guest) { try { seen = !!localStorage.getItem('tourSeenGuest'); if (!seen) localStorage.setItem('tourSeenGuest', '1'); } catch (e) { seen = true; } }
   else if (!seen) fetch('/api/account/tour', {method: 'POST'}).catch(() => {});
   if (seen) return;
-  setTimeout(async () => {  // asked, not forced: a welcome with the choice
+  setTimeout(async () => {  // asked, not forced: a welcome with the choice, up before they have looked around
     if (tourOpen() || document.querySelector('dialog[open]') || !['all', 'tv'].includes(view())) return;
-    if (await confirmSheet('Welcome to TV Remote', 'Want a one-minute tour of what you can do here? You can replay it any time from Settings, then Help.', 'Start the tour', false, 'Skip for now')) $('tourgo').onclick();
-  }, 1800);
+    const who = j.guest ? '' : ', ' + (j.user || '').replace(/^./, c => c.toUpperCase());
+    if (await confirmSheet('Welcome' + who + '!', 'Want a one-minute tour of TV Remote? You can replay it any time from Settings, then Help.', 'Start the tour', false, 'Skip for now')) $('tourgo').onclick();
+  }, 250);
 }
 
 // ---- seek bar, quality shortcuts, sleep timer ----
@@ -4317,6 +4318,31 @@ if (location.pathname === '/' && !location.hash && redirectTarget) history.repla
 show();
 loadTargets(); setInterval(loadTargets, 3000);
 setInterval(poll, 2000);
+// Pull down at the top of the page to reload it (a Home Screen web app has none of Safari's own). Not while a sheet, the tour or a slider or list is being touched.
+(() => {
+  let y0 = null, x0 = 0, dy = 0, on = false;
+  const ind = document.createElement('div');
+  ind.setAttribute('aria-hidden', 'true');
+  ind.style.cssText = 'position:fixed;left:50%;top:0;z-index:70;width:40px;height:40px;margin-left:-20px;border-radius:50%;background:var(--card,#151a26);color:var(--tv,#6bb2ff);display:none;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.5);transform:translateY(-50px);pointer-events:none';
+  ind.innerHTML = '<svg class="ic" viewBox="0 0 24 24" width="22" height="22"><use href="#i-refresh"/></svg>';
+  document.body.append(ind);
+  const reset = () => { y0 = null; on = false; ind.style.display = 'none'; ind.style.transition = ''; ind.style.transform = 'translateY(-50px)'; };
+  document.addEventListener('touchstart', e => {
+    const t = e.target;
+    if (e.touches.length !== 1 || window.scrollY > 0 || document.querySelector('dialog[open]') || tourOpen() || (t.closest && t.closest('input,textarea,select,button[data-k],#chatbox,.stabs,.pad'))) { y0 = null; return; }
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; on = false;
+  }, {passive: true});
+  document.addEventListener('touchmove', e => {
+    if (y0 === null) return;
+    dy = e.touches[0].clientY - y0;
+    if (Math.abs(e.touches[0].clientX - x0) > Math.abs(dy) || window.scrollY > 0 || dy < 0) { reset(); return; }
+    if (dy > 12) { on = true; const pull = Math.min(dy * 0.5, 90); ind.style.display = 'flex'; ind.style.transform = 'translateY(' + (pull - 10 + 12) + 'px) rotate(' + pull * 4 + 'deg)'; ind.style.opacity = String(Math.min(1, pull / 60)); }
+  }, {passive: true});
+  document.addEventListener('touchend', () => {
+    if (on && dy * 0.5 >= 64) { ind.style.transition = 'transform .2s'; ind.style.transform = 'translateY(60px)'; setTimeout(() => location.reload(), 150); } else reset();
+  }, {passive: true});
+  document.addEventListener('touchcancel', reset, {passive: true});
+})();
 setInterval(() => { if (!document.hidden) loadNotices(); }, 30000);
 setInterval(() => { if (view() === 'tv' && !document.hidden) loadFavs(); }, 60000);
 </script>
