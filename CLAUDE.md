@@ -239,7 +239,7 @@ Goal: anyone can run the container on a Pi and get a remote that finds and contr
 - Open idea: chat overlay for the Chromecast via DashCast or a custom receiver (the default receiver can't draw over video).
 
 ## Todo
-- **READ FIRST: `docs/next-session.md`** (end of the 2026-11-06 session): what is live, the plan for launcher cards with pictures/viewers/thumbnails/hover preview and the renderer question (shell = fullscreen mpv + ASS; consider a kiosk browser), open todos, and tooling gotchas.
+- **READ FIRST: `docs/next-session.md`** (end of the long 2026-11-06 night session: the web launcher in the `tvbrowser` container, notices, now-playing, open list and gotchas) and **`docs/ben-requests-2026-11-06.md`** (every request Ben made that night, with its status). The older notes below it in `next-session.md` are kept for reference.
 - **Ben's list (2026-11-06, built and deployed to the Pi, not yet seen on the phone/TV):**
   - Recents: only show a streamer if we actually have their stream. Offline or not-found channels are left out of recents.
   - Disallow pinch/double-tap zoom on the phone page (viewport `user-scalable=no`, `touch-action: manipulation`) so double and triple taps on the Roku volume buttons don't zoom.
