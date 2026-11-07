@@ -139,3 +139,27 @@ class ReinstateTests(unittest.TestCase):
         self.assertEqual(self.admin.post("/api/guests/" + entry + "/reinstate").status_code, 200)
         self.assertEqual(guest.get("/api/auth").get_json()["guest"], True)  # the same phone, no new link
         self.assertEqual(self.admin.post("/api/guests/" + entry + "/reinstate").status_code, 404)  # nothing left to bring back
+
+
+class ResetAccountTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir)):
+            p.start(); self.addCleanup(p.stop)
+        throttle.fails.clear()
+        self.admin = founder_client(server)
+
+    def test_a_reset_clears_their_data_and_keeps_the_login(self):
+        accounts.add("sam", "pass-word1", "user", tv_ids=["bedroom"])
+        accounts.mark_tour("sam")
+        fav = Path(server.fav_file("sam"))
+        with mock.patch.object(server, "fav_file", return_value=str(Path(self.dir) / "favourites.sam.json")):
+            (Path(self.dir) / "favourites.sam.json").write_text("[{\"url\": \"https://kick.com/x\"}]")
+            self.assertEqual(self.admin.post("/api/accounts/reset", json={"name": "sam"}).status_code, 200)
+            self.assertFalse((Path(self.dir) / "favourites.sam.json").exists())
+        self.assertFalse(accounts.tour_seen("sam"))  # the welcome comes back
+        self.assertEqual(accounts.tvs("sam"), ["bedroom"])  # the limit stays
+        self.assertTrue(accounts.verify("sam", "pass-word1"))  # and so does the password
+        self.assertEqual(self.admin.post("/api/accounts/reset", json={"name": "boss"}).status_code, 400)  # not yourself
+        self.assertEqual(self.admin.post("/api/accounts/reset", json={"name": "ghost"}).status_code, 404)

@@ -2624,7 +2624,12 @@ function openPersonSheet(u) {
           async e => { await busy(e.currentTarget, () => api('/api/accounts', 'PATCH', {name: u.name, role: isAdmin ? 'user' : 'admin'})); done(); }),
         row('pencil', 'Reset password', 'Set a new password for them', () => showForm('Reset password', passwordForm), {drill: true}),
         ...(tvOk ? [row('tv', 'TVs', 'Which TVs they can use', () => showForm('Which TVs they can use', tvForm), {drill: true, value: u.tvs ? tvNames(u.tvs) : 'All'})] : []),
-        row('logout', 'Sign out everywhere', 'Ends every session they have open', async e => { await busy(e.currentTarget, () => api('/api/accounts/signout', 'POST', {name: u.name})); close(); })),
+        row('logout', 'Sign out everywhere', 'Ends every session they have open', async e => { await busy(e.currentTarget, () => api('/api/accounts/signout', 'POST', {name: u.name})); close(); }),
+        row('refresh', 'Reset account', 'Clears favourites, links and history', async () => {
+          close();
+          if (!await confirmSheet('Reset ' + u.name + '?', 'Their favourites, groups, linked Kick and Twitch and history are cleared, they are signed out, and they see the welcome tour again. Their password, role and TVs stay.', 'Reset', true)) return;
+          await api('/api/accounts/reset', 'POST', {name: u.name}); loadPeople();
+        })),
       mk('div', {class: 'alist'}, row('x', 'Remove account', 'Deletes it and its favourites', async () => {
         close();
         if (!await confirmSheet('Remove ' + u.name + '?', 'Their account and favourites are deleted. This cannot be undone.', 'Remove', true)) return;

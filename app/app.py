@@ -4134,6 +4134,29 @@ def accounts_del():
     return accounts_list()
 
 
+@app.post("/api/accounts/reset")
+def accounts_reset():
+    """Start an account over: favourites, groups, linked Kick and Twitch and the watching history go, they are signed out, and the welcome tour comes back.
+    The name, password, role and TV limits stay (the password has its own reset)."""
+    admin_only()
+    name = str((request.get_json(silent=True) or {}).get("name", ""))
+    if name == g.user:
+        return jsonify(ok=False, error="You can't reset the account you're signed in with."), 400
+    if not accounts.exists(name):
+        return jsonify(ok=False, error="No such account."), 404
+    if not may_change(name):
+        return refuse()
+    accounts.reset_profile(name)
+    activity.forget(name)
+    drop_user_sessions(name)
+    for p in (fav_file(name), groups_file(name), kick._path(name), twitch._path(name)):
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+    return accounts_list()
+
+
 @app.post("/api/accounts/signout")
 def accounts_signout():
     admin_only()

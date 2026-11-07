@@ -115,7 +115,20 @@ def tour_seen(name):
     if name in (OWNER, GUEST):
         return True
     e = _load().get(name, {})
-    return bool(e.get("tour")) or (e.get("created") or 0) < TOUR_SINCE
+    if "tour" in e:
+        return bool(e["tour"])  # 0 after a reset: the welcome comes back
+    return (e.get("created") or 0) < TOUR_SINCE
+
+
+def reset_profile(name):
+    """Part of an account reset: they are shown the welcome tour again, and the last login is forgotten. The name, password, role and TV limits stay."""
+    with _lock:
+        d = _load()
+        if name not in d:
+            raise ValueError("No such account.")
+        d[name]["tour"] = 0
+        d[name]["last_login"] = None
+        _write(d)
 
 
 def mark_tour(name):
