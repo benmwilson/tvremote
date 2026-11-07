@@ -1,4 +1,5 @@
 import sys
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -86,7 +87,7 @@ class HeatWarning(unittest.TestCase):
         server._warned["at"] = 0.0
 
     def test_off_by_default_and_only_when_warm_and_a_picture_is_playing(self):
-        with mock.patch.object(server, "mpv") as m, mock.patch.object(server, "prop", return_value=123):
+        with mock.patch.object(server, "tv_banner") as m, mock.patch.object(server, "prop", return_value=123):
             with mock.patch.dict(server.settings, {"heat_tv": False}):
                 self.assertFalse(server.heat_warn(85.0, 100.0))
             with mock.patch.dict(server.settings, {"heat_tv": True}):
@@ -96,7 +97,7 @@ class HeatWarning(unittest.TestCase):
         m.assert_called_once()
 
     def test_at_most_once_a_minute_and_never_without_a_player(self):
-        with mock.patch.dict(server.settings, {"heat_tv": True}), mock.patch.object(server, "mpv") as m:
+        with mock.patch.dict(server.settings, {"heat_tv": True}), mock.patch.object(server, "tv_banner") as m:
             with mock.patch.object(server, "prop", return_value=None):
                 self.assertFalse(server.heat_warn(85.0, 100.0))  # no player: nothing to put text on
             with mock.patch.object(server, "prop", return_value=123):
@@ -108,3 +109,28 @@ class HeatWarning(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GlobalBanner(unittest.TestCase):
+    def setUp(self):
+        server._banner.update(win=None, timer=None)
+
+    def test_a_warning_is_a_strip_across_the_screen_and_goes_away_by_itself(self):
+        win = mock.Mock(); win.open.return_value = True; win.update.return_value = True
+        with mock.patch.object(server.chatwin, "banner_panel", return_value=win), mock.patch.object(server, "mpv") as m:
+            self.assertTrue(server.tv_banner("Pi is warm: 80 °C", "warn", 0.05))
+            win.update.assert_called_once()
+            self.assertIn("Pi is warm", win.update.call_args[0][0])
+            m.assert_not_called()  # nothing is drawn inside one stream's window
+            time.sleep(0.3)
+            win.close.assert_called_once()
+
+    def test_when_the_banner_window_will_not_open_the_text_goes_on_the_main_stream(self):
+        win = mock.Mock(); win.open.return_value = False
+        with mock.patch.object(server.chatwin, "banner_panel", return_value=win), mock.patch.object(server, "mpv") as m:
+            self.assertFalse(server.tv_banner("Pi is warm: 80", "warn", 4))
+        self.assertEqual(m.call_args[0][0][:2], ["show-text", "Pi is warm: 80"])
+
+    def test_the_banner_has_its_own_window_rule(self):
+        import multi
+        self.assertIn('identifier="tvr-banner"', multi.rules_xml())

@@ -3170,6 +3170,28 @@ def versions():
 heat = {"on": False, "saved": None, "restored": False}  # the heat guard: lowers multistream pictures while the Pi is very hot
 
 
+_banner = {"win": None, "timer": None}
+
+
+def tv_banner(text, level="warn", seconds=5):
+    """A warning about the Pi or the TV as a whole, drawn as a strip across the top of the screen (a window of its own, above every stream window),
+    so with several streams on screen it is not stuck inside one of them. Falls back to text on the main stream if that window won't open."""
+    try:
+        win = _banner["win"] = _banner["win"] or chatwin.banner_panel()
+        if not (win.open() and win.update(shell.banner_line(text, level))):
+            raise OSError("the banner window did not open")
+    except Exception as e:
+        app.logger.info("Banner window: %s", e)
+        mpv(["show-text", text, int(seconds * 1000)])
+        return False
+    if _banner["timer"]:
+        _banner["timer"].cancel()
+    _banner["timer"] = threading.Timer(seconds, win.close)
+    _banner["timer"].daemon = True
+    _banner["timer"].start()
+    return True
+
+
 def heat_check(temp):
     """Above pihealth.HOT: put every multistream window at 480p (remembering the picks) and say so on the TV; once cooled below
     pihealth.COOL, give the picks back. If it overheats again after that, they stay lowered until a person raises them."""
@@ -3185,7 +3207,7 @@ def heat_check(temp):
                 e["quality"] = "480"
             wall_later(_restart_main_quality, "480")
             wall_later(reconcile_job)
-        mpv(["show-text", f"Pi running hot ({temp:.0f} C): lowering the picture quality", 5000])
+        tv_banner(f"Pi running hot ({temp:.0f} °C): lowering the picture quality", "hot", 6)
     elif temp < pihealth.COOL and heat["on"]:
         heat["on"], saved, heat["saved"] = False, heat["saved"], None
         if saved and wall.active() and len(saved[1]) == len(wall.extras):
@@ -3214,7 +3236,7 @@ def heat_warn(temp, now=None):
     if prop("pid") is None:
         return False  # nothing is playing: the home screen has no picture to put text on
     _warned["at"] = now
-    mpv(["show-text", f"Pi is warm: {temp:.0f} C", 4000])
+    tv_banner(f"Pi is warm: {temp:.0f} °C", "warn", 5)
     return True
 
 

@@ -39,6 +39,7 @@
     <windowRule identifier="tvr-cfocus4-4"><serverDecoration>no</serverDecoration><action name="MoveTo" x="944" y="786"/><action name="ResizeTo" width="416" height="234"/></windowRule>
     <windowRule identifier="tvr-chat"><serverDecoration>no</serverDecoration><action name="MoveTo" x="1440" y="0"/><action name="ResizeTo" width="480" height="1080"/><action name="ToggleAlwaysOnTop"/></windowRule>
     <windowRule identifier="tvr-transition"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="0"/><action name="ResizeTo" width="1920" height="1080"/><action name="ToggleAlwaysOnTop"/></windowRule>
+    <windowRule identifier="tvr-banner"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="0"/><action name="ResizeTo" width="1920" height="84"/><action name="ToggleAlwaysOnTop"/></windowRule>
     <windowRule identifier="tvr-chatbar"><serverDecoration>no</serverDecoration><action name="MoveTo" x="0" y="810"/><action name="ResizeTo" width="1440" height="270"/><action name="ToggleAlwaysOnTop"/></windowRule>
     <windowRule identifier="com.igalia.Cog"><action name="HideCursor"/></windowRule>
   </windowRules>

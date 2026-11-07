@@ -196,7 +196,9 @@ input:not([type]),input[type=text],input[type=password],input[type=search],input
 #wallgroups button{display:inline-flex;align-items:center;gap:8px;padding:0 14px 0 10px}
 #wallgroups button .avgroup .av{width:26px;height:26px;font-size:11px;margin-left:-8px;box-shadow:0 0 0 2px var(--card2)}
 #wallgroups button .avgroup .av:first-child{margin-left:0}
-.gsug{border:1px dashed var(--line)}.gsug .gtag{font-size:12px;color:var(--dim);letter-spacing:.04em;text-transform:uppercase}
+.gsug{border:1px dashed var(--line)}
+.gsug .gsave{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:44px;margin-top:12px;padding:0 16px;border-radius:10px;background:transparent;color:var(--tv,#6bb2ff);box-shadow:inset 0 0 0 2px var(--tv,#6bb2ff);font-size:15px;font-weight:700}
+.gsug .gsave .ic{width:18px;height:18px}.gsug .gsave:active{background:var(--tv,#6bb2ff);color:#0b0e14}
 .gmembers{display:block;font-size:13px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 .iconlink{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:var(--dim);border-radius:12px}
 .nowhead{display:flex;align-items:center;gap:8px}.nowhead .av{width:40px;height:40px}
@@ -1580,13 +1582,16 @@ function drawGroups() {
     rows.push(b);
   });
   groupSug.forEach(sg => {  // seen together more than once: offered, never forced
-    const b = el('div', 'fav gsug'), head = el('div', 'fhead'), x = el('button', 'x'), save = el('button', null, 'Save as group');
+    const b = el('div', 'fav gsug'), head = el('div', 'fhead'), x = el('button', 'x'), save = el('button', 'gsave'), liveN = groupLive(sg);
+    save.type = 'button'; save.innerHTML = ic('plus') + '<span>Save as group</span>';
     b.setAttribute('role', 'button'); b.tabIndex = 0;
     x.innerHTML = ic('x'); x.setAttribute('aria-label', 'Not interested in ' + sg.name);
     x.onclick = async e => { e.stopPropagation(); await api('/api/groups/dismiss', 'POST', {key: sg.key}); loadGroups(); };
     save.onclick = async e => { e.stopPropagation(); await busy(save, () => saveGroup(sg.members)); };
     head.append(avatarGroup(sg.members, true), el('b', null, sg.name));
-    b.append(el('span', 'gtag', 'Watched together ' + sg.count + ' times'), head, el('span', 'gmembers', groupWho(sg)), ...groupSites(sg), save, x);
+    b.append(head, ...groupSites(sg), ...(liveN ? [el('span', 'badge live', liveN + ' LIVE')] : []),  // the same layout as a saved group's card: faces and name, chips, one line of facts, then the action
+      el('span', 'sub livenote', ['Watched together ' + sg.count + ' times', groupLine(sg)].filter(Boolean).join(' · ')), save, x);
+    b.querySelectorAll('.badge').forEach(e => { e.style.marginTop = '8px'; });
     b.onclick = () => playGroup(sg);
     b.onkeydown = e => { if (e.key === 'Enter') b.click(); };
     sugRows.push(b);

@@ -127,5 +127,10 @@ def transition_panel(**kw):
     return Panel("transition", "tvr-transition", 1920, 1080, bg=os.path.join(ASSETS, "bg-full.png"), **kw)
 
 
+def banner_panel(**kw):
+    """A strip across the top of the whole screen for warnings about the Pi or the TV (not about one stream), above every stream window."""
+    return Panel("banner", "tvr-banner", 1920, 84, **kw)
+
+
 def bar_panel(**kw):
     return Panel("chatbar", "tvr-chatbar", 1440, 270, bg=os.path.join(ASSETS, "chat-bg-bar.png"), **kw)
