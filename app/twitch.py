@@ -116,7 +116,9 @@ def check(login):
     if not rows or rows[0].get("type") != "live":
         return {"live": False}
     s = rows[0]
-    return {"live": True, "game": s.get("game_name"), "title": s.get("title"), "uptime_s": _uptime(s.get("started_at")), "viewers": s.get("viewer_count")}
+    return {"live": True, "game": s.get("game_name"), "title": s.get("title"), "uptime_s": _uptime(s.get("started_at")), "viewers": s.get("viewer_count"),
+            "thumb": (s.get("thumbnail_url") or "").replace("{width}", "440").replace("{height}", "248") or None,
+            "avatar": (users([login]).get(login.lower()) or {}).get("avatar")}  # users() is remembered for a day: no extra request per check
 
 
 def live_now(first=24, game=None):

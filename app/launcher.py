@@ -31,7 +31,8 @@ def build_rows(favs=(), recents=(), groups=(), live_first=True):
         return (x.get("name") or x.get("url") or "").lower()
     def tile(x, kind="stream"):
         return {"id": x.get("id") or x.get("url"), "kind": kind, "name": x.get("name") or x.get("url"), "url": x.get("url"),
-                "live": x.get("live") is True, "source": x.get("source"), "avatar": x.get("avatar"), "members": x.get("members")}
+                "live": x.get("live") is True, "source": x.get("source"), "avatar": x.get("avatar"), "members": x.get("members"),
+                "thumb": x.get("thumb"), "viewers": x.get("viewers"), "title": x.get("title"), "game": x.get("game")}
     if live_first:
         for x in list(favs) + list(recents):
             if x.get("live") is True and key(x) not in seen:

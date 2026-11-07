@@ -2488,12 +2488,15 @@ def launcher_rows():
     owner = accounts.founder_name() or accounts.OWNER
     snap = livewatch.snapshot()
     is_live = lambda url: (snap.get(url) or {}).get("live") is True
+    def facts(url):  # what the live check saw, for the cards (only while live: a stale picture of an offline channel misleads)
+        e = snap.get(url) or {}
+        return {k: e.get(k) for k in ("thumb", "viewers", "avatar", "title", "game")} if e.get("live") is True else {}
     favs = []
     for f in load_favs(owner):
         links = fav_links(f)
         top = next((l for l in links if is_live(l["url"])), links[0])
-        favs.append({"name": f.get("name") or fav_name(top["url"]), "url": top["url"], "source": top.get("source"), "live": any(is_live(l["url"]) for l in links)})
-    recents = [{"name": r.get("name") or fav_name(r.get("url") or ""), "url": r["url"], "source": r.get("source"), "live": is_live(r["url"])} for r in load_recents() if r.get("url")]
+        favs.append({"name": f.get("name") or fav_name(top["url"]), "url": top["url"], "source": top.get("source"), "live": any(is_live(l["url"]) for l in links), **facts(top["url"])})
+    recents = [{"name": r.get("name") or fav_name(r.get("url") or ""), "url": r["url"], "source": r.get("source"), "live": is_live(r["url"]), **facts(r["url"])} for r in load_recents() if r.get("url")]
     try:
         grp = [{"id": x["id"], "name": x["name"], "members": x["members"]} for x in groups.load(groups_file(owner))["groups"]]
     except Exception:
@@ -2512,6 +2515,15 @@ def launcher_state():
         except Exception as e:
             app.logger.warning("Launcher contents: %s", e)
     return (LAUNCHER.rows, LAUNCHER.row, LAUNCHER.col)
+
+
+@app.get("/api/launcher")
+def api_launcher():
+    """The launcher's rows and focus, for a page or a renderer that draws the cards."""
+    st = launcher_state()
+    if st is None:
+        return jsonify(ok=False, error="The launcher is off."), 404
+    return jsonify(ok=True, rows=st[0], row=st[1], col=st[2])
 
 
 @app.post("/api/launcher/key")

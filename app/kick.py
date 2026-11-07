@@ -195,7 +195,7 @@ def check(slug):
     except (KeyError, ValueError, AttributeError):
         pass
     return {"live": True, "game": (ch.get("category") or {}).get("name"), "title": ch.get("stream_title"),
-            "uptime_s": up, "viewers": st.get("viewer_count")}
+            "uptime_s": up, "viewers": st.get("viewer_count"), "thumb": st.get("thumbnail")}
 
 
 def live_among(slugs):

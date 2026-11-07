@@ -25,6 +25,11 @@ class RowsTests(unittest.TestCase):
         self.assertEqual(rows[0]["title"], "Groups")
         self.assertEqual(rows[0]["tiles"][0]["kind"], "group")
 
+    def test_tiles_carry_the_picture_and_viewer_facts(self):
+        x = {**item("omie", True), "thumb": "http://t/1.jpg", "viewers": 42, "avatar": "http://a/1.jpg", "title": "hi", "game": "Chess"}
+        t = launcher.build_rows([x], [], [])[0]["tiles"][0]
+        self.assertEqual((t["thumb"], t["viewers"], t["avatar"], t["title"], t["game"]), ("http://t/1.jpg", 42, "http://a/1.jpg", "hi", "Chess"))
+
     def test_empty_rows_are_left_out(self):
         self.assertEqual(launcher.build_rows([], [], []), [])
 
@@ -123,6 +128,15 @@ class ScreenTests(unittest.TestCase):
                     self.assertLessEqual(x, 1920)
                     self.assertLessEqual(y, 1080)
         self.assertTrue(seen)  # the check really looked at positions
+
+
+class DataEndpointTests(unittest.TestCase):
+    def test_the_launcher_data_is_refused_while_the_launcher_is_off(self):
+        from unittest import mock
+        import app as server
+        with mock.patch.object(server, "launcher_on", return_value=False):
+            r = server.app.test_client().get("/api/launcher")
+        self.assertIn(r.status_code, (401, 403, 404))
 
 
 class KeyEndpointTests(unittest.TestCase):

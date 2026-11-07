@@ -57,7 +57,7 @@ class LiveWatch:
                 e["live"] = bool(result.get("live"))
                 if e["live"]:
                     e["last_live"] = now
-                    for k in ("game", "title"):
+                    for k in ("game", "title", "viewers", "thumb", "avatar"):
                         if result.get(k):
                             e[k] = result[k]
                     e["uptime_s"] = result.get("uptime_s")
