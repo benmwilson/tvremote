@@ -103,7 +103,7 @@ function card(t) {
   return c;
 }
 // hover preview: after a pause on a live card its stream plays muted in the card, through the app's relay (never from the internet directly)
-let pvKey = '', pvCard = null, pvTimer = 0, pvHls = null, pvVideo = null;
+let pvCfg = {on: true, sound: true}, pvKey = '', pvCard = null, pvTimer = 0, pvHls = null, pvVideo = null;
 const hs = document.createElement('script'); hs.src = q('/vendor/hls.min.js'); document.head.append(hs);
 function stopPreview() {
   clearTimeout(pvTimer); if (pvHls) { pvHls.destroy(); pvHls = null; } if (pvVideo) { pvVideo.remove(); pvVideo = null; }
@@ -111,19 +111,20 @@ function stopPreview() {
 function preview(c) {
   stopPreview(); pvCard = c;
   const t = c && c._t;
-  if (!t || t.kind !== 'stream' || !t.live || !t.thumb) return;
+  if (!pvCfg.on || !t || t.kind !== 'stream' || !t.live || !t.thumb) return;
   pvTimer = setTimeout(async () => {
     try {
       if (!window.Hls || !Hls.isSupported()) { report('preview: hls.js ' + (window.Hls ? 'has no MSE here' : 'did not load')); return; }
       const r = await (await fetch(q('/tv/pv?u=' + encodeURIComponent(t.url)), {cache: 'no-store'})).json();
       if (!r.ok || pvCard !== c || !c.isConnected) return;
-      const v = el('video'); v.muted = true; v.autoplay = true; v.playsInline = true;
+      const v = el('video'); v.muted = !pvCfg.sound; v.volume = 0.7; v.autoplay = true; v.playsInline = true;
       v.style.cssText = 'position:absolute;left:0;top:0;width:330px;height:186px;object-fit:cover;background:#000';
       v.addEventListener('playing', () => { v.style.opacity = 1; }); v.style.opacity = 0;
       const im = c.querySelector('img.t'); im.after(v); pvVideo = v;  // right after the picture, so the chips stay on top
       pvHls = new Hls({capLevelToPlayerSize: true, maxBufferLength: 6, liveSyncDurationCount: 2});
       pvHls.on(Hls.Events.ERROR, (e, d) => { if (d.fatal) { report('preview: ' + d.type + ' ' + d.details); stopPreview(); } });
       pvHls.loadSource(r.src); pvHls.attachMedia(v);
+      v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });  // sound refused by the browser: the picture still plays
       pvTimer = setTimeout(stopPreview, 90000);  // a preview is a glance, not a viewing
     } catch (e) { report('preview: ' + e); }
   }, 1500);
@@ -158,6 +159,8 @@ function draw(d) {
   });
   document.getElementById('empty').hidden = d.rows.length > 0;
   liveNow = ((d.rows.find(r => r.title === 'Live now') || {}).tiles || []).length;
+  pvCfg = {on: d.preview !== false, sound: d.sound !== false};  // the admin's switches (Settings > TV screen), live
+  if (!pvCfg.on) stopPreview(); else if (pvVideo) pvVideo.muted = !pvCfg.sound;
   const nt = document.getElementById('note'); nt.textContent = d.note || ''; nt.hidden = !d.note;
   cur = {row: d.row, col: d.col}; focus();
 }

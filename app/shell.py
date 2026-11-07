@@ -378,7 +378,8 @@ class Shell:
             data = self._launcher()
             if data is not None:  # the launcher is drawn by the TV's browser (docker/cog): this window only shows its plain background under it, so the Ready screen never flashes first
                 self._lau = True
-                return []  # the old tiles, drawn here as subtitles, are retired: [(pos, pos + FOREVER, t) for t in launcher_pieces(*data)]
+                # the logo and name on the plain background: what the TV shows while the browser starts (the browser's page covers it, and its boot animation opens on the same logo)
+                return [(pos, pos + FOREVER, t) for t in transition_screen("TV Remote", "").split(chr(10))]
         if kind == "idle":  # one event per wall-clock second, so the colon blinks in step with the real seconds
             now = self._clock()
             frac, base = now.microsecond / 1e6, now.replace(microsecond=0)

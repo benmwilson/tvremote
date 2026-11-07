@@ -841,6 +841,8 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <button id="desktop" class="pibtn"><svg class="ic" aria-hidden="true"><use id="piicon" href="#i-eye-off"/></svg><span id="pilabel">Hide the remote from the TV</span></button>
       <p class="sub" id="pihelp"></p>
       <label class="s-check" style="justify-content:space-between;margin-top:6px">Launcher on the TV between streams<input id="launchertoggle" type="checkbox" class="tg" role="switch"></label>
+      <label class="s-check" style="justify-content:space-between">Live preview when you rest on a card<input id="launcherpreview" type="checkbox" class="tg" role="switch"></label>
+      <label class="s-check" style="justify-content:space-between">Play sound in the preview<input id="launcherpreviewsound" type="checkbox" class="tg" role="switch"></label>
     <p class="sub" style="margin:2px 0 6px">Who is live, your favourites, groups and recents as tiles on the TV. Move around it with the pad on the remote (an IR receiver can be added later).</p>
     <div style="margin-top:10px"><b style="display:block;margin-bottom:6px;font-weight:600">Weather in the launcher&rsquo;s header</b>
       <input id="weathercity" type="text" placeholder="Start typing a city" aria-label="City for the weather" maxlength="80" autocapitalize="words" autocorrect="off" autocomplete="off">
@@ -2254,6 +2256,7 @@ function renderShell() {
   if (document.activeElement !== $('shortcuturl')) $('shortcuturl').value = s.shortcut_url || '';
   $('qrshortcut').classList.toggle('hide', mode !== 'shortcut'); $('scname-wrap').classList.toggle('hide', mode !== 'shortcut'); $('qrinstall').classList.toggle('hide', mode !== 'install'); if (document.activeElement !== $('installurl')) $('installurl').value = s.install_url || '';
   $('launchertoggle').checked = !!s.launcher;
+  $('launcherpreview').checked = s.launcher_preview !== false; $('launcherpreviewsound').checked = s.launcher_preview_sound !== false; $('launcherpreviewsound').disabled = s.launcher_preview === false;
   if (document.activeElement !== $('weathercity')) $('weathercity').value = s.weather_place || '';
   $('weatherunit').value = s.weather_unit || 'C';
   $('qropts').classList.toggle('hide', s.qr === false || !!s.qr_guest);  // these only matter while the remote's own code is the one on the TV
@@ -2281,6 +2284,8 @@ async function loadShell() {
 const qrSet = async body => { const r = await api('/api/shell', 'POST', body); if (r) { shellInfo = r; renderShell(); } return r; };
 $('qrmode').onchange = () => qrSet({qr_mode: $('qrmode').value});
 $('launchertoggle').onchange = () => qrSet({launcher: $('launchertoggle').checked});
+$('launcherpreview').onchange = () => qrSet({launcher_preview: $('launcherpreview').checked});
+$('launcherpreviewsound').onchange = () => qrSet({launcher_preview_sound: $('launcherpreviewsound').checked});
 const weatherSet = async body => { const r = await api('/api/shell', 'POST', body); if (r && r.ok !== false) { shellInfo = r; renderShell(); } };  // a refused city (r.ok false) shows its message and leaves the page as it was
 // Typing lists matching cities; tapping one saves that exact place. Enter takes the first match, and emptying the box turns the weather off.
 let wTimer = 0, wPlaces = [];
