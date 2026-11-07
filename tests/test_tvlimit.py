@@ -163,3 +163,31 @@ class ResetAccountTests(unittest.TestCase):
         self.assertTrue(accounts.verify("sam", "pass-word1"))  # and so does the password
         self.assertEqual(self.admin.post("/api/accounts/reset", json={"name": "boss"}).status_code, 400)  # not yourself
         self.assertEqual(self.admin.post("/api/accounts/reset", json={"name": "ghost"}).status_code, 404)
+
+
+class SeparateAccountsTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        for p in (mock.patch.dict(os.environ, {"TVREMOTE_DATA": self.dir}), mock.patch.object(server, "DATA", self.dir),
+                  mock.patch.object(server, "RECENT_FILE", os.path.join(self.dir, "recents.json"))):
+            p.start(); self.addCleanup(p.stop)
+        throttle.fails.clear()
+        self.admin = founder_client(server)
+
+    def test_what_one_account_played_is_not_in_anothers_recents(self):
+        (Path(self.dir) / "recents.json").write_text('[{"name": "old", "url": "https://kick.com/old", "source": "Kick"}]')  # the list that used to be shared
+        accounts.add("sam", "pass-word1", "user")
+        sam = server.app.test_client()
+        sam.post("/login", data={"username": "sam", "password": "pass-word1"})
+        self.assertEqual(sam.get("/api/recents").get_json(), [])  # nothing of the main account's
+        self.assertEqual([r["url"] for r in self.admin.get("/api/recents").get_json()], ["https://kick.com/old"])  # it moved to the founder
+        self.assertFalse((Path(self.dir) / "recents.json").exists())
+        with server.app.test_request_context("/api/play", method="POST"):
+            server.g.user = "sam"
+            server.remember("https://kick.com/sampick")
+        self.assertEqual([r["url"] for r in sam.get("/api/recents").get_json()], ["https://kick.com/sampick"])
+        self.assertNotIn("sampick", str(self.admin.get("/api/recents").get_json()))
+        self.admin.post("/api/accounts/reset", json={"name": "sam"})
+        self.assertEqual(sam.get("/api/recents", headers={"Accept": "application/json"}).status_code in (200, 302, 401, 403), True)
+        self.assertEqual(server.load_recents("sam"), [])  # a reset clears them

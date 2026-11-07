@@ -1293,38 +1293,57 @@ def switch_input(tid):
         app.logger.warning("Input switch failed for %s (%s, %s): %s", tid, ip, hdmi, e)  # playback already started: best effort, but say why
 
 
-RECENT_FILE = os.path.join(DATA, "recents.json")
+RECENT_FILE = os.path.join(DATA, "recents.json")  # the old shared list: it moves to the founder's own file the first time that is read, then goes
 
 
-def load_recents():
+def recent_file(user=None):
+    """Each account has its own recents (what one person watched is not another's business). Outside a request it is the founder's (or the stand-in owner's)."""
+    founder = accounts.founder_name()
+    user = user or (g.user if has_request_context() else (founder or accounts.OWNER))
+    if user == accounts.OWNER:
+        return RECENT_FILE
+    path = os.path.join(DATA, f"recents.{user}.json")
+    if user == founder and not os.path.exists(path) and os.path.exists(RECENT_FILE):  # what was shared until now was the founder's
+        try:
+            with open(RECENT_FILE) as f:
+                store.write_json(path, json.load(f))
+            os.remove(RECENT_FILE)
+        except (OSError, ValueError):
+            pass
+    return path
+
+
+def load_recents(user=None):
     try:
-        with open(RECENT_FILE) as f:
-            return json.load(f)
+        with open(recent_file(user)) as f:
+            d = json.load(f)
+        return d if isinstance(d, list) else []
     except (OSError, ValueError):
         return []
 
 
 def remember(url):
-    """Keep the last few links that were played, newest first. A guest's plays are not kept (they would show up in everyone else's list)."""
+    """Keep the last few links this account played, newest first. A guest's plays are not kept."""
     if has_request_context() and g.user == accounts.GUEST:
         return
     try:
         with _files_lock:
             items = [r for r in load_recents() if r.get("url") != url]
             items.insert(0, {"name": fav_name(url)[:40], "url": url, "source": route(url)[0]})
-            store.write_json(RECENT_FILE, items[:8])
+            store.write_json(recent_file(), items[:8])
     except OSError:
         pass  # history is a convenience
 
 
 def forget(url):
-    """Take a link out of the recents: it turned out to be offline or not found, so it was never a stream we had."""
+    """Take a link out of everyone's recents: it turned out to be offline or not found, so it was never a stream we had."""
     try:
         with _files_lock:
-            items = load_recents()
-            kept = [r for r in items if r.get("url") != url]
-            if len(kept) != len(items):
-                store.write_json(RECENT_FILE, kept)
+            for u in [accounts.OWNER, *accounts.names()]:
+                items = load_recents(u)
+                kept = [r for r in items if r.get("url") != url]
+                if len(kept) != len(items):
+                    store.write_json(recent_file(u), kept)
     except OSError:
         pass
 
@@ -2617,7 +2636,7 @@ def launcher_rows():
         links = fav_links(f)
         top = next((l for l in links if is_live(l["url"])), links[0])
         favs.append({"name": f.get("name") or fav_name(top["url"]), "url": top["url"], "source": top.get("source"), "live": any(is_live(l["url"]) for l in links), **facts(top["url"])})
-    recents = [{"name": r.get("name") or fav_name(r.get("url") or ""), "url": r["url"], "source": r.get("source"), "live": is_live(r["url"]), **facts(r["url"])} for r in load_recents() if r.get("url")]
+    recents = [{"name": r.get("name") or fav_name(r.get("url") or ""), "url": r["url"], "source": r.get("source"), "live": is_live(r["url"]), **facts(r["url"])} for r in load_recents(accounts.founder_name() or accounts.OWNER) if r.get("url")]
     try:
         grp = [{"id": x["id"], "name": x["name"], "members": [{**m, "live": is_live(m.get("url") or "")} for m in x["members"]]} for x in groups.load(groups_file(owner))["groups"]]
     except Exception:
@@ -3626,7 +3645,7 @@ def streamer_key(url):
 def watched_urls():
     urls = [l["url"] or "" for u in [accounts.OWNER] + accounts.names() for f in load_favs(u) for l in fav_links(f)]  # everyone's: one pass serves all
     urls += [t["url"] for t in wall.extras]  # the streams on the multistream screen, so their tiles can say LIVE
-    urls += [r.get("url") or "" for r in load_recents()]  # recents too: the multistream suggests the ones that are live
+    urls += [r.get("url") or "" for u in [accounts.OWNER] + accounts.names() for r in load_recents(u)]  # everyone's recents too, so their cards can say LIVE
     if state.get("url"):
         urls.append(state["url"])
     return list(dict.fromkeys(u for u in urls if is_channel(u)))
@@ -4126,7 +4145,7 @@ def accounts_del():
     if accounts.remove(name):
         activity.forget(name)
         drop_user_sessions(name)  # re-creating the name later must not revive old logins
-        for p in (fav_file(name), kick._path(name), twitch._path(name)):  # its favourites and site links go with it
+        for p in (fav_file(name), recent_file(name), groups_file(name), kick._path(name), twitch._path(name)):  # its favourites, recents and site links go with it
             try:
                 os.remove(p)
             except OSError:
@@ -4149,7 +4168,7 @@ def accounts_reset():
     accounts.reset_profile(name)
     activity.forget(name)
     drop_user_sessions(name)
-    for p in (fav_file(name), groups_file(name), kick._path(name), twitch._path(name)):
+    for p in (fav_file(name), recent_file(name), groups_file(name), kick._path(name), twitch._path(name)):
         try:
             os.remove(p)
         except OSError:

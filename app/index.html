@@ -3053,7 +3053,13 @@ async function loadTvsAdmin() {
 }
 fetch('/api/setup').then(r => r.json()).then(j => { setupNeeded = !!j.needed; if (setupNeeded && view() !== 'setup') location.hash = '#/setup'; }).catch(() => {});
 
-fetch("/api/auth").then(r => r.json()).then(j => { me = j; document.body.classList.toggle("is-guest", !!j.guest); if (j.required) $("logout").classList.remove("hide"); if (j.ui) { uiCfg = j.ui; quickSig = ''; loadRecents(); renderQuick(); } firstTour(j); loadNotices(); }).catch(() => {});
+fetch("/api/auth").then(r => r.json()).then(j => { me = j; document.body.classList.toggle("is-guest", !!j.guest); if (j.required) $("logout").classList.remove("hide"); if (j.ui) { uiCfg = j.ui; quickSig = ''; loadRecents(); renderQuick(); }
+  try {  // one phone, two people: what the last person saved on it (their site picks, recent emotes, layout) is not the next one's
+    const prev = localStorage.getItem('lastUser'), now = j.guest ? 'guest' : (j.user || '');
+    localStorage.setItem('lastUser', now);
+    if (prev && prev !== now) { Object.keys(localStorage).filter(k => k !== 'lastUser' && !/^(av:|app:|src:)/.test(k)).forEach(k => localStorage.removeItem(k)); location.reload(); return; }
+  } catch (e) {}
+  firstTour(j); loadNotices(); }).catch(() => {});
 // A new account (or a guest on their first visit) is offered the tour once; it can always be replayed from Settings > Help.
 function firstTour(j) {
   if (!j || j.required === false || setupNeeded || tourOpen()) return;
@@ -4320,26 +4326,31 @@ loadTargets(); setInterval(loadTargets, 3000);
 setInterval(poll, 2000);
 // Pull down at the top of the page to reload it (a Home Screen web app has none of Safari's own). Not while a sheet, the tour or a slider or list is being touched.
 (() => {
-  let y0 = null, x0 = 0, dy = 0, on = false;
+  let y0 = null, x0 = 0, dy = 0, on = false, t0 = 0;
+  const START = 45, ARM = 230, HOLD = 400;  // px before anything shows, px of pull to arm it, ms the pull must take (a quick flick at the top is a scroll, not a refresh)
   const ind = document.createElement('div');
   ind.setAttribute('aria-hidden', 'true');
   ind.style.cssText = 'position:fixed;left:50%;top:0;z-index:70;width:40px;height:40px;margin-left:-20px;border-radius:50%;background:var(--card,#151a26);color:var(--tv,#6bb2ff);display:none;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.5);transform:translateY(-50px);pointer-events:none';
   ind.innerHTML = '<svg class="ic" viewBox="0 0 24 24" width="22" height="22"><use href="#i-refresh"/></svg>';
   document.body.append(ind);
-  const reset = () => { y0 = null; on = false; ind.style.display = 'none'; ind.style.transition = ''; ind.style.transform = 'translateY(-50px)'; };
+  const reset = () => { y0 = null; on = false; ind.style.display = 'none'; ind.style.transition = ''; ind.style.transform = 'translateY(-50px)'; ind.style.background = 'var(--card,#151a26)'; ind.style.color = 'var(--tv,#6bb2ff)'; };
   document.addEventListener('touchstart', e => {
     const t = e.target;
     if (e.touches.length !== 1 || window.scrollY > 0 || document.querySelector('dialog[open]') || tourOpen() || (t.closest && t.closest('input,textarea,select,button[data-k],#chatbox,.stabs,.pad'))) { y0 = null; return; }
-    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; on = false;
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; on = false; dy = 0; t0 = Date.now();
   }, {passive: true});
   document.addEventListener('touchmove', e => {
     if (y0 === null) return;
     dy = e.touches[0].clientY - y0;
     if (Math.abs(e.touches[0].clientX - x0) > Math.abs(dy) || window.scrollY > 0 || dy < 0) { reset(); return; }
-    if (dy > 12) { on = true; const pull = Math.min(dy * 0.5, 90); ind.style.display = 'flex'; ind.style.transform = 'translateY(' + (pull - 10 + 12) + 'px) rotate(' + pull * 4 + 'deg)'; ind.style.opacity = String(Math.min(1, pull / 60)); }
+    if (dy > START) {
+      on = true; const pull = Math.min((dy - START) * 0.45, 84), ready = dy >= ARM && Date.now() - t0 >= HOLD;
+      ind.style.display = 'flex'; ind.style.transform = 'translateY(' + (pull + 2) + 'px) rotate(' + pull * 4 + 'deg) scale(' + (ready ? 1.15 : 1) + ')';
+      ind.style.opacity = String(Math.min(1, pull / 50)); ind.style.background = ready ? 'var(--tv,#6bb2ff)' : 'var(--card,#151a26)'; ind.style.color = ready ? '#0b0e14' : 'var(--tv,#6bb2ff)';  // it fills in once letting go would refresh
+    }
   }, {passive: true});
   document.addEventListener('touchend', () => {
-    if (on && dy * 0.5 >= 64) { ind.style.transition = 'transform .2s'; ind.style.transform = 'translateY(60px)'; setTimeout(() => location.reload(), 150); } else reset();
+    if (on && dy >= ARM && Date.now() - t0 >= HOLD) { ind.style.transition = 'transform .2s'; ind.style.transform = 'translateY(60px)'; setTimeout(() => location.reload(), 150); } else reset();
   }, {passive: true});
   document.addEventListener('touchcancel', reset, {passive: true});
 })();
