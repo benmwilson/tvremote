@@ -867,11 +867,9 @@ body:has(dialog.sheet[open]){overflow:hidden}
       <p class="sub" id="pistate">Checking&hellip;</p>
       <button id="desktop" class="pibtn"><svg class="ic" aria-hidden="true"><use id="piicon" href="#i-eye-off"/></svg><span id="pilabel">Hide the remote from the TV</span></button>
       <p class="sub" id="pihelp"></p>
-      <label class="s-check" style="justify-content:space-between;margin-top:6px">Launcher on the TV between streams<input id="launchertoggle" type="checkbox" class="tg" role="switch"></label>
       <label class="s-check" style="justify-content:space-between">Live preview when you rest on a card<input id="launcherpreview" type="checkbox" class="tg" role="switch"></label>
       <label class="s-check" style="justify-content:space-between">Play sound in the preview<input id="launcherpreviewsound" type="checkbox" class="tg" role="switch"></label>
-      <p class="sub hide" id="pvsoundnote" style="margin:0 2px 4px">No sound connection for the TV&rsquo;s browser yet.</p>
-    <p class="sub" style="margin:2px 0 6px">Live favourites, groups and recents as tiles. Use the pad on the remote to move around.</p>
+      <p class="sub hide" id="pvsoundnote" style="margin:0 2px 4px">No sound connection for the TV&rsquo;s browser yet.</p>
     <div style="margin-top:10px"><b style="display:block;margin-bottom:6px;font-weight:600">Weather in the launcher&rsquo;s header</b>
       <input id="weathercity" type="text" placeholder="Start typing a city" aria-label="City for the weather" maxlength="80" autocapitalize="words" autocorrect="off" autocomplete="off">
       <div id="weathersug" class="wsug" role="listbox" aria-label="Matching cities"></div>
@@ -2328,7 +2326,6 @@ function renderShell() {
   $('qrmode').value = mode;
   if (document.activeElement !== $('shortcuturl')) $('shortcuturl').value = s.shortcut_url || '';
   $('qrshortcut').classList.toggle('hide', mode !== 'shortcut'); $('scname-wrap').classList.toggle('hide', mode !== 'shortcut'); $('qrinstall').classList.toggle('hide', mode !== 'install'); if (document.activeElement !== $('installurl')) $('installurl').value = s.install_url || '';
-  $('launchertoggle').checked = !!s.launcher;
   $('launcherpreview').checked = s.launcher_preview !== false; $('launcherpreviewsound').checked = s.launcher_preview_sound === true; $('launcherpreviewsound').disabled = s.launcher_preview === false || !s.preview_audio; $('pvsoundnote').classList.toggle('hide', !!s.preview_audio);
   if (document.activeElement !== $('weathercity')) $('weathercity').value = s.weather_place || '';
   $('weatherunit').value = s.weather_unit || 'C';
@@ -2356,7 +2353,6 @@ async function loadShell() {
 }
 const qrSet = async body => { const r = await api('/api/shell', 'POST', body); if (r) { shellInfo = r; renderShell(); } return r; };
 $('qrmode').onchange = () => qrSet({qr_mode: $('qrmode').value});
-$('launchertoggle').onchange = () => qrSet({launcher: $('launchertoggle').checked});
 $('launcherpreview').onchange = () => qrSet({launcher_preview: $('launcherpreview').checked});
 $('launcherpreviewsound').onchange = () => qrSet({launcher_preview_sound: $('launcherpreviewsound').checked});
 const weatherSet = async body => { const r = await api('/api/shell', 'POST', body); if (r && r.ok !== false) { shellInfo = r; renderShell(); } };  // a refused city (r.ok false) shows its message and leaves the page as it was

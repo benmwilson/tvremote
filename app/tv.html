@@ -16,7 +16,7 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 #clock{text-align:right;line-height:1.1}
 #clock .time{font-size:56px;font-weight:800;letter-spacing:1px}
 #clock .date{font-size:20px;color:var(--dim)}
-#rows{z-index:1;position:absolute;left:40px;top:120px;width:1840px;will-change:transform}
+#rows{z-index:1;position:absolute;left:40px;top:120px;width:1480px;will-change:transform}
 .row{height:350px;position:relative;overflow:hidden}
 .row h2{margin:0 0 0 22px;font-size:26px;color:var(--dim);font-weight:700}
 .strip{display:flex;gap:22px;padding:16px 24px 24px 22px;will-change:transform}
@@ -37,6 +37,11 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:radial-
 .live{left:10px;background:var(--live)}.view{right:10px}
 #note{position:absolute;left:50%;top:44px;transform:translateX(-50%);z-index:9;background:#e0243a;color:#fff;border-radius:16px;padding:14px 32px;font-size:30px;font-weight:800;box-shadow:0 6px 24px #0008}
 #note[hidden]{display:none}
+#qrcard{position:absolute;right:40px;bottom:44px;width:300px;z-index:2;text-align:center}
+#qrcard[hidden]{display:none}
+#qrcard img{display:block;width:300px;height:300px;border-radius:22px;background:#f6f1ee}
+#qrcard .cap{margin-top:14px;font-size:26px;font-weight:700}
+#qrcard .addr{margin-top:4px;font-size:19px;color:var(--dim);word-break:break-all}
 .empty[hidden]{display:none}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:var(--dim)}
 
@@ -76,7 +81,8 @@ body.reveal #head{animation:cardin .7s both cubic-bezier(.2,.8,.2,1)}
 <div id="head"><img src="/logo.svg" alt=""><span class="brand">TV Remote</span><span id="others"></span><span class="grow"></span>
   <div id="wx"><span id="wxi"></span><div><div class="t" id="wxt"></div><div class="s" id="wxs"></div></div></div>
   <div id="clock"><div class="time" id="ct"></div><div class="date" id="cd"></div></div></div>
-<div id="note" hidden></div><div id="rows"></div><div class="empty" id="empty" hidden>Nothing here yet. Add favourites on your phone.</div>
+<div id="note" hidden></div><div id="qrcard" hidden><img id="qrimg" alt=""><div class="cap" id="qrcap"></div><div class="addr" id="qraddr"></div></div>
+<div id="rows"></div><div class="empty" id="empty" hidden>Nothing here yet. Add favourites on your phone.</div>
 <script>
 const K = new URLSearchParams(location.search).get('k') || '';
 const report = m => { try { fetch('/tv/log?k=' + encodeURIComponent(K) + '&m=' + encodeURIComponent(String(m).slice(0, 300))); } catch (e) {} };
@@ -137,7 +143,7 @@ function focus() {
   if (c) c.classList.add('f');
   const key = cur.row + ':' + cur.col + ':' + (c && c._t && c._t.url);  // the same focused tile (even if its card is rebuilt for a new viewer count) never restarts a preview
   if (key !== pvKey) { pvKey = key; preview(c); }
-  strip.style.transform = 'translateX(' + -Math.max(0, cur.col - 4) * 352 + 'px)';
+  strip.style.transform = 'translateX(' + -Math.max(0, cur.col - 3) * 352 + 'px)';
   document.getElementById('rows').style.transform = 'translateY(' + -Math.max(0, cur.row - 1) * 350 + 'px)';
 }
 function draw(d) {
@@ -159,6 +165,9 @@ function draw(d) {
   });
   document.getElementById('empty').hidden = d.rows.length > 0;
   liveNow = ((d.rows.find(r => r.title === 'Live now') || {}).tiles || []).length;
+  const qc = document.getElementById('qrcard');  // the QR code (remote, shortcut or guest link), as the old Ready screen had
+  qc.hidden = !d.qr;
+  if (d.qr) { const im = document.getElementById('qrimg'); if (im.dataset.v !== d.qr.v) { im.dataset.v = d.qr.v; im.src = q('/tv/qr.svg?v=' + d.qr.v); } document.getElementById('qrcap').textContent = d.qr.caption; document.getElementById('qraddr').textContent = d.qr.text; }
   pvCfg = {on: d.preview !== false, sound: d.sound === true};  // the admin's switches (Settings > TV screen), live
   if (!pvCfg.on) stopPreview(); else if (pvVideo) pvVideo.muted = !pvCfg.sound;
   const nt = document.getElementById('note'); nt.textContent = d.note || ''; nt.hidden = !d.note;

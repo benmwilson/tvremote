@@ -2579,7 +2579,7 @@ _launcher_at = {"t": 0.0}
 
 
 def launcher_on():
-    return bool(settings.get("launcher"))
+    return settings.get("launcher", True) is not False  # the launcher is the TV's idle screen now (the old Ready screen is the fallback only if it is switched off)
 
 
 def launcher_rows():
@@ -2639,7 +2639,7 @@ def launcher_state():
 BOOT_ID = secrets.token_hex(4)  # new at every start: an open page that sees it change reloads itself, so it never runs an older script against a newer app
 
 
-TV_PATHS = ("/tv", "/tv/data", "/tv/focus", "/tv/info", "/tv/img", "/tv/log", "/tv/pv", "/vendor/hls.min.js")
+TV_PATHS = ("/tv", "/tv/data", "/tv/focus", "/tv/info", "/tv/img", "/tv/log", "/tv/pv", "/tv/qr.svg", "/vendor/hls.min.js")
 TV_KEY = secrets.token_urlsafe(16)  # new at every start; only the browser the app opens on the TV is given it
 TV_THUMBS = 6  # tiles with a stream picture; the rest are cards with the profile picture (the Pi's browser can't draw many)
 _tv_imgs = {}   # id -> picture address, from the last /tv/data (only these can be fetched through /tv/img)
@@ -2737,8 +2737,24 @@ def tv_data():
                             for m in (t.get("members") or [])[:4]] or None  # a group card shows up to four faces
             tiles.append(t)
         rows.append({"title": r["title"], "tiles": tiles})
+    qr_url, qr_caption = qr_info()
     return jsonify(rows=rows, row=st[1], col=st[2], note=_launch_note["text"] if time.time() < _launch_note["until"] else "",
+                   qr={"v": hashlib.sha256(qr_url.encode()).hexdigest()[:10], "caption": qr_caption, "text": qr_url.replace("http://", "").replace("https://", "")[:44]} if qr_url else None,
                    preview=bool(settings.get("launcher_preview", True)), sound=PREVIEW_AUDIO and bool(settings.get("launcher_preview_sound", False)))
+
+
+@app.get("/tv/qr.svg")
+def tv_qr():
+    """The QR code the TV shows (the remote's address, the shortcut or a guest link: see qr_info), drawn by the library as a picture for the launcher page."""
+    tv_viewer_ok()
+    url, _ = qr_info()
+    if not url:
+        abort(404)
+    import io
+    import segno
+    buf = io.BytesIO()
+    segno.make(url, error="m", boost_error=False).save(buf, kind="svg", scale=10, border=2, dark="#0b0e14", light="#f6f1ee")
+    return Response(buf.getvalue(), mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/tv/info")

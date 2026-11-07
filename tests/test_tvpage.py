@@ -47,6 +47,17 @@ class TvPageTests(unittest.TestCase):
             with mock.patch.object(server, "PREVIEW_AUDIO", True):
                 self.assertTrue(self.c.get("/tv/data?k=" + server.TV_KEY).get_json()["sound"])
 
+    def test_the_launcher_page_gets_the_qr_code(self):
+        with mock.patch.object(server, "qr_info", return_value=("http://192.168.1.149:8765", "Scan to open the remote")),                 mock.patch.object(server, "launcher_state", return_value=([{"title": "Live now", "tiles": [tile("a")]}], 0, 0)):
+            d = self.c.get("/tv/data?k=" + server.TV_KEY).get_json()
+            self.assertEqual((d["qr"]["caption"], d["qr"]["text"]), ("Scan to open the remote", "192.168.1.149:8765"))
+            r = self.c.get("/tv/qr.svg?k=" + server.TV_KEY)
+            self.assertEqual(r.status_code, 200)
+            self.assertIn(b"<svg", r.data)
+        with mock.patch.object(server, "qr_info", return_value=("", "")), mock.patch.object(server, "launcher_state", return_value=([], 0, 0)):
+            self.assertIsNone(self.c.get("/tv/data?k=" + server.TV_KEY).get_json()["qr"])  # switched off: no card
+            self.assertEqual(self.c.get("/tv/qr.svg?k=" + server.TV_KEY).status_code, 404)
+
     def test_the_boot_animation_plays_once_after_the_app_starts(self):
         with mock.patch.object(server, "launcher_state", return_value=None):
             server._tv_intro["pending"] = True
